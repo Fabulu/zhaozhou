@@ -210,8 +210,36 @@ int main(int argc, char** argv) {
   // ------------------------------------------------------------------------
   ckt(accepted >= 40, "the record stream ran to completion");
   ckt(seal_offered_clocks > 0, "a seal was OFFERED while records were in flight");
-  ckt(t.share_ledger_full_o > 0,
-      "the share's ledger really did back the socket up (the M_REQ window exists)");
+  // THE M_REQ WINDOW, AND WHY THIS CHECK CHANGED SHAPE ON 2026-09-27.
+  //
+  // It used to be `share_ledger_full_o > 0`: the write share's four-entry
+  // ledger reaching FULL was taken as evidence that requests were piling up, so
+  // a write must have been in flight when the seal arrived. Under
+  // TriangleDescriptor SCHEMA v2 that proxy no longer fires -- MEASURED, 0 in
+  // both forms -- and the reason is mechanical rather than a regression: a v2
+  // descriptor is FOUR beats instead of two, so each write occupies the socket
+  // twice as long and the arena's single write engine never has four requests
+  // awaiting retirement at once. The ledger is still printed below so a reader
+  // can see the zero and its reason instead of inheriting a deleted line.
+  //
+  // WHAT THE PROXY WAS STANDING IN FOR IS ASSERTED DIRECTLY INSTEAD, and it is
+  // a stronger statement because it names the exact precondition the mutation
+  // removes. `seal_ok_c` requires `drained_c` -- nothing this block issued is
+  // outstanding -- and the mutant deletes that term. So:
+  //
+  //   * in PRODUCTION the window shows up as a seal that WAITED:
+  //     `view_flip_blocked_o` counts every clock of it, and that check already
+  //     existed below and reads 744.
+  //   * in the MUTANT the window shows up as the fault LANDING: the view flips
+  //     out from under a live request, `addr_view_bad_o` fires, and the guard
+  //     refuses the requests whose region moved underneath them.
+  //
+  // Both are form-specific, so they are asserted per form rather than here.
+  // What remains unconditional is the one thing that must hold either way: the
+  // engine really was given writes to be busy with while the seal was offered.
+  ckt(t.tris_written_o > 0,
+      "the write engine actually wrote records during the seal offer -- the"
+      " window had traffic to exist in");
 
   const uint32_t fired = t.addr_view_bad_o;
   const bool did_fire = fired != 0;
@@ -239,6 +267,19 @@ int main(int argc, char** argv) {
         "PRODUCTION: view_flip_blocked_o moved -- the drain precondition REFUSED a seal");
     ckt(t.guard_violations_o == 0,
         "PRODUCTION: the guard refused nothing -- no request outlived its selector");
+  } else {
+    // THE MUTANT'S OWN WINDOW EVIDENCE, and it is not the same statement as
+    // "the counter fired". `addr_view_bad_o` is the block's verdict on itself;
+    // `guard_violations_o` is the MEM.GUARD's independent verdict on the same
+    // event -- a request whose view moved under it addresses a region the guard
+    // does not admit for that client. Two instruments, one fault, and the
+    // second is outside the block under test.
+    ckt(t.guard_violations_o > 0,
+        "MUTANT: the guard independently refused request(s) whose view flipped"
+        " underneath them -- the M_REQ window existed and the fault landed");
+    ckt(t.view_flip_blocked_o == 0,
+        "MUTANT: and no seal ever WAITED, which is precisely the term the"
+        " mutation deletes -- so the two forms differ where they should");
   }
 
   if (did_fire != expect_fire) {

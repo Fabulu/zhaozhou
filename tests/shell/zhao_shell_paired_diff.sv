@@ -12,7 +12,7 @@
 // every name on that list is a claim WITHDRAWN, which is why it
 // is short and why it is argued rather than discovered.
 //
-// 75 inputs exist only on the sibling. They get harness ports of
+// 80 inputs exist only on the sibling. They get harness ports of
 // their own so a test can exercise the new lifecycle without
 // disturbing the paired comparison.
 
@@ -128,6 +128,11 @@ module zhao_shell_paired_diff
   input  logic scanout_ack_i,
   input  logic frame_swap_valid_i,
   input  logic frame_swap_slot_i,
+  input  logic walk_job_valid_i,
+  input  logic [11:0] walk_job_tile_x_i,
+  input  logic [11:0] walk_job_tile_y_i,
+  input  logic walk_job_first_i,
+  input  logic walk_job_last_i,
   input  logic [63:0] geom_wdata_i,
   input  logic geom_wvalid_i,
   input  logic geom_wlast_i,
@@ -514,7 +519,7 @@ module zhao_shell_paired_diff
     .phy_dq_i(phy_dq_i)
   );
 
-  // The sibling has 89 outputs the historical shell never had
+  // The sibling has 91 outputs the historical shell never had
   // -- the v2_* lifecycle counters and the new lease surface.
   // They are left unconnected ON PURPOSE: this harness exists to
   // compare the SHARED surface, and a V2-only output has nothing
@@ -703,6 +708,13 @@ module zhao_shell_paired_diff
     .render_grid_h_i(render_grid_h_i),
     .render_tri_valid_i(render_tri_valid_i),
     .render_tri_ready_o(v2_render_tri_ready_o),
+    .walk_job_valid_i(walk_job_valid_i),
+    .walk_job_ready_o(),
+    .walk_job_tile_x_i(walk_job_tile_x_i),
+    .walk_job_tile_y_i(walk_job_tile_y_i),
+    .walk_job_first_i(walk_job_first_i),
+    .walk_job_last_i(walk_job_last_i),
+    .walk_jobs_taken_o(),
     .geom_guard_req_i(geom_guard_req_i),
     .geom_guard_rsp_o(v2_geom_guard_rsp_o),
     .geom_beat_valid_o(v2_geom_beat_valid_o),

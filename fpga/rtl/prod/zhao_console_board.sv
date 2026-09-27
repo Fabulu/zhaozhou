@@ -1577,9 +1577,51 @@ module zhao_console_board
   output logic [31:0] geom_ab_flushcut_o,    // partial chunks cut by frame end
   output logic [15:0] geom_ab_max_chunks_o,  // deepest tile list, in chunks
   output logic        geom_ab_overflow_o,
-  input  logic [ 9:0] geom_ab_head_tile_i,
+  // `geom_ab_head_tile_i` WAS HERE AND IS REMOVED (SWAPCLOSE, 2026-09-27).
+  // It was a console INPUT choosing which tile's head to read, driven by
+  // nothing and held at zero by the bench. The comment above it already said
+  // this table is "what a walk starts FROM: entry I55's consumer reads it" --
+  // and the consumer did not exist, so the query came from outside the
+  // machine. `u_geom_tilewalk` drives it now. Removed rather than left dead,
+  // because an input with no reader is a tie-off shape and ruling R159 makes
+  // an undeclared one LOWER the completion register.
+  //
+  // The two OUTPUTS stay, and they are better evidence than before: they now
+  // show the head the sequencer is actually querying, tile by tile, instead of
+  // tile zero forever.
   output logic [31:0] geom_ab_head_chunk_o,
   output logic        geom_ab_head_valid_o,
+
+  // ---- GEOM.TILEWALK's evidence (SWAPCLOSE, 2026-09-27) ------------------
+  // `geom_tw_door_o` is `zhao_geom_bin_pipe_v2`'s `walk_jobs_taken_o` brought
+  // to the boundary. The shell's binding comment asked for exactly this --
+  // "it wants a real reader at the console boundary then, not an empty pin"
+  // -- and it is the number that says the raster door carried traffic.
+  //
+  // `geom_tw_overlap_o` is UNREACHABLE while the sequencer's serial handshake
+  // is correct, so it owes a committed mutant rather than an argument:
+  // `tests/mutants/zhao_geom_tilewalk_overlap_mutant.sv`.
+  output logic [31:0] geom_tw_tiles_o,
+  output logic [31:0] geom_tw_empty_o,
+  output logic [31:0] geom_tw_jobs_o,
+  output logic [31:0] geom_tw_failed_o,
+  output logic [31:0] geom_tw_stall_o,
+  output logic [31:0] geom_tw_overlap_o,
+  output logic [31:0] geom_tw_door_o,
+  // HIGH FOR THE WHOLE SWEEP. The frame is not finished until this
+  // falls: in arrangement 1 the walk is what produces pixels, and the
+  // binner's `render_drain_done_o` now says only that the RETAINED
+  // ORACLE has finished discarding its jobs. A bench that stopped on
+  // the old condition would cut the picture off part way and every
+  // counter would still balance.
+  output logic        geom_tw_busy_o,
+  // WHICH ARRANGEMENT THIS CONSOLE WAS BUILT AS -- a constant, exported so a
+  // bench gates the right invariant instead of skipping one. 1 = the SDRAM
+  // walk feeds the raster; 0 = `zhao_geom_binner_v2`'s on-chip drain does and
+  // the sweep is a structural zero. A bench that merely fell silent when the
+  // walk is parked would be a gate that cannot reach the state it checks, and
+  // its silence would read exactly like a pass.
+  output logic        geom_walk_raster_o,
   output logic [31:0] geom_pw_dirs_o,
   output logic [31:0] geom_pw_dirmiss_o,
   output logic [31:0] geom_pw_chunks_o,
@@ -2055,11 +2097,24 @@ module zhao_console_board
   output logic [31:0] forge_jobarb_no_desc_o,
 
   // ---- GEOM.CLIPDOOR's evidence (owner ruling R187's honest door) ----------
-  // THREE clients since 2026-09-22 (owner ruling 1, PARTMAT): GEOM.REPLAY's
-  // mesh triangles (0), the forge (1) and PART.CLIPFEED's polygon particles
-  // (2). `granted_o` is flattened 32 bits each, least significant slice
-  // client 0, so the port widened 64 -> 96 with the third arm.
-  output logic [95:0] geom_clipdoor_granted_o,
+  // FOUR clients: GEOM.REPLAY's mesh triangles (0), the forge (1),
+  // PART.CLIPFEED's polygon particles (2) and TERRAIN.CLIPFEED (3).
+  // `granted_o` is flattened 32 bits each, least significant slice client 0.
+  //
+  // THIS COMMENT SAID "THREE" AND THIS PORT WAS 96 BITS UNTIL 2026-09-27
+  // (SWAPCLOSE), while `u_geom_clipdoor` below has been instantiated with
+  // `.NCLIENT (4)`. The block drives `[NCLIENT*32-1:0]`, so the FOURTH
+  // client's whole 32-bit grant counter was discarded on the way out and
+  // terrain's grant count was not observable at this boundary at all. It
+  // showed up as a Verilator WIDTHEXPAND, which `verilate()` does not surface
+  // because it does not pass `-Wall`.
+  //
+  // IT IS THE SAME SHAPE AS THIS PACKET'S OTHER TERRAIN FINDING. Domain 3 was
+  // being refused as a malformed record by a rule written before terrain was a
+  // producer domain; this is two more places written before terrain was a
+  // client. When an arm arrives, the things that DESCRIBE it are what go
+  // stale, and nothing in the tree reads them back.
+  output logic [127:0] geom_clipdoor_granted_o,
   output logic [31:0] geom_clipdoor_switches_o,
   output logic [31:0] geom_clipdoor_idle_offered_o,
   output logic [31:0] geom_clipdoor_err_hold_broken_o,
@@ -5047,9 +5102,17 @@ module zhao_console_board
       .geom_ab_flushcut_o                 (geom_ab_flushcut_o),
       .geom_ab_max_chunks_o               (geom_ab_max_chunks_o),
       .geom_ab_overflow_o                 (geom_ab_overflow_o),
-      .geom_ab_head_tile_i                (geom_ab_head_tile_i),
       .geom_ab_head_chunk_o               (geom_ab_head_chunk_o),
       .geom_ab_head_valid_o               (geom_ab_head_valid_o),
+      .geom_tw_tiles_o                    (geom_tw_tiles_o),
+      .geom_tw_empty_o                    (geom_tw_empty_o),
+      .geom_tw_jobs_o                     (geom_tw_jobs_o),
+      .geom_tw_failed_o                   (geom_tw_failed_o),
+      .geom_tw_stall_o                    (geom_tw_stall_o),
+      .geom_tw_overlap_o                  (geom_tw_overlap_o),
+      .geom_tw_door_o                     (geom_tw_door_o),
+      .geom_tw_busy_o                     (geom_tw_busy_o),
+      .geom_walk_raster_o                 (geom_walk_raster_o),
       .geom_pw_dirs_o                     (geom_pw_dirs_o),
       .geom_pw_dirmiss_o                  (geom_pw_dirmiss_o),
       .geom_pw_chunks_o                   (geom_pw_chunks_o),

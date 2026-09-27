@@ -531,9 +531,28 @@ module tb_zhao_console_core_smoke
   logic [31:0] geom_ab_flushcut_o;
   logic [15:0] geom_ab_max_chunks_o;
   logic        geom_ab_overflow_o;
-  logic [ 9:0] geom_ab_head_tile_i = 10'd0;
+  // `geom_ab_head_tile_i` WAS DECLARED HERE AND IS GONE (SWAPCLOSE,
+  // 2026-09-27). It was the group's only input, held at tile 0 forever,
+  // because nothing in the machine chose a tile. `u_geom_tilewalk` chooses one
+  // now, so the console port was removed and this net with it -- and the two
+  // outputs below stopped describing tile 0 and started describing whichever
+  // tile the sequencer is querying.
   logic [31:0] geom_ab_head_chunk_o;
   logic        geom_ab_head_valid_o;
+  // ---- GEOM.TILEWALK, entry I55's sequencer ------------------------------
+  logic [31:0] geom_tw_tiles_o;
+  logic [31:0] geom_tw_empty_o;
+  logic [31:0] geom_tw_jobs_o;
+  logic [31:0] geom_tw_failed_o;
+  logic [31:0] geom_tw_stall_o;
+  logic [31:0] geom_tw_overlap_o;
+  logic [31:0] geom_tw_door_o;
+  logic        geom_tw_busy_o;
+  logic        geom_walk_raster_o;
+  // Latched by the post-drain wait below and REFUSED at the end of the report.
+  // Not a fatal where it is set: the whole point of the walk's checks moving to
+  // the end is that a failing frame gets to say what it did first.
+  logic        tw_sweep_incomplete = 1'b0;
   logic [31:0] geom_pw_dirs_o;
   logic [31:0] geom_pw_dirmiss_o;
   logic [31:0] geom_pw_chunks_o;
@@ -1597,7 +1616,10 @@ module tb_zhao_console_core_smoke
   // be a silently unread output.
   logic        forge_pb_busy_o;
   // PARTMAT 2026-09-22: three clients now (mesh 0, forge 1, particles 2).
-  logic [95:0] geom_clipdoor_granted_o;
+  // 128 bits since 2026-09-27 (SWAPCLOSE): `u_geom_clipdoor` is
+  // `.NCLIENT (4)` and drives `[NCLIENT*32-1:0]`, so at 96 the FOURTH
+  // client -- TERRAIN.CLIPFEED -- had its whole grant counter discarded.
+  logic [127:0] geom_clipdoor_granted_o;
   logic [31:0] forge_pb_pages_o;
   logic [31:0] forge_pb_draws_o;
   logic [31:0] forge_pb_bad_magic_o;
@@ -6472,6 +6494,64 @@ module tb_zhao_console_core_smoke
       $display("SMOKE: NOTE render_drain_done_o never rose after %0d cycles", guard);
     repeat (4000) @(posedge gpu_clk);
 
+    // ---- AND THEN WAIT FOR THE WALK (SWAPCLOSE, 2026-09-27) --------------
+    // With `JOB_SRC = 1` the pixels come from GEOM.TILEWALK's sweep over the
+    // arena, and `render_drain_done_o` above no longer means the frame is
+    // drawn -- it means the RETAINED ORACLE has finished discarding its jobs,
+    // which in this arrangement happens FASTER than before because nothing
+    // backpressures it. Stopping there cut the sweep off at 26 tiles of 576
+    // with every counter still balancing, which is how this wait came to be
+    // written.
+    //
+    // THE CLOCKS ARE PRINTED BECAUSE THEY ARE THE MEASUREMENT. Entry I55
+    // quotes the walk at 29.58 clocks per triangle from `geom_arenabin_price`,
+    // which runs with no competing SDRAM traffic; this console is measured at
+    // 88% SDRAM occupancy. The difference between those two numbers is the
+    // cost directive section 7 asks to be charged honestly, and it cannot be
+    // read off a bench.
+    begin
+      int unsigned tw_rise;
+      int unsigned tw_wait;
+      // ---- WAIT FOR IT TO START, AND REFUSE TO PROCEED IF IT NEVER DOES ---
+      // `geom_tw_busy_o` is LOW before the sweep begins, so waiting only for
+      // it to FALL returns immediately when the sweep has not started -- the
+      // frame is cut off exactly as before and the bench prints a confident
+      // "swept the frame in 0 gpu clocks". "The walk never started" and "the
+      // walk finished instantly" are the same observation from that form, and
+      // only one of them is good news.
+      tw_rise = 0;
+      // ARRANGEMENT 0 HAS NO SWEEP TO WAIT FOR, and that is asserted below
+      // rather than assumed here.
+      while (geom_walk_raster_o && !geom_tw_busy_o && (tw_rise < 200000)) begin
+        @(posedge gpu_clk);
+        tw_rise = tw_rise + 1;
+      end
+      if (geom_walk_raster_o && !geom_tw_busy_o) begin
+        tw_sweep_incomplete = 1'b1;
+        $display("SMOKE: NOTE GEOM.TILEWALK NEVER STARTED -- %0d cycles after the drain `geom_tw_busy_o` is still low, so no walk-sourced job can have reached the raster. Every counter below is about a frame the walk did not draw.",
+                 tw_rise);
+      end
+      tw_wait = 0;
+      while (geom_tw_busy_o && (tw_wait < 2000000)) begin
+        @(posedge gpu_clk);
+        tw_wait = tw_wait + 1;
+      end
+      if (geom_tw_busy_o) begin
+        tw_sweep_incomplete = 1'b1;
+        $display("SMOKE: NOTE GEOM.TILEWALK DID NOT FINISH in %0d cycles -- the frame below is PARTIAL and every counter in it is a FLOOR rather than a total. Read it as a diagnosis, never as a measurement.",
+                 tw_wait);
+      end else if (geom_walk_raster_o) begin
+        $display("SMOKE: tilewalk   started %0d clk after the drain, swept the frame in %0d gpu clocks",
+                 tw_rise, tw_wait);
+      end
+      // NO LINE AT ALL WHEN PARKED. It used to print "swept the frame in 0 gpu
+      // clocks" on the arrangement where there is no sweep, which reads as a
+      // sweep that finished instantly -- the flattering direction, and the
+      // exact confusion this wait was added to remove. The parked arrangement
+      // says so in its own words at the end of the report instead.
+      repeat (2000) @(posedge gpu_clk);
+    end
+
     // (GEOM.GROUP_SEQ's job is no longer injected here: the meshlet dispatcher
     // fork inside the core issues it, from the meshlet the draw above fetched.)
 
@@ -6982,6 +7062,26 @@ module tb_zhao_console_core_smoke
     // (geom_paramarena_alignmut_fires) that makes them evidence.
     $display("SMOKE: paramalign arena_unaligned=%0d walk_unaligned=%0d",
              geom_pa_unaligned_o, geom_pw_unaligned_o);
+    // ---- I55's RASTER SWAP, AND THIS IS WHERE IT IS READ -----------------
+    // `tilewalk` is the sequencer; `door` is `zhao_geom_bin_pipe_v2`'s
+    // `walk_jobs_taken_o`, the raster door's own traffic count. In the
+    // arrangement this console now elaborates -- `JOB_SRC = 1` -- the door is
+    // the ONLY way a job reaches `zhao_raster_tile_pipe_v2`, so `door` and
+    // `raster pixels` stand or fall together.
+    $display("SMOKE: tilewalk   tiles=%0d empty=%0d jobs=%0d failed=%0d stall=%0d overlap=%0d door=%0d",
+             geom_tw_tiles_o, geom_tw_empty_o, geom_tw_jobs_o,
+             geom_tw_failed_o, geom_tw_stall_o, geom_tw_overlap_o,
+             geom_tw_door_o);
+    // THE JOB AND THE DOOR ARE COUNTED IN DIFFERENT MODULES, ON DIFFERENT
+    // REGISTER ENABLES -- `jobs_issued_o` inside GEOM.TILEWALK on its own
+    // handshake, `walk_jobs_taken_o` inside the bin pipe on the tile pipe's.
+    // So this comparison is NOT the pattern where one enable drives both sides
+    // and the checker is blind to the timing it exists to catch.
+    // A walk that failed part way leaves a tile's list half drawn, and `last`
+    // -- which RESOLVES the tile -- may never be asserted for it.
+    // Unreachable while the serial handshake holds; the committed mutant
+    // `zhao_geom_tilewalk_overlap_mutant` is what shows it CAN fire.
+
     $display("SMOKE: paramwalk  dirs=%0d dirmiss=%0d chunks=%0d stale=%0d illegal=%0d depth=%0d",
              geom_pw_dirs_o, geom_pw_dirmiss_o, geom_pw_chunks_o,
              geom_pw_stale_o, geom_pw_illegal_o, geom_pw_depth_o);
@@ -6998,13 +7098,6 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: fetcharm  vread=%0d vbad=%0d pvsplit=%0d (invariant vread == 3*tris=%0d)",
              geom_pw_vread_o, geom_pw_vbad_o, geom_pw_pvsplit_o,
              3 * geom_pw_tris_o);
-    if (geom_pw_vread_o != 3 * geom_pw_tris_o) begin
-      $fatal(1, "GEOM.PARAMWALK: vertices read (%0d) is not three per emitted triangle (%0d)",
-             geom_pw_vread_o, geom_pw_tris_o);
-    end
-    if (geom_pw_vbad_o != 32'd0) begin
-      $fatal(1, "GEOM.PARAMWALK: the fetch arm refused %0d vertex record(s)", geom_pw_vbad_o);
-    end
     $display("SMOKE: geomwshare denied=%0d contention=%0d err[short/long/unowned]=[%0d %0d %0d] retireunowned=%0d wbeatunowned=%0d ledgerfull=%0d",
              geom_ws_denied_o, geom_ws_contention_o, geom_ws_short_o,
              geom_ws_long_o, geom_ws_unowned_o, geom_ws_retire_unowned_o,
@@ -8932,10 +9025,29 @@ module tb_zhao_console_core_smoke
     if (geom_clip_culled_o != (SGF_EXP_CULLED + SGF_EXP_TERR_CULLED))
       $fatal(1, "SMOKE: GEOM.CLIP culled=%0d and the reference wants %0d. Terrain declares CULL_NONE, so `s3_back` is false by construction and a cull can ONLY be ZERO SCREEN AREA -- the ground plane is back through the eye. Check SGF_TERR_BASE_H16 in the generated fixture; do NOT put a tolerance on the area test.",
              geom_clip_culled_o, SGF_EXP_CULLED + SGF_EXP_TERR_CULLED);
-    if (geom_setup_triangles_submitted_o != (SGF_EXP_ACCEPTED + SGF_EXP_TERR_ACCEPTED))
-      $fatal(1, "SMOKE: GEOM.SETUP took %0d triangle(s) and the reference wants %0d mesh + %0d terrain = %0d -- the clip->setup seam or the shell's triangle door is not carrying",
+    // GEOM.SETUP HAS TWO SOURCES SINCE THE TIME MULTIPLEX (SWAPCLOSE,
+    // 2026-09-27), and `triangles_submitted_o` is a LIFETIME counter --
+    // `cnt_sub`, that block's only non-pipeline state -- so it sums both.
+    //
+    // The live frame's triangles arrive from GEOM.CLIP through the three-way
+    // fork; the walk's arrive from `zhao_geom_paramwalk` through the source
+    // select during the drain window. Both go through the SAME silicon, which
+    // is the entire reason the multiplex was chosen over a second instance:
+    // the planes are bit-identical by construction rather than by a
+    // verification argument at every plane and edge case.
+    //
+    // MEASURED WHEN THIS TERM WAS ADDED: 89 = 75 + 14, where 14 is exactly
+    // `geom_pw_tris_o`. THE CHECK IS STRONGER THAN IT WAS, not weaker: the
+    // seam is still asserted exactly, and the walk's contribution is now a
+    // NAMED TERM counted in a DIFFERENT MODULE on a DIFFERENT register enable,
+    // so a walk that silently dropped or duplicated a triangle fails here too
+    // and not only at the raster door.
+    if (geom_setup_triangles_submitted_o !=
+        (SGF_EXP_ACCEPTED + SGF_EXP_TERR_ACCEPTED + geom_pw_tris_o))
+      $fatal(1, "SMOKE: GEOM.SETUP took %0d triangle(s) and the reference wants %0d mesh + %0d terrain + %0d from the SDRAM walk = %0d -- the clip->setup seam, the shell's triangle door, or the walk's source select is not carrying",
              geom_setup_triangles_submitted_o, SGF_EXP_ACCEPTED, SGF_EXP_TERR_ACCEPTED,
-             SGF_EXP_ACCEPTED + SGF_EXP_TERR_ACCEPTED);
+             geom_pw_tris_o,
+             SGF_EXP_ACCEPTED + SGF_EXP_TERR_ACCEPTED + geom_pw_tris_o);
     // ---- I13: TERRAIN DRAWS, AND WHAT THAT DOES AND DOES NOT MEAN --------
     // 2026-09-26 (TERRAINVISIBLE). For the first time a terrain triangle
     // reaches GEOM.SETUP in the composed console, and `render_pixels_o` moves
@@ -10199,6 +10311,61 @@ module tb_zhao_console_core_smoke
     if (render_overflow_o !== 1'b0)
       $fatal(1, "SMOKE: the binner walled off this frame -- render_overflow_o is high. This fixture offers %0d triangle(s) to GEOM.SETUP and GEOM.BINNER holds %0d per frame; past that the tail of the frame is dropped WHOLE and its tiles are never resolved.",
              geom_setup_triangles_submitted_o, SGF_BINNER_TRI_CAP);
+
+    // =====================================================================
+    // I55's WALK -- THE CHECKS, RUN LAST SO THE REPORT SURVIVES THEM
+    // =====================================================================
+    // These five sat above `SMOKE: raster` and `SMOKE: texture`, so a frame
+    // that failed one of them killed the run before printing the evidence
+    // that would explain it -- the same fault this file already repaired
+    // once by moving the `tilewalk` line above the fetch arm's assertion.
+    // An assertion that suppresses the diagnostics needed to explain it is
+    // an instrument that goes silent exactly when it is wanted.
+    //
+    // MOVED, NOT WEAKENED: every check below is the one that was there, on
+    // the same counters, and the frame has now said what it did before it
+    // is judged for it.
+    // THE SWEEP MUST HAVE COMPLETED, and this is refused LAST rather than at
+    // the wait that detects it, so the report above survives to explain it.
+    // A partial frame is not a smaller frame: `raster pixels` and every
+    // texture counter in it are floors, and reading one as a total is how a
+    // truncated run gets quoted as a measurement.
+    if (!geom_walk_raster_o) begin
+      // ---- ARRANGEMENT 0: THE SWEEP IS A STRUCTURAL ZERO ----------------
+      // Asserted, not skipped. `GEOM_WALK_RASTER = 0` gates GEOM.TILEWALK's
+      // `start_i`, so the sweep never begins and every one of these is zero by
+      // construction -- which means a build that accidentally half-engaged the
+      // arrangement (the door parked while the sequencer runs, which would
+      // hold `cl_o_ready` low and stop the console's geometry dead) fails
+      // HERE, loudly, instead of hanging.
+      if (geom_tw_tiles_o != 32'd0 || geom_tw_jobs_o != 32'd0 ||
+          geom_tw_door_o != 32'd0 || geom_pw_tris_o != 32'd0 ||
+          geom_pw_vread_o != 32'd0) begin
+        $fatal(1, "GEOM.TILEWALK: the walk arrangement is PARKED (`geom_walk_raster_o` low) but it moved -- tiles=%0d jobs=%0d door=%0d tris=%0d vread=%0d. Half an engaged arrangement is worse than either whole one.",
+               geom_tw_tiles_o, geom_tw_jobs_o, geom_tw_door_o,
+               geom_pw_tris_o, geom_pw_vread_o);
+      end
+      $display("SMOKE: tilewalk   PARKED (GEOM_WALK_RASTER=0): the sweep is a structural zero and the binner's on-chip drain feeds the raster. Entry I55 is OPEN; see FINDINGS-swapclose.md section 5.");
+    end else if (tw_sweep_incomplete) begin
+      $fatal(1, "GEOM.TILEWALK: the sweep did not complete -- the frame above is PARTIAL");
+    end
+    if (geom_tw_jobs_o != geom_tw_door_o) begin
+      $fatal(1, "GEOM.TILEWALK: %0d job(s) issued but the raster door took %0d",
+             geom_tw_jobs_o, geom_tw_door_o);
+    end
+    if (geom_tw_failed_o != 32'd0) begin
+      $fatal(1, "GEOM.TILEWALK: %0d walk(s) ended badly", geom_tw_failed_o);
+    end
+    if (geom_tw_overlap_o != 32'd0) begin
+      $fatal(1, "GEOM.TILEWALK: %0d overlapping triangle offer(s)", geom_tw_overlap_o);
+    end
+    if (geom_pw_vread_o != 3 * geom_pw_tris_o) begin
+      $fatal(1, "GEOM.PARAMWALK: vertices read (%0d) is not three per emitted triangle (%0d)",
+             geom_pw_vread_o, geom_pw_tris_o);
+    end
+    if (geom_pw_vbad_o != 32'd0) begin
+      $fatal(1, "GEOM.PARAMWALK: the fetch arm refused %0d vertex record(s)", geom_pw_vbad_o);
+    end
 
     $display("SMOKE: PASS -- the connected core carries traffic on every wire this bench can reach.");
     $finish;

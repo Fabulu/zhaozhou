@@ -173,7 +173,16 @@ the repository ever said what the byte holds**: `zhao_geom_parambuf` decoded
 `pv_status_o` and no producer ever wrote one. §4 grants this packet authority to
 amend record schemas. The amendment:
 
-    [1:0]  domain           0 MESH, 1 FORGE, 2 PARTICLE, 3 reserved (illegal)
+    [1:0]  domain           0 MESH, 1 FORGE, 2 PARTICLE, 3 TERRAIN
+                            CORRECTED 2026-09-27 (SWAPCLOSE). This line read
+                            "3 reserved (illegal)" and `zhao_geom_parambuf`
+                            implemented it, so every TERRAIN vertex in the
+                            arena was refused as malformed -- measured at 30
+                            of 45 in the first console frame that read the
+                            detector. `zhao_console_core` declares
+                            `GEOM_VID_DOM_TERR = 2'd3`, the clip door grants
+                            it, and `SHARED_DOMAINS` is a four-bit mask over
+                            four domains. The line predated the terrain arm.
     [2]    untextured       the primitive that first published this vertex
                             declared no texture coordinates (R197), so
                             u_over_w and v_over_w are DON'T-CARE
@@ -183,7 +192,10 @@ amend record schemas. The amendment:
 
 **AND AS OF SCHEMA v2 BOTH OF THOSE RULES HAVE A DETECTOR** (2026-09-27).
 They were written here and enforced nowhere. `zhao_geom_parambuf`'s
-`pv_illegal_o` now asserts on a nonzero `[7:4]` **and** on the reserved domain
+`pv_illegal_o` asserts on a nonzero `[7:4]`. It ALSO asserted on domain 3
+until 2026-09-27, which refused every terrain vertex; see the table above.
+The superseded sentence read: it asserts on a nonzero `[7:4]` and on the
+reserved domain
 3, counted by `pv_illegal_count_o`, and `geom_parambuf_directed` fires both
 with legal stimulus rather than quoting the counter at zero. The port used to
 carry the s21 rule, which v2 made unreachable on the decode side by storing

@@ -2452,6 +2452,10 @@ targets:
       # the serialiser and the binner's serialise pass that fed it are gone.
       - fpga/rtl/geometry/zhao_geom_arenabin.sv
       - fpga/rtl/geometry/zhao_geom_tidq.sv
+      # Entry I55, SWAPCLOSE 2026-09-27: the tile sequencer that
+      # drives the walk. A census top of its own here for the same
+      # reason its two neighbours are.
+      - fpga/rtl/geometry/zhao_geom_tilewalk.sv
       - fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
       # The texture island became a COUNTED TOP on 2026-09-09, so the generated
       # production top instantiates the island instead of nine of its leaves --
@@ -3387,6 +3391,10 @@ targets:
       # serialise pass.
       - fpga/rtl/geometry/zhao_geom_arenabin.sv
       - fpga/rtl/geometry/zhao_geom_tidq.sv
+      # Added 2026-09-27 (entry I55, SWAPCLOSE): GEOM.TILEWALK is
+      # what asks the walk to walk. Without it in this list the
+      # console fit elaborates a module it cannot find, hours in.
+      - fpga/rtl/geometry/zhao_geom_tilewalk.sv
       - fpga/rtl/geometry/zhao_geom_meshfetch.sv
       # Added 2026-09-19 (geom packet): the descriptor CRC walker, entry I37.
       - fpga/rtl/geometry/zhao_geom_desc_crc.sv

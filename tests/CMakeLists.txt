@@ -11570,6 +11570,53 @@ foreach(pa_variant fires silent)
 endforeach()
 
 # ---------------------------------------------------------------------------
+# GEOM.TILEWALK -- entry I55's sequencer, and `overlap_o`'s POSITIVE CONTROL.
+#
+# `overlap_o` counts a triangle taken from the walk while one is still in
+# flight through the geometry back end. It is UNREACHABLE with legal stimulus
+# while the serial handshake is correct -- `t_ready_o` is high in exactly one
+# sub-state -- so no traffic can move it and its zero would be a claim forever.
+# CLAUDE.md: such a guard owes a COMMITTED MUTANT.
+#
+# ONE source, TWO executables, opposite expectations. The macro reaches BOTH
+# the RTL seam (a plain `ifdef selecting the module name, which a -D does
+# reach) and the C++ expectation, so the pair cannot drift into a driver that
+# expects one block and measures the other.
+# ---------------------------------------------------------------------------
+foreach(tw_variant directed overlapmut_fires)
+  if(tw_variant STREQUAL "directed")
+    set(tw_target test_geom_tilewalk_directed)
+  else()
+    set(tw_target test_geom_tilewalk_overlapmut_fires)
+  endif()
+  add_executable(${tw_target} geometry/geom_tilewalk_directed.cpp)
+  target_link_libraries(${tw_target} PRIVATE zhao_harness)
+  set(tw_sources "")
+  if(tw_variant STREQUAL "directed")
+    set(tw_vargs "")
+    list(APPEND tw_sources
+         ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_tilewalk.sv)
+  else()
+    target_compile_definitions(${tw_target} PRIVATE ZHAO_GEOM_TILEWALK_OVERLAP_MUT)
+    set(tw_vargs -DZHAO_GEOM_TILEWALK_OVERLAP_MUT)
+    list(APPEND tw_sources
+         ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_geom_tilewalk_overlap_mutant.sv)
+  endif()
+  list(APPEND tw_sources
+       ${CMAKE_SOURCE_DIR}/tests/geometry/tb_zhao_geom_tilewalk.sv)
+  verilate(${tw_target}
+    PREFIX Vtb_zhao_geom_tilewalk
+    TOP_MODULE tb_zhao_geom_tilewalk
+    VERILATOR_ARGS ${tw_vargs}
+    INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+    SOURCES ${tw_sources})
+  add_test(NAME geom_tilewalk_${tw_variant} COMMAND ${tw_target})
+  set_tests_properties(geom_tilewalk_${tw_variant}
+    PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+endforeach()
+
+# ---------------------------------------------------------------------------
 # `burst_unaligned_o`'s POSITIVE CONTROL AND ITS NEGATIVE CONTROL.
 # The counter watches for a request address that is not a multiple of the
 # SDRAM's burst-alignment quantum.  A JEDEC BL8 SEQUENTIAL burst wraps inside

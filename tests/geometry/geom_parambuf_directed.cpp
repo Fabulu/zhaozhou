@@ -72,6 +72,52 @@ void set_words(W& dst, const uint8_t* b, int nbytes) {
 // RTL's offsets move and these do not, the test fails, which is the whole
 // point of a directed test against a schema.
 constexpr int kPvBytes = 32;
+// SCHEMA v2. Named rather than repeated as a literal at each `set_words` call,
+// which is how the 16 below outlived the record it described.
+constexpr int kTdBytes = 32;
+
+// The four scan-box bounds are s12 fields at bits 176/188/200/212, so two of
+// them do NOT start on a byte. A byte-granular writer would have silently
+// tested a layout four bits away from the one `zhao_pkg` declares.
+//
+// AND IT IS A SECOND FUNCTION ON PURPOSE. The `put_field` below this file
+// already had is SET-ONLY -- it ORs a 1 in and leaves a 0 alone -- which is
+// correct for filling a freshly zeroed buffer and silently WRONG for putting a
+// field back. The reserved-field control needs exactly that: set one bit, watch
+// the detector fire, CLEAR it, watch it go quiet. Written with the set-only
+// helper the clear would be a no-op, the detector would go on firing, and the
+// honest reading of that is "stuck bit" -- a false alarm manufactured by the
+// test's own instrument.
+// VERILATOR HANDS A NARROW SIGNED PORT BACK AS RAW BITS, and this cost three
+// failures before it was believed. `pv_x_o` is `logic signed [31:0]`, so a plain
+// `static_cast<int32_t>` is correct on it and every existing check in this file
+// does exactly that. `td_min_x_o` is s12 and `td_area2_o` is s48 -- the widths
+// `zhao_geom_setup` actually declares -- so the model returns 0x800 for -2048
+// and 0x0000_9ABC... for a negative area, and a cast reads them as large
+// POSITIVE numbers. The RTL is right and the reader has to sign-extend; the
+// direction is the safe one, because it fails loudly rather than agreeing.
+int64_t sx48(uint64_t v) {
+  v &= 0x0000FFFFFFFFFFFFull;
+  return (v & 0x0000800000000000ull)
+             ? static_cast<int64_t>(v | 0xFFFF000000000000ull)
+             : static_cast<int64_t>(v);
+}
+
+int32_t sx12(uint32_t v) {
+  v &= 0xFFFu;
+  return (v & 0x800u) ? static_cast<int32_t>(v | 0xFFFFF000u)
+                      : static_cast<int32_t>(v);
+}
+
+void put_field_exact(uint8_t* b, int lo, int w, uint32_t v) {
+  for (int i = 0; i < w; ++i) {
+    const int p = lo + i;
+    if ((v >> i) & 1u)
+      b[p / 8] = static_cast<uint8_t>(b[p / 8] | (1u << (p % 8)));
+    else
+      b[p / 8] = static_cast<uint8_t>(b[p / 8] & ~(1u << (p % 8)));
+  }
+}
 constexpr int kPvXLo = 0, kPvXW = 21;
 constexpr int kPvYLo = 21, kPvYW = 21;
 constexpr int kPvInvwLo = 42, kPvInvwW = 24;
@@ -298,9 +344,17 @@ int main(int argc, char** argv) {
     };
     const C cases[] = {
         {0x00, true, "domain MESH, nothing else set"},
-        {0x0F, false, "domain 3 is reserved -- illegal"},
+        // WAS `false` UNTIL 2026-09-27 AND IT ASSERTED A DEFECT.
+        // 0x0F has a ZERO reserved nibble and domain 3, so it fired on the
+        // domain rule alone -- the rule that refused every terrain vertex in
+        // the arena. Domain 3 is TERRAIN and is legal, so this record is
+        // well formed.
+        {0x0F, true, "domain 3 is TERRAIN -- legal, and the reserve is zero"},
         {0x0A, true, "shared_capable + domain PARTICLE"},
-        {0x03, false, "domain 3 alone"},
+        {0x03, true, "domain 3 (TERRAIN) alone -- legal"},
+        // A REPLACEMENT ILLEGAL CASE, so the table still contains one that
+        // fires on the rule that remains: a nonzero reserved nibble.
+        {0x10, false, "reserved bit 4 set -- a malformed record"},
         {0x10, false, "a reserved bit set: nonzero [7:4] is malformed"},
         {0x80, false, "the top reserved bit"},
         {0x0C, true, "shared_capable + untextured, domain MESH"},
@@ -328,7 +382,7 @@ int main(int argc, char** argv) {
     }
     zhao::check(bad == 0,
                 "a malformed status byte is refused and REPORTED not corrected -- "
-                "both the reserved-bits rule and the reserved-domain rule, neither "
+                "the reserved-bits rule, which is the rule that remains, neither "
                 "of which had any detector before schema v2",
                 0, bad);
     zhao::check(fired > 0, "and the malformed cases are not vacuous: some were offered",
@@ -339,9 +393,9 @@ int main(int argc, char** argv) {
                 fired, static_cast<int>(top.pv_illegal_count_o - before));
   }
 
-  // ---- 3: TriangleDescriptor, and the sealed vertex count ---------------
+  // ---- 3: TriangleDescriptor SCHEMA v2, and the sealed vertex count -----
   {
-    uint8_t b[16];
+    uint8_t b[kTdBytes];
     std::memset(b, 0, sizeof(b));
     put16(b, 0, 10);
     put16(b, 2, 20);
@@ -349,8 +403,30 @@ int main(int argc, char** argv) {
     put16(b, 6, 0x0777);
     put32(b, 8, 0x12345678);
     put32(b, 12, 0xA5A5A5A5);
+    // SCHEMA v2's second sixteen bytes. `area2` is s48 at bit 128 -- byte
+    // aligned, so two writes -- and the value has BITS ABOVE 31 SET and is
+    // NEGATIVE, because those are the two ways a carriage narrower than s48, or
+    // one sign-extended from the wrong bit, would go unnoticed against a small
+    // positive number.
+    // 0x1ABC_DEF0_1234 is about 1.88e13, comfortably inside s48's
+    // -140,737,488,355,328 .. +140,737,488,355,327 -- and the first value tried
+    // here was NOT: 0x9ABC_DEF0_1234 is 1.70e14, so its negation does not fit
+    // s48 at all and the check failed against a field that was storing exactly
+    // what s48 can store. That is PVSCHEMA's own mistake in a new width ("my
+    // s21 stimulus asked for a truncation and then complained about it"), and
+    // the lesson is the same: the RTL was right and the stimulus was illegal.
+    const int64_t kArea2 = -static_cast<int64_t>(0x00001ABCDEF01234ll);
+    const uint64_t a2 = static_cast<uint64_t>(kArea2) & 0x0000FFFFFFFFFFFFull;
+    put32(b, 16, static_cast<uint32_t>(a2 & 0xFFFFFFFFu));
+    put16(b, 20, static_cast<uint16_t>((a2 >> 32) & 0xFFFFu));
+    // Four DIFFERENT bounds, two of them negative, so a decoder cutting one
+    // bound's bits for another fails rather than agreeing with itself.
+    put_field_exact(b, 176, 12, static_cast<uint32_t>(-2048) & 0xFFFu);   // min_x
+    put_field_exact(b, 188, 12, 2047u);                                   // max_x
+    put_field_exact(b, 200, 12, static_cast<uint32_t>(-7) & 0xFFFu);      // min_y
+    put_field_exact(b, 212, 12, 1365u);                                   // max_y
 
-    set_words(top.td_bytes_i, b, 16);
+    set_words(top.td_bytes_i, b, kTdBytes);
     top.td_sealed_vertices_i = 100;
     top.td_valid_i = 1;
     top.eval();
@@ -361,12 +437,28 @@ int main(int argc, char** argv) {
                 "a TriangleDescriptor decodes, and ids inside the sealed count "
                 "are legal",
                 1, (ok && !top.td_illegal_o) ? 1 : 0);
+    // v2's five, each at its own width and each with its sign.
+    zhao::check(sx48(static_cast<uint64_t>(top.td_area2_o)) == kArea2,
+                "area2 decodes as s48, NEGATIVE, with bits above 31 set", 1,
+                sx48(static_cast<uint64_t>(top.td_area2_o)) == kArea2 ? 1 : 0);
+    zhao::check(sx12(static_cast<uint32_t>(top.td_min_x_o)) == -2048,
+                "min_x decodes as s12 at bit 176", 1,
+                static_cast<int>(sx12(static_cast<uint32_t>(top.td_min_x_o))));
+    zhao::check(sx12(static_cast<uint32_t>(top.td_max_x_o)) == 2047,
+                "max_x decodes as s12 at bit 188 -- NOT byte aligned", 1,
+                static_cast<int>(sx12(static_cast<uint32_t>(top.td_max_x_o))));
+    zhao::check(sx12(static_cast<uint32_t>(top.td_min_y_o)) == -7,
+                "min_y decodes as s12 at bit 200", 1,
+                static_cast<int>(sx12(static_cast<uint32_t>(top.td_min_y_o))));
+    zhao::check(sx12(static_cast<uint32_t>(top.td_max_y_o)) == 1365,
+                "max_y decodes as s12 at bit 212 -- NOT byte aligned", 1,
+                static_cast<int>(sx12(static_cast<uint32_t>(top.td_max_y_o))));
     zhao::tick(top);
 
     // one id past the sealed count
     const uint32_t before = top.td_illegal_count_o;
     put16(b, 4, 100);  // == sealed count, so out of range
-    set_words(top.td_bytes_i, b, 16);
+    set_words(top.td_bytes_i, b, kTdBytes);
     top.eval();
     zhao::check(top.td_illegal_o == 1,
                 "a vertex id AT the sealed count is out of range -- the count "
@@ -376,6 +468,44 @@ int main(int argc, char** argv) {
     top.td_valid_i = 0;
     zhao::check(top.td_illegal_count_o == before + 1, "and is counted", 1,
                 static_cast<int>(top.td_illegal_count_o - before));
+
+    // ---- SCHEMA v2's RESERVE, SHOWN SILENT AND THEN FIRED --------------
+    // `zhao_pkg` rules bits 224..255 "WRITTEN 0. Nonzero is a malformed
+    // record". The status byte's own reserved nibble went the whole of v1 with
+    // no detector at all, which `zhao_geom_parambuf`'s header records as the
+    // thing schema v2 fixed for the vertex; this is the same law for the
+    // descriptor, and it is checked rather than promised.
+    put16(b, 4, 30);  // put the id back so the ONLY fault is the reserve
+    set_words(top.td_bytes_i, b, kTdBytes);
+    top.td_valid_i = 1;
+    top.eval();
+    const uint32_t q0 = top.td_illegal_count_o;
+    zhao::check(top.td_illegal_o == 0,
+                "NEGATIVE CONTROL: a sound v2 descriptor with a ZERO reserve is "
+                "legal -- so the firing below is the reserve and not the ids",
+                1, top.td_illegal_o ? 0 : 1);
+    zhao::tick(top);
+    put_field_exact(b, 224, 32, 0x00000001u);  // one bit, the smallest breach there is
+    set_words(top.td_bytes_i, b, kTdBytes);
+    top.eval();
+    zhao::check(top.td_illegal_o == 1,
+                "td_illegal_o FIRES on a SINGLE nonzero bit in the reserved "
+                "field -- the reserve has a detector, not a promise",
+                1, top.td_illegal_o);
+    zhao::tick(top);
+    zhao::check(top.td_illegal_count_o == q0 + 1,
+                "and the reserved breach is counted exactly once", 1,
+                static_cast<int>(top.td_illegal_count_o - q0));
+    // Put it back and prove it STOPS. A detector that keeps firing on healthy
+    // input is a stuck bit.
+    put_field_exact(b, 224, 32, 0u);
+    set_words(top.td_bytes_i, b, kTdBytes);
+    top.eval();
+    zhao::check(top.td_illegal_o == 0,
+                "and it goes quiet again once the reserve is zero", 1,
+                top.td_illegal_o ? 0 : 1);
+    zhao::tick(top);
+    top.td_valid_i = 0;
   }
 
   // ---- 4: THE CHUNK, and the generation that is its only tell -----------

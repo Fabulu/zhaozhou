@@ -428,6 +428,18 @@ module zhao_geom_paramarena_drain_mutant
     input  var logic [15:0] td_material_i,
     input  var logic [31:0] td_raster_i,
     input  var logic [31:0] td_source_i,
+    // ---- SCHEMA v2's SECOND SIXTEEN BYTES (SWAPCLOSE, 2026-09-27) ---------
+    // `zhao_geom_setup` consumes these five and the v1 record carried none of
+    // them, so a back end fed from the arena had nothing to drive them with.
+    // They are stored WHOLE, at the width GEOM.SETUP declares, and they are
+    // NOT recomputable here or anywhere downstream: `kc2` is DEFINED from
+    // `area2` in that block, so the barycentric identity recovers nothing.
+    // `zhao_pkg`'s TriangleDescriptor table carries the whole argument.
+    input  var logic signed [47:0] td_area2_i,
+    input  var logic signed [11:0] td_min_x_i,
+    input  var logic signed [11:0] td_max_x_i,
+    input  var logic signed [11:0] td_min_y_i,
+    input  var logic signed [11:0] td_max_y_i,
 
     input  var logic        ck_valid_i,
     output var logic        ck_ready_o,
@@ -640,7 +652,7 @@ module zhao_geom_paramarena_drain_mutant
   // import -- so nothing went red. Flattering direction: a reader looking for
   // room in the record was told there were eight spare bytes that are spent.
   localparam int unsigned PV_B = ZHAO_PARAMBUF_PV_BYTES;   // w=32 bytes
-  localparam int unsigned TD_B = ZHAO_PARAMBUF_TD_BYTES;   // w=16 bytes
+  localparam int unsigned TD_B = ZHAO_PARAMBUF_TD_BYTES;   // w=32 bytes
   localparam int unsigned CK_B = ZHAO_PARAMBUF_CK_BYTES;   // w=64 bytes
 
   // The three sub-regions inside a view, laid out in allocation order. Bases
@@ -690,17 +702,20 @@ module zhao_geom_paramarena_drain_mutant
   // rather than guessing at it. Its number below is therefore verified by the
   // acceptance bench, which reads memory AT that offset, and not by the gate.
   localparam int unsigned TRI_OFF_B = ((VERT_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,097,152
-  localparam int unsigned TRI_CAP_B   = MAX_TRIS   * TD_B;         // 262,144
-  // 2,359,296 AND NOT 2,359,264, CORRECTED MUXBUILD 2026-09-27. 2,097,152 +
-  // 262,144 is 2,359,296, and `VIEW_USED_B` on the line below but one -- whose
-  // 3,407,872 is right -- implies exactly that. The paragraph above predicted
-  // this: it says this constant is not checked because it reaches `TD_B`, a
-  // package import, and "its number below is therefore verified by the
-  // acceptance bench ... and not by the gate". The bench verifies the ADDRESS
-  // it reads at; it never reads the comment.
-  localparam int unsigned CHUNK_OFF_B = ((TRI_OFF_B + TRI_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,359,296
+  localparam int unsigned TRI_CAP_B   = MAX_TRIS   * TD_B;         // 524,288
+  // 2,621,440 SINCE TriangleDescriptor SCHEMA v2 (SWAPCLOSE, 2026-09-27).
+  // 2,097,152 + 524,288 is 2,621,440, and `VIEW_USED_B` on the line below but
+  // one is that plus the chunk region. It read 2,359,296 while `TD_B` was 16,
+  // and 2,359,264 before MUXBUILD corrected it -- so this one number has now
+  // been wrong once and stale once, in a comment the paragraph above says
+  // NOTHING CHECKS, because it reaches `TD_B`, a package import, and
+  // `check_localparam_comments` skips a constant it cannot resolve. "Its
+  // number below is therefore verified by the acceptance bench ... and not by
+  // the gate" -- and the bench verifies the ADDRESS it reads at, never the
+  // comment. Treat every number on these three lines as unguarded prose.
+  localparam int unsigned CHUNK_OFF_B = ((TRI_OFF_B + TRI_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,621,440
   localparam int unsigned CHUNK_CAP_B = MAX_CHUNKS * CK_B;         // 1,048,576
-  localparam int unsigned VIEW_USED_B = CHUNK_OFF_B + CHUNK_CAP_B; // 3,407,872
+  localparam int unsigned VIEW_USED_B = CHUNK_OFF_B + CHUNK_CAP_B; // 3,670,016
 
   // The low bits an aligned address must have clear. `BURST_ALIGN_B` is
   // guarded to be a power of two at elaboration, so this is the whole test.
@@ -772,6 +787,16 @@ module zhao_geom_paramarena_drain_mutant
       $fatal(1, "zhao_geom_paramarena: the ProjectedVertex field table does not fill the record");
     if (ZHAO_PARAMBUF_PV_SCHEMA != 2)
       $fatal(1, "zhao_geom_paramarena: this block encodes ProjectedVertex SCHEMA v2");
+    // The same two statements for the TriangleDescriptor, which had NEITHER
+    // until SCHEMA v2: its six v1 fields were packed here from bare literals
+    // and unpacked in `zhao_geom_parambuf` from a second set of bare literals,
+    // so the pair were exactly the "two hand-maintained inverses" the vertex
+    // record was rescued from. Both sides now derive from `zhao_pkg`, and
+    // these two lines are what makes that derivation checkable.
+    if (ZHAO_TD_END_BIT != TD_B * 8)
+      $fatal(1, "zhao_geom_paramarena: the TriangleDescriptor field table does not fill the record");
+    if (ZHAO_PARAMBUF_TD_SCHEMA != 2)
+      $fatal(1, "zhao_geom_paramarena: this block encodes TriangleDescriptor SCHEMA v2");
     if ((PV_STRIDE_B % BURST_ALIGN_B) != 0)
       $fatal(1, "zhao_geom_paramarena: PV_STRIDE_B is not burst-aligned");
     if ((TD_B % BURST_ALIGN_B) != 0)
@@ -954,12 +979,35 @@ module zhao_geom_paramarena_drain_mutant
 
   wire pv_narrow_c = !fits_s21(pv_x_i) || !fits_s21(pv_y_i) || !fits_s22(pv_alpha_i);
 
-  wire [TD_B*8-1:0] td_bytes_c = {
-      td_source_i,                  // byte 12..15
-      td_raster_i,                  // byte  8..11
-      td_material_i,                // byte  6.. 7
-      td_v2_i, td_v1_i, td_v0_i     // byte  0.. 5
-  };
+  // SCHEMA v2, AND IT IS BUILT FROM `zhao_pkg`'s OFFSETS RATHER THAN FROM A
+  // CONCATENATION. The v1 form was a positional `{...}` and its inverse in
+  // `zhao_geom_parambuf` was a set of bare bit literals (`td_bytes_i[64 +: 32]`
+  // and friends); the two agreed only because two people kept them agreeing.
+  // Writing both sides against the same named constants is what the vertex
+  // record already does, and the elaboration guard above asserts the table
+  // FILLS the record, so a field added without moving `ZHAO_TD_END_BIT` is a
+  // `$fatal` rather than a silently short write.
+  //
+  // THE RESERVED FIELD IS WRITTEN 0 BY THE `'0` BELOW, not by a literal that
+  // has to be maintained at the right width. `zhao_geom_parambuf` refuses a
+  // nonzero one as a malformed record, so the reserve has a DETECTOR and not
+  // just a promise -- and that detector is reachable, because the bench can
+  // poke those bytes in the SDRAM model between the write and the walk.
+  logic [TD_B*8-1:0] td_bytes_c;
+  always_comb begin
+    td_bytes_c = '0;
+    td_bytes_c[ZHAO_TD_V0_LO       +: ZHAO_TD_V0_W]       = td_v0_i;
+    td_bytes_c[ZHAO_TD_V1_LO       +: ZHAO_TD_V1_W]       = td_v1_i;
+    td_bytes_c[ZHAO_TD_V2_LO       +: ZHAO_TD_V2_W]       = td_v2_i;
+    td_bytes_c[ZHAO_TD_MATERIAL_LO +: ZHAO_TD_MATERIAL_W] = td_material_i;
+    td_bytes_c[ZHAO_TD_RASTER_LO   +: ZHAO_TD_RASTER_W]   = td_raster_i;
+    td_bytes_c[ZHAO_TD_SOURCE_LO   +: ZHAO_TD_SOURCE_W]   = td_source_i;
+    td_bytes_c[ZHAO_TD_AREA2_LO    +: ZHAO_TD_AREA2_W]    = td_area2_i;
+    td_bytes_c[ZHAO_TD_MINX_LO     +: ZHAO_TD_MINX_W]     = td_min_x_i;
+    td_bytes_c[ZHAO_TD_MAXX_LO     +: ZHAO_TD_MAXX_W]     = td_max_x_i;
+    td_bytes_c[ZHAO_TD_MINY_LO     +: ZHAO_TD_MINY_W]     = td_min_y_i;
+    td_bytes_c[ZHAO_TD_MAXY_LO     +: ZHAO_TD_MAXY_W]     = td_max_y_i;
+  end
 
   // THE GENERATION IS STAMPED HERE AND NOT SUPPLIED BY THE CALLER. A producer
   // that took the generation as an input would let a carried-over chunk keep

@@ -168,7 +168,35 @@ module zhao_geom_paramwalk
     output var logic [15:0] t_material_o,
     output var logic [31:0] t_raster_o,
     output var logic [31:0] t_source_o,
-    output var logic        t_illegal_o,       // a vertex id past the seal
+    output var logic        t_illegal_o,       // a MALFORMED descriptor
+    // ---- SCHEMA v2's FIVE, AND THEY ARE WHY THE RECORD GREW ----------------
+    // `zhao_geom_setup` consumes `tri_area2_i` and the four bounds of the
+    // section 8 SCISSORED scan box. Before TriangleDescriptor v2 the record
+    // carried none of them, so this walk could offer a triangle no back end
+    // could accept -- which is what "the planes are recomputable" hid for six
+    // packets. They are READ BACK, never recomputed here: `kc2` is DEFINED from
+    // `area2` in GEOM.SETUP, so the barycentric identity recovers nothing and a
+    // walk-side derivation would be correct for any garbage value whatever.
+    output var logic signed [47:0] t_area2_o,
+    output var logic signed [11:0] t_min_x_o,
+    output var logic signed [11:0] t_max_x_o,
+    output var logic signed [11:0] t_min_y_o,
+    output var logic signed [11:0] t_max_y_o,
+    // ---- THE TILE LIST'S BRACKETS (SWAPCLOSE, 2026-09-27) -----------------
+    // `zhao_raster_tile_pipe_v2` clears a tile's coverage on `job_first_i` and
+    // RESOLVES the tile on `job_last_i` -- `rs_state_q <= last_q ? RS_SWAP :
+    // RS_IDLE`. So these two are not decoration: `last` is what writes the tile
+    // out, and a walk that never asserts it draws nothing.
+    //
+    // THEY ARE PUBLISHED FROM HERE BECAUSE ONLY HERE KNOWS. `t_last_o` is the
+    // `else` arm of W_TD_EMIT's own branch below -- no more ids in this chunk
+    // AND the chain does not continue -- which is the same decision that sends
+    // the FSM to W_END. A consumer trying to derive it would have to see
+    // whether another triangle is coming, which means letting this block
+    // advance, which destroys the triangle it is still holding. That is a skid
+    // buffer and a deadlock; this is a wire off a decision already made.
+    output var logic        t_first_o,
+    output var logic        t_last_o,
 
     // ---- THE THREE PROJECTED VERTICES THE DESCRIPTOR NAMES ------------------
     // THIS IS THE ARM THE BLOCK DELIBERATELY DID NOT DRIVE, and the comment
@@ -280,12 +308,12 @@ module zhao_geom_paramwalk
 );
 
   localparam int unsigned CK_B  = ZHAO_PARAMBUF_CK_BYTES;  // w=64 bytes
-  localparam int unsigned TD_B  = ZHAO_PARAMBUF_TD_BYTES;  // w=16 bytes
+  localparam int unsigned TD_B  = ZHAO_PARAMBUF_TD_BYTES;  // w=32 bytes
   localparam int unsigned CKW   = CK_B * 8;                // w=512 bits
   // The low bits an aligned address must have clear.
   localparam int unsigned ALIGN_LSB = $clog2(BURST_ALIGN_B);  // w=4 bits
   localparam int unsigned CK_BEATS = CK_B / 8;             // w=8 beats
-  localparam int unsigned TD_BEATS = TD_B / 8;             // w=2 beats
+  localparam int unsigned TD_BEATS = TD_B / 8;             // w=4 beats
   localparam int unsigned PV_B  = ZHAO_PARAMBUF_PV_BYTES;  // w=32 bytes
   localparam int unsigned PVW   = PV_B * 8;                // w=256 bits
   localparam int unsigned PV_BEATS = PV_B / 8;             // w=4 beats
@@ -386,7 +414,35 @@ module zhao_geom_paramwalk
   // the correctness; a second 512-bit copy of the chunk would have bought the
   // same thing for four times the price.
   logic [CKW-1:0] r_buf_q;
-  logic [127:0]   td_buf_q;
+  // WIDTH-DERIVED SINCE SCHEMA v2, AND IT WAS A LITERAL. At TD_B = 32 this
+  // register holds 256 bits. Its declaration and the beat shift below were
+  // BOTH written `[127:0]`/`[127:64]` while `TD_BEATS` was already derived from
+  // `TD_B`, so the schema change had to find two typed numbers in a block whose
+  // third copy of the same fact was already automatic.
+  //
+  // AND THE FAILURE MODE IS LOUD, WHICH IS WORTH RECORDING BECAUSE I FIRST
+  // WROTE THE OPPOSITE. Leaving either number at 128 while the other moves is
+  // a width MISMATCH, and it was fire tested rather than argued: restoring the
+  // literal `td_buf_q[127:64]` under a 256-bit `td_buf_q` fails the build with
+  //
+  //   %Warning-WIDTHEXPAND: zhao_geom_paramwalk.sv:1017: Operator ASSIGNDLY
+  //   expects 256 bits on the Assign RHS, but Assign RHS's REPLICATE generates
+  //   128 bits.  %Error: Exiting due to 1 warning(s)
+  //
+  // -- so this is a cheap, immediate error and NOT a silent truncation. My
+  // first version of this comment claimed the descriptor would have decoded out
+  // of the wrong bytes "with every instrument in the block still balanced",
+  // which is wrong in the ALARMING direction: it would send the next reader
+  // hunting a quiet fault the toolchain refuses in seconds. The state that
+  // WOULD be silent is both numbers agreeing at the wrong width, and a derived
+  // width is what makes that unreachable.
+  //
+  // WHAT THE FIRE TEST ALSO SETTLED, because the run that followed it lied:
+  // the broken build returned BUILD_RC=1 and the test binary then ran STALE and
+  // printed the previous run's "0/620 checks failed" -- the documented
+  // stale-binary trap, caught only by reading the build's exit code rather than
+  // the pipeline's.
+  logic [TD_B*8-1:0] td_buf_q;
   // A THIRD BUFFER, for the same reason there is a second. `r_buf_q` must hold
   // the chunk while its ids are walked and `td_buf_q` must hold the descriptor
   // while its three vertices are fetched -- the descriptor's ids are re-read on
@@ -432,6 +488,11 @@ module zhao_geom_paramwalk
   // within a chunk: which of its ids we are fetching
   logic [3:0]  id_idx_q;
   logic [15:0] id_count_q;
+  // Set by the first ACCEPTED emit of a walk and cleared when a walk starts, so
+  // `t_first_o` is true for exactly one reference per walk. Cleared at the
+  // start rather than at W_END, because a walk that fails part way through must
+  // still begin the next one with a clean bracket.
+  logic        emitted_any_q;
 
   // ------------------------------------------------------------- decoding --
   // The one decoder. Fed from the burst buffer for chunks, and from the low
@@ -460,6 +521,8 @@ module zhao_geom_paramwalk
   logic [15:0] td_v0_c, td_v1_c, td_v2_c, td_material_c;
   logic [31:0] td_raster_c, td_source_c;
   logic        td_illegal_c;
+  logic signed [47:0] td_area2_c;
+  logic signed [11:0] td_min_x_c, td_max_x_c, td_min_y_c, td_max_y_c;
 
   assign dec_ck_valid_c = (wstate_q == W_CK_CHECK);
   // THE DESCRIPTOR'S DECODE IS HELD ACROSS THE VERTEX FETCH. `td_valid_i` used
@@ -512,7 +575,14 @@ module zhao_geom_paramwalk
       .td_sealed_vertices_i (w_verts_q),
       .td_v0_o (td_v0_c), .td_v1_o (td_v1_c), .td_v2_o (td_v2_c),
       .td_material_o (td_material_c), .td_raster_o (td_raster_c),
-      .td_source_o (td_source_c), .td_illegal_o (td_illegal_c),
+      .td_source_o (td_source_c),
+      // SCHEMA v2's five, straight out of the same decoder instance that
+      // reads the ids -- so there is exactly one place in the design that
+      // knows where `area2` sits in the record.
+      .td_area2_o (td_area2_c), .td_min_x_o (td_min_x_c),
+      .td_max_x_o (td_max_x_c), .td_min_y_o (td_min_y_c),
+      .td_max_y_o (td_max_y_c),
+      .td_illegal_o (td_illegal_c),
 
       .ck_valid_i     (dec_ck_valid_c),
       .ck_bytes_i     (r_buf_q),
@@ -618,6 +688,25 @@ module zhao_geom_paramwalk
   assign t_raster_o   = td_raster_c;
   assign t_source_o   = td_source_c;
   assign t_illegal_o  = td_illegal_c;
+  // Combinational off the decoder, exactly like the six fields above, and
+  // held for the whole of W_TD_EMIT because `td_buf_q` is not touched again
+  // until the next descriptor request.
+  assign t_area2_o    = td_area2_c;
+  assign t_min_x_o    = td_min_x_c;
+  assign t_max_x_o    = td_max_x_c;
+  assign t_min_y_o    = td_min_y_c;
+  assign t_max_y_o    = td_max_y_c;
+
+  // THE BRACKETS. `t_last_c` is written as the NEGATION OF THE TWO CONTINUE
+  // CONDITIONS rather than as a third copy of the end condition, so it cannot
+  // drift away from the branch it describes: W_TD_EMIT continues if there are
+  // more ids in this chunk, or if the chain may be followed, and otherwise goes
+  // to W_END. If either of those tests is ever changed, this line is wrong in
+  // the same edit and the directed test says so -- which is the point of
+  // writing it this way round.
+  wire t_more_ids_c  = (({12'd0, id_idx_q} + 16'd1) < id_count_q);
+  assign t_last_o    = (wstate_q == W_TD_EMIT) && !t_more_ids_c && !ck_follow_q;
+  assign t_first_o   = (wstate_q == W_TD_EMIT) && !emitted_any_q;
 
   // The three fetched vertices, in the descriptor's own order. Index 0 is v0,
   // which `zhao_geom_setup` and `zhao_geom_attrpack` both call corner A.
@@ -725,6 +814,7 @@ module zhao_geom_paramwalk
       t_pv_split_o    <= '0;
       id_idx_q       <= 4'd0;
       id_count_q     <= 16'd0;
+      emitted_any_q  <= 1'b0;
       walk_done_o    <= 1'b0;
       walk_failed_o  <= 1'b0;
       dirs_read_o      <= '0;
@@ -794,6 +884,7 @@ module zhao_geom_paramwalk
           w_chunk_q      <= walk_head_i[22:0];
           w_depth_q      <= 16'd0;
           w_failed_q     <= 1'b0;
+          emitted_any_q  <= 1'b0;
           wstate_q       <= W_SCR;
         end
 
@@ -977,7 +1068,7 @@ module zhao_geom_paramwalk
         // 128-bit buffer, so `r_buf_q` still holds the chunk whose ids are
         // being walked and the chain continues without re-reading it.
         W_TD_BEAT: if (beat_valid_i) begin
-          td_buf_q <= {beat_data_i, td_buf_q[127:64]};
+          td_buf_q <= {beat_data_i, td_buf_q[TD_B*8-1:64]};
           r_beat_q <= r_beat_q + 4'd1;
           if (beat_last_i) begin
             if (r_beat_q != (r_beats_q - 4'd1)) begin
@@ -1088,6 +1179,7 @@ module zhao_geom_paramwalk
 
         W_TD_EMIT: if (t_ready_i) begin
           tris_emitted_o <= tris_emitted_o + 32'd1;
+          emitted_any_q  <= 1'b1;
           // A malformed descriptor is EMITTED AND FLAGGED, not dropped. The
           // consumer is told which triangle is wrong; dropping it silently
           // would leave a hole nothing downstream could see. R7's rule is that

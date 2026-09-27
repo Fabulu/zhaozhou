@@ -104,7 +104,7 @@ constexpr uint32_t SCRATCH_BASE = 0x06800000u;
 // been amended under owner directive section 4. A dead constant with an
 // authoritative comment is a document that cannot go stale loudly.
 constexpr uint32_t PV_B = 32;
-constexpr uint32_t TD_B = 16;
+constexpr uint32_t TD_B = 32;
 constexpr uint32_t CK_B = 64;
 
 // THE BURST-ALIGNMENT QUANTUM AND THE VERTEX ALLOCATION STRIDE, 2026-09-23.
@@ -134,7 +134,7 @@ constexpr uint32_t align_up(uint32_t v) {
 }
 
 constexpr uint32_t TRI_OFF_B   = align_up(MAX_VERTS * PV_SLOT_B);          // 2,097,120
-constexpr uint32_t CHUNK_OFF_B = align_up(TRI_OFF_B + MAX_TRIS * TD_B);    // 2,359,264
+constexpr uint32_t CHUNK_OFF_B = align_up(TRI_OFF_B + MAX_TRIS * TD_B);    // 2,621,408
 
 uint32_t view_base(int view) { return view ? VIEW1_BASE : VIEW0_BASE; }
 
@@ -184,7 +184,39 @@ struct Vertex {
 struct Descriptor {
   uint16_t v0, v1, v2, material;
   uint32_t raster, source;
+  // SCHEMA v2's second sixteen bytes. Defaulted to zero so the several
+  // aggregate initialisers in this file that name only the first six stay
+  // valid AND stay defined -- an uninitialised member here would be an
+  // indeterminate value compared against a decoded one, which fails at random.
+  int64_t area2 = 0;
+  int16_t min_x = 0, max_x = 0, min_y = 0, max_y = 0;
 };
+
+// A 48-bit field does not fit `get_field`'s uint32_t. Kept separate rather than
+// widening that one, because every existing caller reads a field of 32 bits or
+// fewer and a silent widening is how a 32-bit check starts passing on 48 bits
+// of garbage.
+uint64_t get_field64(const uint8_t* b, int lo, int w) {
+  uint64_t v = 0;
+  for (int i = 0; i < w; ++i) {
+    const int p = lo + i;
+    if ((b[p / 8] >> (p % 8)) & 1u) v |= (1ull << i);
+  }
+  return v;
+}
+
+int64_t sx48(uint64_t v) {
+  v &= 0x0000FFFFFFFFFFFFull;
+  return (v & 0x0000800000000000ull)
+             ? static_cast<int64_t>(v | 0xFFFF000000000000ull)
+             : static_cast<int64_t>(v);
+}
+
+int16_t sx12(uint32_t v) {
+  v &= 0xFFFu;
+  return static_cast<int16_t>((v & 0x800u) ? static_cast<int16_t>(v | 0xF000u)
+                                           : static_cast<int16_t>(v));
+}
 
 // Cut `w` bits at bit offset `lo` out of a little-endian byte buffer. Schema
 // v2's ProjectedVertex is not byte-aligned past the status byte, so a
@@ -237,6 +269,13 @@ bool push_td(Dut& t, const Descriptor& d, int max_wait = 20000) {
   t.td_material_i = d.material;
   t.td_raster_i = d.raster;
   t.td_source_i = d.source;
+  // Masked at the port's own width rather than relying on Verilator to trim a
+  // negative host integer. The masks are the widths `zhao_pkg` declares.
+  t.td_area2_i = static_cast<uint64_t>(d.area2) & 0x0000FFFFFFFFFFFFull;
+  t.td_min_x_i = static_cast<uint32_t>(d.min_x) & 0xFFFu;
+  t.td_max_x_i = static_cast<uint32_t>(d.max_x) & 0xFFFu;
+  t.td_min_y_i = static_cast<uint32_t>(d.min_y) & 0xFFFu;
+  t.td_max_y_i = static_cast<uint32_t>(d.max_y) & 0xFFFu;
   for (int i = 0; i < max_wait; ++i) {
     t.eval();
     const bool go = t.td_ready_o != 0;
@@ -415,6 +454,11 @@ WalkResult walk(Dut& t, uint32_t head, int max_wait = 400000) {
       d.material = t.t_material_o;
       d.raster = t.t_raster_o;
       d.source = t.t_source_o;
+      d.area2 = sx48(static_cast<uint64_t>(t.t_area2_o));
+      d.min_x = sx12(static_cast<uint32_t>(t.t_min_x_o));
+      d.max_x = sx12(static_cast<uint32_t>(t.t_max_x_o));
+      d.min_y = sx12(static_cast<uint32_t>(t.t_min_y_o));
+      d.max_y = sx12(static_cast<uint32_t>(t.t_max_y_o));
       r.tris.push_back(d);
       r.illegal.push_back(static_cast<uint8_t>(t.t_illegal_o));
       WalkTriVerts tv;
@@ -734,6 +778,29 @@ int main(int argc, char** argv) {
     d.material = static_cast<uint16_t>(0xA100 + i);
     d.raster = 0x5AA50000u + static_cast<uint32_t>(i * 7 + 1);
     d.source = 0x0BAD0000u + static_cast<uint32_t>(i * 13 + 3);
+    // ---- SCHEMA v2, AND THE VALUES ARE THE TEST -------------------------
+    // Three properties, each asserted as a PREMISE below before anything is
+    // required of the round trip:
+    //   * BITS ABOVE 31 ARE SET. A path that carried `area2` in 32 bits -- the
+    //     obvious mistake, since every other integer field in this record is
+    //     32 or fewer -- truncates these and the check fails. s48 is not taken
+    //     on trust.
+    //   * EVERY VALUE IS DISTINCT, so a decoder that returns a neighbour's
+    //     field, or the same field twice, fails rather than agreeing with
+    //     itself.
+    //   * ODD TRIANGLES ARE NEGATIVE. `out_area2_o` is
+    //     `flip ? -s3_area : s3_area`, so the sign is part of the quantity and
+    //     a field read unsigned, or sign-extended from the wrong bit, fails.
+    // The four box bounds are given FOUR DIFFERENT values, including negative
+    // ones, for the same reason PVSCHEMA gave x and y different values: a
+    // decoder that reads min_y's bits for max_x cannot be caught by a fixture
+    // where they agree.
+    const int64_t mag = 0x0000'12A0'0000'0000ll + static_cast<int64_t>(i) * 0x5B3'0000'07ll;
+    d.area2 = (i & 1) ? -mag : mag;
+    d.min_x = static_cast<int16_t>(-2048 + i * 3);
+    d.max_x = static_cast<int16_t>(2047 - i * 5);
+    d.min_y = static_cast<int16_t>(-1000 + i * 7);
+    d.max_y = static_cast<int16_t>(1500 - i * 11);
     tris.push_back(d);
     ckt(push_td(t, d), "A: a descriptor is accepted");
   }
@@ -846,6 +913,34 @@ int main(int argc, char** argv) {
       cke(tris[i].material, peek16(t, a + 6), "A: TD byte 6..7 is material_id");
       cke(tris[i].raster, peek32(t, a + 8), "A: TD byte 8..11 is raster_state");
       cke(tris[i].source, peek32(t, a + 12), "A: TD byte 12..15 is source_id");
+      // ---- SCHEMA v2's SECOND SIXTEEN BYTES, AS A BIT LAYOUT -------------
+      // `area2` is byte aligned; the four box bounds are NOT -- they are s12
+      // fields at bits 176/188/200/212 -- so past `area2` the record is read
+      // WHOLE and cut at the offsets `zhao_pkg` declares, transcribed here
+      // independently. Byte-granular peeks would pass while every bound sat
+      // four bits over, which is exactly the trap the vertex record's own
+      // comment above names.
+      uint8_t trec[32];
+      for (int k = 0; k < 32; k += 4) {
+        const uint32_t w = peek32(t, a + static_cast<uint32_t>(k));
+        for (int q = 0; q < 4; ++q) trec[k + q] = static_cast<uint8_t>(w >> (8 * q));
+      }
+      cke(static_cast<uint64_t>(tris[i].area2) & 0x0000FFFFFFFFFFFFull,
+            get_field64(trec, 128, 48), "A: TD bits 128..175 are area2, s48");
+      cke(static_cast<uint32_t>(tris[i].min_x) & 0xFFFu, get_field(trec, 176, 12),
+          "A: TD bits 176..187 are min_x, s12");
+      cke(static_cast<uint32_t>(tris[i].max_x) & 0xFFFu, get_field(trec, 188, 12),
+          "A: TD bits 188..199 are max_x, s12");
+      cke(static_cast<uint32_t>(tris[i].min_y) & 0xFFFu, get_field(trec, 200, 12),
+          "A: TD bits 200..211 are min_y, s12");
+      cke(static_cast<uint32_t>(tris[i].max_y) & 0xFFFu, get_field(trec, 212, 12),
+          "A: TD bits 212..223 are max_y, s12");
+      // THE RESERVE IS WRITTEN 0, AND THAT IS CHECKED RATHER THAN ASSUMED.
+      // `zhao_pkg` rules bits 224..255 "WRITTEN 0. Nonzero is a malformed
+      // record", the encoder writes them from a `'0` initialisation, and
+      // `td_illegal_o` refuses a nonzero one -- which case 15 fires.
+      cke(0u, get_field(trec, 224, 32),
+          "A: TD bits 224..255 are the reserve, WRITTEN ZERO");
     }
     const uint32_t cbase = VIEW1_BASE + CHUNK_OFF_B;
     cke(0xFFFFFFFFu, peek32(t, cbase + 0), "A: chunk byte 0..3 is next_chunk");
@@ -885,6 +980,72 @@ int main(int argc, char** argv) {
       cke(tris[i].raster, r.tris[i].raster, "case 1: raster_state is bit-identical");
       cke(tris[i].source, r.tris[i].source, "case 1: source_id is bit-identical");
       cke(0, r.illegal[i], "case 1: the descriptor is inside the seal");
+    }
+
+    // -------------------------------------------------------------------
+    // CASE 1b -- SCHEMA v2's `area2` AND SCISSORED BOX, THROUGH REAL SDRAM,
+    //            AND THE PREMISE THAT MAKES IT A TEST.
+    //
+    // WHY THIS EXISTS AND WHY IT CANNOT BE SKIPPED. `zhao_geom_setup`
+    // consumes `tri_area2_i` and these four bounds, and the v1 record carried
+    // NEITHER -- so a back end fed from this arena had nothing to drive them
+    // with. The attractive escape was the barycentric identity
+    // `kc0 + kc1 + kc2 = 2A`, which is true, and circular here:
+    // `zhao_geom_setup`'s `s3_kc2` is DEFINED as `s2_area2 - kc0 - kc1`, so
+    // recovering 2A from that block's own outputs recovers it from itself and
+    // the result is correct for ANY garbage value. A derivation that cannot
+    // fail is not a derivation, so the quantity is CARRIED and this is the
+    // check that it arrives.
+    //
+    // THE PREMISE IS ASSERTED FIRST, because a round-trip check whose values
+    // happen to be representable in 32 bits, or happen to be equal, passes
+    // while discriminating nothing -- PVSCHEMA's colour bucket is the
+    // precedent, and it caught its own author's first attempt.
+    {
+      std::printf("\n=== case 1b: area2 and the scissored box survive SDRAM\n");
+      int hi_bits = 0, negatives = 0, distinct = 0;
+      for (size_t i = 0; i < tris.size(); ++i) {
+        const uint64_t mag =
+            static_cast<uint64_t>(tris[i].area2 < 0 ? -tris[i].area2 : tris[i].area2);
+        if (mag > 0xFFFFFFFFull) ++hi_bits;
+        if (tris[i].area2 < 0) ++negatives;
+        bool uniq = true;
+        for (size_t j = 0; j < i; ++j)
+          if (tris[j].area2 == tris[i].area2) uniq = false;
+        if (uniq) ++distinct;
+      }
+      cke(static_cast<uint32_t>(tris.size()), static_cast<uint32_t>(hi_bits),
+          "case 1b PREMISE: EVERY area2 has bits above 31 set, so a 32-bit"
+          " carriage truncates it and this check fails");
+      ckt(negatives > 0,
+          "case 1b PREMISE: at least one area2 is NEGATIVE, so the sign is"
+          " under test and not merely the magnitude");
+      cke(static_cast<uint32_t>(tris.size()), static_cast<uint32_t>(distinct),
+          "case 1b PREMISE: every area2 is distinct, so a decoder returning a"
+          " neighbour's field fails rather than agreeing with itself");
+      ckt(tris.size() > 1 && tris[0].min_x != tris[0].max_x &&
+              tris[0].min_x != tris[0].min_y && tris[0].max_x != tris[0].max_y,
+          "case 1b PREMISE: the four bounds carry FOUR different values, so a"
+          " decoder cutting one bound's bits for another is caught");
+
+      for (size_t i = 0; i < r.tris.size() && i < tris.size(); ++i) {
+        cke(static_cast<uint64_t>(tris[i].area2),
+              static_cast<uint64_t>(r.tris[i].area2),
+              "case 1b: area2 is BIT-IDENTICAL through the real guard,"
+              " arbiter, controller and SDRAM");
+        cke(static_cast<uint32_t>(static_cast<int32_t>(tris[i].min_x)),
+            static_cast<uint32_t>(static_cast<int32_t>(r.tris[i].min_x)),
+            "case 1b: the scissored min_x is bit-identical");
+        cke(static_cast<uint32_t>(static_cast<int32_t>(tris[i].max_x)),
+            static_cast<uint32_t>(static_cast<int32_t>(r.tris[i].max_x)),
+            "case 1b: the scissored max_x is bit-identical");
+        cke(static_cast<uint32_t>(static_cast<int32_t>(tris[i].min_y)),
+            static_cast<uint32_t>(static_cast<int32_t>(r.tris[i].min_y)),
+            "case 1b: the scissored min_y is bit-identical");
+        cke(static_cast<uint32_t>(static_cast<int32_t>(tris[i].max_y)),
+            static_cast<uint32_t>(static_cast<int32_t>(r.tris[i].max_y)),
+            "case 1b: the scissored max_y is bit-identical");
+      }
     }
     cke(1, t.dirs_read_o, "case 1: the directory was read once");
     cke(0, t.dir_mismatch_o, "case 1 / case 2a: dir_mismatch_o is SILENT on a healthy frame");

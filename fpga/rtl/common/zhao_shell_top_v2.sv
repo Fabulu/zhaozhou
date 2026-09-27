@@ -179,7 +179,21 @@ module zhao_shell_top_v2
   // reason: the room gate below is EXACT, so a queue too small does not
   // corrupt anything, it throttles -- which is a throughput question and not
   // a correctness one.
-  parameter int unsigned GEOM_WQ_W   = 64
+  parameter int unsigned GEOM_WQ_W   = 64,
+  // ---- I55's RASTER DOOR, arrangement select (SWAPCLOSE, 2026-09-27) --------
+  // 0 = `zhao_geom_binner_v2`'s on-chip drain feeds the raster, which is what
+  // this shell has always done and what owner directive section 7's "retain the
+  // correct complete oracle" asks to keep buildable. 1 = the SDRAM walk,
+  // through the `walk_job_*` ports below.
+  //
+  // DEFAULT 0 IS LOAD-BEARING. `tb_zhao_shell` and the paired-diff harness
+  // instantiate this shell and must elaborate byte-identically to before; only
+  // `zhao_console_core` asks for arrangement 1. The two are ALTERNATIVES, never
+  // concurrent, so this is an elaboration question -- a `generate` answers it
+  // for zero logic where a run-time multiplex on the job bus measures 2,050
+  // comb ALUT, and directive section 4 forbids the concurrent arrangement
+  // anyway.
+  parameter int unsigned JOB_SRC     = 0
 ) (
   // ---- clocks + reset (harness-driven, frozen ratios: vid = gpu/2,
   // ---- audio = gpu/4, fixed phase — plan R1) -----------------------------
@@ -446,6 +460,29 @@ module zhao_shell_top_v2
 
   input  logic               render_tri_valid_i,
   output logic               render_tri_ready_o,
+
+  // ---- I55's RASTER DOOR (SWAPCLOSE, 2026-09-27) ---------------------------
+  // What the WALK knows and the triangle record does not: which TILE a
+  // reference is for, whether it opens or closes that tile's list, and its own
+  // handshake. Twenty-eight bits plus a counter.
+  //
+  // The 1,877-bit metadata is NOT here and never needed to be: the time
+  // multiplex feeds the SAME `u_geom_setup` / `u_geom_attrpack` pair, so the
+  // record arrives at `u_render_bin`'s own `tri_*` ports whichever source fed
+  // it. That is DOORCOST's measurement -- 2,037 of the 2,065 wires six packets
+  // priced were already ports -- and it is why this door is twenty-eight wires
+  // rather than a subsystem retirement.
+  //
+  // In arrangement 0 the `generate` branch that reads these IS NOT BUILT, so
+  // they have no reader in the elaborated circuit and `walk_jobs_taken_o` is a
+  // structural zero rather than a silent instrument.
+  input  logic               walk_job_valid_i,
+  output logic               walk_job_ready_o,
+  input  logic signed [11:0] walk_job_tile_x_i,
+  input  logic signed [11:0] walk_job_tile_y_i,
+  input  logic               walk_job_first_i,
+  input  logic               walk_job_last_i,
+  output logic        [31:0] walk_jobs_taken_o,
   // ---- D22 TREAD 10: the geometry memory clients -----------------------------
   // The last thing the bench still PLAYED was memory itself. Every earlier
   // tread took something the bench supplied and gave it to a composed block;
@@ -1271,8 +1308,6 @@ module zhao_shell_top_v2
   logic        rp_done_unused, rp_degen_unused, rp_busy_unused;
   logic        rp_tok_unused;
   // I55's door, arrangement 0. See u_render_bin's `walk_job_*` comment.
-  logic        rp_walkready_unused;
-  logic [31:0] rp_walkjobs_unused;
 
   // ---- GEOM.BINNER's INSTRUMENTS, which used to end here (GIANTREFS) ------
   // `rp_refs_unused`, `rp_depth_unused`, `rp_culled_unused` and
@@ -1397,7 +1432,15 @@ module zhao_shell_top_v2
   zhao_geom_bin_pipe_v2 #(
     .CHUNKS(RENDER_CHUNKS),
     .CHUNK_W(RENDER_CHUNK_W),
-    .CHUNK_REFS(RENDER_CHUNK_REFS)
+    .CHUNK_REFS(RENDER_CHUNK_REFS),
+    // PASSED THROUGH, NOT HARDCODED. The two arrangements are ALTERNATIVES and
+    // the selection is an elaboration question, which a `generate` answers for
+    // zero logic -- DOORCOST measured the run-time multiplex at 2,050 comb ALUT
+    // and refused it, and owner directive section 4 is why: an arrangement in
+    // which the legacy drain and the SDRAM walk can BOTH reach `u_tile` inside
+    // one frame is "a parallel legacy on-chip frame arena that still supplies
+    // the actual pixels", with a select line on it.
+    .JOB_SRC(JOB_SRC)
   ) u_render_bin (
     .clk(gpu_clk), .rst_n(rst_n),
     .frame_begin_i(v2_frame_admit_w), .frame_end_i(render_frame_end_i),
@@ -1455,18 +1498,25 @@ module zhao_shell_top_v2
     // select that feeds `u_geom_setup`/`u_geom_attrpack` from the walk during
     // the drain window; then a sequencer on `walk_valid_i`. These five wires
     // are then driven by that sequencer and nothing else changes here.
-    .walk_job_valid_i(1'b0),
-    .walk_job_ready_o(rp_walkready_unused),
-    .walk_job_tile_x_i(12'sd0),
-    .walk_job_tile_y_i(12'sd0),
-    .walk_job_first_i(1'b0),
-    .walk_job_last_i(1'b0),
+    //
+    // -- SWAPCLOSE, 2026-09-27. THE THREE THINGS ABOVE HAVE ARRIVED, so the
+    // five wires are now driven by the sequencer the paragraph names and
+    // nothing else changed here, exactly as it said. `JOB_SRC` is a shell
+    // parameter defaulting to 0, so every OTHER instantiation of this shell --
+    // the paired-diff harness, `tb_zhao_shell` -- elaborates byte-identically
+    // to before, and the console is the one place that asks for arrangement 1.
+    .walk_job_valid_i(walk_job_valid_i),
+    .walk_job_ready_o(walk_job_ready_o),
+    .walk_job_tile_x_i(walk_job_tile_x_i),
+    .walk_job_tile_y_i(walk_job_tile_y_i),
+    .walk_job_first_i(walk_job_first_i),
+    .walk_job_last_i(walk_job_last_i),
     // Structurally zero in arrangement 0 -- the door is not built, so the
     // counter cannot be anything else, and that is a reason rather than a
     // silence. When `JOB_SRC` becomes 1 this is the number that must move off
     // zero before any claim about I55 is worth reading, and it wants a real
     // reader at the console boundary then, not an empty pin.
-    .walk_jobs_taken_o(rp_walkjobs_unused),
+    .walk_jobs_taken_o(walk_jobs_taken_o),
 
     // TIE: MEASURE.TOKENS does not gate the shell render path yet -- the V1
     // shell says the same at its own u_render_bin; when the governor is wired

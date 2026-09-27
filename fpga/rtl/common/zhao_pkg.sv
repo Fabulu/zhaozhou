@@ -181,11 +181,19 @@ package zhao_pkg;
 
   // The three record sizes R7 ruled, in BYTES, in one place so the arena
   // producer, the chunk walker and the reference model cannot disagree about
-  // them. `zhao_geom_parambuf` decodes 192 / 128 / 512 BITS respectively;
+  // them. `zhao_geom_parambuf` decodes 256 / 256 / 512 BITS respectively;
   // these are the same three numbers in the unit an ADDRESS is counted in,
   // which is the unit the allocator needs and the decoder does not have.
+  //
+  // THAT BIT COUNT WAS STALE IN BOTH PLACES AND IS CORRECTED HERE.
+  // It read "192 / 128 / 512". PVSCHEMA moved the ProjectedVertex 24 -> 32
+  // bytes and left the 192 behind one screen above the constant it had just
+  // changed; SWAPCLOSE moves the TriangleDescriptor 16 -> 32 and the 128 with
+  // it. Neither number is checked by anything -- prose cannot go stale loudly
+  // -- and a reader sizing a record against this line would have been told the
+  // vertex record had eight bytes of room that PVSCHEMA had already spent.
   localparam int unsigned ZHAO_PARAMBUF_PV_BYTES = 32;   // SCHEMA v2 -- was 24
-  localparam int unsigned ZHAO_PARAMBUF_TD_BYTES = 16;
+  localparam int unsigned ZHAO_PARAMBUF_TD_BYTES = 32;   // SCHEMA v2 -- was 16
   localparam int unsigned ZHAO_PARAMBUF_CK_BYTES = 64;
 
   // =====================================================================
@@ -297,6 +305,141 @@ package zhao_pkg;
   // The end of the last field, so a block can assert the layout FILLS the
   // record exactly rather than trusting the table above.
   localparam int unsigned ZHAO_PV_END_BIT    = ZHAO_PV_A_LO + ZHAO_PV_A_W;   // 256
+
+  // =====================================================================
+  // `TriangleDescriptor` SCHEMA v2 -- THE LAYOUT, DECLARED ONCE
+  // =====================================================================
+  // Authority: owner vacation directive section 4 -- "If the old compact
+  // records cannot carry the full commissioned function, introduce a
+  // VERSIONED EXTENSION or immutable sidecar keyed by the same identity ...
+  // The architect has explicit authority to amend record schemas for this
+  // purpose." Full record, with the alternatives priced:
+  // `reports/DECISION-20260927-TRIANGLEDESCRIPTOR-V2.md`.
+  //
+  // WHY v1 COULD NOT STAND, AND IT IS NOT A SIZE ARGUMENT. `zhao_geom_setup`
+  // consumes `tri_area2_i` (s48) and the four s12 bounds of the section 8
+  // SCISSORED scan box. The 16-byte v1 record carries NEITHER of them --
+  // three u16 ids, a u16 material, a u32 raster word and a u32 source word,
+  // 128 bits every one of them spoken for -- so a back end fed from the
+  // arena had nothing whatever to put on those five ports.
+  //
+  // AND THE ELEGANT ESCAPE IS CIRCULAR. This is the measurement that belongs
+  // beside the constants, because it is what two packets nearly built. The
+  // barycentric identity `kc0 + kc1 + kc2 = 2A` holds for every triangle and
+  // GEOM.SETUP emits all three constants, so 2A looks recoverable from its
+  // own outputs with two adds and no multiplier. It is not:
+  // `zhao_geom_setup`'s `s3_kc2` is DEFINED as `s2_area2 - kc0 - kc1`. The
+  // block computes only TWO of the three cross products and spends the
+  // supplied 2A to avoid the third, so the identity holds BY CONSTRUCTION
+  // and carries no information. A back end built on it would compute `kc2`
+  // as `(kc0+kc1+kc2) - kc0 - kc1` -- identically `kc2` for ANY garbage
+  // `area2` whatever -- and produce plausible planes from an unconstrained
+  // number with every handshake healthy and every counter balanced.
+  // A DERIVATION THAT CANNOT FAIL IS NOT A DERIVATION. `tri_area2_i` is
+  // load-bearing input arithmetic and not a passthrough.
+  //
+  // RECOMPUTING EITHER QUANTITY ON THE WALK SIDE IS REFUSED, and not on
+  // cost. `zhao_geom_clip`'s `out_area2_o` is `flip ? -s3_area : s3_area` --
+  // the area AFTER the winding normalisation that also swapped B and C -- so
+  // a second site computing it owes bit-equality with that at every
+  // triangle, every cull mode and every degenerate case.
+  // `zhao_forge_assemble.sv` states the admissible form: "A second INSTANCE
+  // of one law is not a second law; a second EXPRESSION of it would be". The
+  // scissored box is a second ratified law again -- a subpixel-to-pixel
+  // conversion AND a clamp against the viewport rectangle, not a min/max of
+  // three corners. The time multiplex was chosen precisely to avoid that
+  // verification burden; re-deriving these at its input would reintroduce it
+  // at the one port that feeds it.
+  //
+  // THE FIRST SIXTEEN BYTES ARE BYTE-IDENTICAL TO v1. The amendment is
+  // purely ADDITIVE, which is what makes it a versioned extension in
+  // section 4's sense rather than a re-layout: a reader of the old six
+  // fields is correct without any change.
+  //
+  // IT FITS AT FULL R7 CAPACITY. At the console's `MAX_TRIS` = 16,384 the
+  // descriptor region goes 262,144 -> 524,288 bytes, so the view's used
+  // footprint goes 3,407,872 -> 3,670,016 against a
+  // `ZHAO_PARAMBUF_VIEW_SPAN` of 4,194,304 -- it fits with 524,288 bytes
+  // spare, and NO region in `spec/memory_rules.md` section 5c moves, because
+  // the growth is absorbed inside the view's own span. `VIEW0_BASE`,
+  // `VIEW1_BASE` and `SCRATCH_BASE` are unchanged and their elaboration
+  // guards still hold. 32 is a multiple of the 16-byte BL8 burst-alignment
+  // quantum and 32/8 = 4 is an exact beat count, so both of the arena's
+  // alignment guards still PASS rather than being relaxed to admit this.
+  //
+  // THE ONE REAL COST, DECLARED RATHER THAN ABSORBED: the TRIANGLE arm's
+  // SDRAM traffic DOUBLES -- 2 beats to 4, 16 bytes to 32 per triangle -- on
+  // the write side of every frame, and the walk's read side pays the same
+  // doubling. It is unavoidable: the bytes ARE the function, and the
+  // alternative is re-expressing two ratified laws.
+  //
+  // `untex` IS NOT A FIELD HERE, and checking that saved one. It is already
+  // `status[2]` of every ProjectedVertex -- `zhao_geom_vertid`'s
+  // `pv_status_o = {4'd0, shareable_q, untex_q, dom_q}` -- which the walk
+  // decodes already and publishes as `t_untex_o`. A second storage site for
+  // one fact is how two copies come to disagree about it.
+  localparam int unsigned ZHAO_PARAMBUF_TD_SCHEMA = 2;
+
+  //   offset  width  field        signed  note
+  //   ------  -----  -----------  ------  --------------------------------
+  //        0     16  v0               no  v1, unchanged
+  //       16     16  v1               no  v1, unchanged
+  //       32     16  v2               no  v1, unchanged
+  //       48     16  material         no  v1, unchanged
+  //       64     32  raster           no  v1, unchanged (owner ruling R28)
+  //       96     32  source           no  v1, unchanged
+  //      128     48  area2           yes  GEOM.SETUP's `tri_area2_i`. 2A in
+  //                                       subpixel squared, winding-normalised,
+  //                                       stored WHOLE at its port width.
+  //      176     12  min_x           yes  the section 8 SCISSORED scan box, in
+  //      188     12  max_x           yes  inclusive pixels, each at GEOM.SETUP's
+  //      200     12  min_y           yes  own s12 port width
+  //      212     12  max_y           yes
+  //      224     32  reserved         --  WRITTEN 0. Nonzero is a MALFORMED
+  //                                       record and `td_illegal_o` says so --
+  //                                       a reserve with a detector, not a
+  //                                       reserve with a promise.
+  //   ------------
+  //      256 bits = 32 bytes exactly
+  //
+  // EVERY FIELD IS STORED AT ITS FULL PORT WIDTH AND CARRIES NO DOMAIN
+  // CLAIM. `area2` is s48 because `tri_area2_i` is s48; the box fields are
+  // s12 because `tri_min_x_i` is s12. Nothing is narrowed to a measured
+  // domain. That is PROJECTEDVERTEX-V2's own rule -- "no claim at all beats
+  // a claim with a large margin" -- and here it is free, because 96 bits of
+  // function fit in 128 bits of space with 32 bits left over.
+  //
+  // THE SCHEMA IS VERSIONED AT ELABORATION, exactly as the ProjectedVertex
+  // is, and for the same reason: v1 and v2 descriptors never coexist in one
+  // arena, because one build writes the region and the same build reads it
+  // back inside the frame.
+  localparam int unsigned ZHAO_TD_V0_LO       = 0;
+  localparam int unsigned ZHAO_TD_V0_W        = 16;
+  localparam int unsigned ZHAO_TD_V1_LO       = 16;
+  localparam int unsigned ZHAO_TD_V1_W        = 16;
+  localparam int unsigned ZHAO_TD_V2_LO       = 32;
+  localparam int unsigned ZHAO_TD_V2_W        = 16;
+  localparam int unsigned ZHAO_TD_MATERIAL_LO = 48;
+  localparam int unsigned ZHAO_TD_MATERIAL_W  = 16;
+  localparam int unsigned ZHAO_TD_RASTER_LO   = 64;
+  localparam int unsigned ZHAO_TD_RASTER_W    = 32;
+  localparam int unsigned ZHAO_TD_SOURCE_LO   = 96;
+  localparam int unsigned ZHAO_TD_SOURCE_W    = 32;
+  localparam int unsigned ZHAO_TD_AREA2_LO    = 128;
+  localparam int unsigned ZHAO_TD_AREA2_W     = 48;
+  localparam int unsigned ZHAO_TD_MINX_LO     = 176;
+  localparam int unsigned ZHAO_TD_MINX_W      = 12;
+  localparam int unsigned ZHAO_TD_MAXX_LO     = 188;
+  localparam int unsigned ZHAO_TD_MAXX_W      = 12;
+  localparam int unsigned ZHAO_TD_MINY_LO     = 200;
+  localparam int unsigned ZHAO_TD_MINY_W      = 12;
+  localparam int unsigned ZHAO_TD_MAXY_LO     = 212;
+  localparam int unsigned ZHAO_TD_MAXY_W      = 12;
+  localparam int unsigned ZHAO_TD_RSVD_LO     = 224;
+  localparam int unsigned ZHAO_TD_RSVD_W      = 32;
+  // The end of the last field, so a block can assert the layout FILLS the
+  // record exactly rather than trusting the table above.
+  localparam int unsigned ZHAO_TD_END_BIT     = ZHAO_TD_RSVD_LO + ZHAO_TD_RSVD_W; // 256
 
   // ---------------------------------------------------------------------
   // RENDER asset pool -- the Phase-3/Packet-E shared ENGINE1 region
