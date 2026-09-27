@@ -4312,3 +4312,87 @@ at 296, smoke **PASS** at `raster pixels=2816`.
 **+90,000 ALUTs** from arithmetic and measured **+11,979 -- 7.5x high, in the
 ALARMING direction.** *"2,065 wires sounds huge"* is an estimate of exactly that
 kind, and **nobody has measured it.**
+
+### 2026-09-27 (very late) - BOTH GAPS TURNED OUT TO BE CHEAP, AND THE ESTIMATES WERE 74x AND INFINITELY WRONG
+
+**Not yet merged -- both packets still running their control forms.** Recorded now
+because the commits are pushed and the numbers are durable.
+
+### DOORCOST: THE DOOR IS 28 WIRES, OPEN, AND AFFORDABLE
+
+**2,037 of MUXBUILD's 2,065 wires ARE ALREADY PORTS on
+`zhao_geom_bin_pipe_v2`.** The multiplex feeds the **same**
+`u_geom_setup`/`u_geom_attrpack` pair, so that pair's output arrives on
+`tri_*_plane_i`, `tri_ax_i..tri_cy_i`, `tri_src_id_i`, `tri_area2_i` and the rest
+**whichever source fed it** -- and `tri_meta_w`, the whole **1,877-bit** record,
+is built from those ports **thirty lines above the binner instantiation.**
+**The record never needed transporting because it was never anywhere else.**
+
+So the door is only what the walk knows and the triangle record does not: which
+**tile**, whether it **opens or closes** that tile's list, and a handshake.
+**Twenty-eight bits.**
+
+**Priced, map-only, shipping part `5CSEBA6U23I7`, `rtlCleanAtHead` TRUE, at the
+console's own CHUNKS=8192:**
+
+```
+  @doorcost-base        36,672 comb ALUT  38,368 reg  89 DSP  892,204 bits
+  @doorcost-src0        36,666            38,368      89      892,204
+  @doorcost-src1walk    37,655            36,489      89      285,612
+  @doorcost-runtimemux   2,050                 0       0            0
+```
+
+**`@doorcost-base` is the FIRST shipping-part figure this block has ever had** --
+entry I55 said there was none and that was true.
+
+**`src0` is a CONTROL and it can fail**: the ports exist, the generate select is
+present, and the arrangement this console elaborates measures **-6 ALUTs**,
+identical registers/DSP/memory, and **exactly +60 virtual pins -- the door's own
+bit count** (1+1+12+12+1+1+32). Had the select wrongly built the mux it would
+read about **+2,050**.
+
+**`src1walk` is the door DRIVING: +983 comb ALUT, +0 DSP**, -1,879 registers,
+-606,592 memory bits. **Below the smallest thing this campaign has ever refused**
+(LANESCOST +11,979/+9; a second back end +1,621/+40) **and zero on the DSP axis,
+which is the one at 335%.** The register and memory savings are Quartus pruning
+the binner's payload path once nothing reads `bin_job_meta_w`; the drain is still
+in the RTL, so they are declared **AVAILABLE, not taken.**
+
+**And it priced the arrangement MUXBUILD refused without a number:** the run-time
+mux is **one LUT per bit of a 2,048-bit bundle**. Critically, **BOTH of
+MUXBUILD's routes need that mux**, so the two it offered as alternatives have the
+**same** price -- and **the elaboration select avoids it entirely.** `JOB_SRC`
+selects at elaboration: zero logic, and the old arrangement survives as a
+complete buildable oracle, which is what directive section 7 asks for. A run-time
+mux is refused on section 4's own words -- both sources reaching the tile pipe in
+one frame **is** the forbidden parallel arena with a select line on it.
+
+Tests: `geom_bin_pipe_v2_door` **11,381 checks / 0 failures**, with
+`geom_bin_pipe_v2_door_shut_control` at **4,084 / 0** as the separate control.
+
+### MATCARRY: THE CARRIAGE COSTS ZERO ALUTs
+
+**Four leaf map rows, `rtlCleanAtHead` true, shipping part: 0 ALUTs, +198
+registers, 0 DSP.** The widening is **free on the axis that binds.** Per-triangle
+equality **41/0**, self-vacuity checked, **mutant fires 9/9 inverted**, and the
+console assertion **de-vacuumed**. Velocity **19/0 on the repaired test**;
+composepub **154/0**. The stale *"zero `material_set` hits"* claim is **struck at
+three sites**, with its control re-measured at **72 hits across 9 files**.
+
+**It found NINE false claims, FIVE of them in the brief, decision record and
+entry I handed it** -- and needed a **fourth** file the decision had not named.
+
+### NEITHER ENTRY CLOSED YET
+
+`I34` 2 -> 2; `I55`'s console/shell plumbing is explicitly not done. **But both
+are now measured, cheap, and no longer blocked on anything unknown.**
+
+### THE PATTERN WORTH KEEPING
+
+**Three estimates on these two entries were wrong in the ALARMING direction:**
+LANESCOST predicted +90,000 ALUTs and measured +11,979 (**7.5x**); MUXBUILD
+priced the door at 2,065 wires and it is **28** (**74x**); and the carriage,
+feared as area on a device 350% over, is **zero**. **Every one of them would have
+justified a refusal, and every one was wrong.** The door's own probe exists
+precisely because *a refusal with no number is what this packet exists to
+replace.*
