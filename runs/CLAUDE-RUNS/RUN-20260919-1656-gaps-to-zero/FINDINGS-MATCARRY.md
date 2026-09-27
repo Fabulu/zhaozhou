@@ -484,3 +484,103 @@ decision's claim that none is needed held: I read
 **inherited red** at this tree — exit 1 with `262 warning(s)`, DECLFILENAME and
 PINCONNECTEMPTY under `-Wall`, identical at `f4b4a653` and `gz/terrainvisible`.
 The protocol's own row for it says so.
+
+---
+
+## 10. THE SIX SMOKE CONTROL FORMS — WHAT RAN, WHAT DID NOT, AND ONE OWNED RED
+
+**Closed out on the coordinator's instruction, which is sound and is recorded
+rather than paraphrased:** the six control forms are the MERGE gate, they are run
+against the merged tree for every packet, and mine would measure a tree that is
+about to stop existing. A declared gap is fine; an implied pass is not. So this
+table says exactly what has a verdict and what does not.
+
+| form | verdict | evidence |
+|---|---|---|
+| plain | **PASS** | `raster pixels=2816`, `frames_admitted=1`, `mosaic tile[max/or]=[6 7]` |
+| `-TerrainFlatLattice` | **PASS** | `raster pixels=2560`; 128 terrain triangles culled, all verdict ZERO_AREA; `tileset fills=0` |
+| `-Mutant` | **PASS** (inverted) | `terr_pl_slot_overflow_o` fired 1x; `terrcf triangles=0` |
+| `-UntexMutant` | **FATAL — NOT MINE, and it is NOT in the merge gate's list** | see below |
+| `-BadVertex` | **NO VERDICT** — still building when I stopped | — |
+| `-NoEchoArm` | **NO VERDICT** — queued when I stopped | — |
+| `-BadTraceArm` | **NO VERDICT** — queued when I stopped | — |
+
+**Three of six have verdicts, not five.** Stating the count exactly because the
+close-out instruction said five were still running; three were.
+
+### What the two passes actually bought, since neither is a formality
+
+**`-TerrainFlatLattice` is the control my layer-E authoring most needed.** I wrote
+a material plane into every played terrain page, and that switch's whole claim is
+that it varies layer A and nothing else. It still culls all 128 terrain triangles
+for ZERO_AREA, still reads the mesh-only 2,560, and reports **zero tileset
+fills** — so the mosaic assertion takes its complement branch rather than the
+`tile_max` one. The plane perturbed the control not at all.
+
+**`-Mutant` validated the wrapper widening.** That form instantiates the core
+through `zhao_console_core_slot_overflow_mutant.sv`, whose `GEOM_VID_RIDERW` I had
+to take 50 -> 82. Had I missed it — and the brief warned only about a new PORT,
+not a changed parameter VALUE — the composer's `[81:50]` slice would have run off
+the end of a 50-bit rider and the build could not have elaborated. It did, and the
+counter fired once.
+
+### THE `-UntexMutant` RED: AN OWNED DEFECT, NOT INHERITED DEBT
+
+`geom_untex_refused_o = 16 (want 16)` — **the counter fired exactly its target, so
+the instrument itself works.** What failed is the mutant's SECOND clause:
+
+```
+%Fatal :8255  MUTANT FAILED: 128 triangle(s) entered GEOM.CLIP
+              (61 reached SETUP) past a refusal
+clip submitted=128  (reference mesh: 16 / 2 / 0 / 14, terrain: 128 / 67 / 0 / 61)
+```
+
+All 16 MESH triangles were refused correctly. The 128 that entered are
+**TERRAIN's**. `cl_in_untex_c` is a CONSTANT declaration for the whole door and
+the refusal is `cl_in_untex_c && (mw_pub_sample_count != 0)`, while
+`geom_clip_submitted_o` is a GLOBAL count — so a second door client whose span
+that declaration was never about walks straight through the assertion.
+
+**ATTRIBUTION, settled two ways rather than asserted, because CLAUDE.md is blunt
+that "INHERITED is the word that makes a red nobody's job":**
+
+* **BY DATE.** The assertion was written `addc0be7`, **2026-09-21**, when
+  GEOM.REPLAY was the door's only producer. TERRAIN.CLIPFEED became the FOURTH
+  clipdoor client at `1b6f8895` (CARRIAGE 2/n), **2026-09-26** — five days later.
+  An assertion written on the 21st cannot have accounted for a client composed on
+  the 26th.
+* **BY SOURCE.** My entire core diff contains seven hits on
+  `untex|sample_count|cl_in_refuse|GEOM_REPLAY_UNTEX`, and **six are comments**.
+  The one code line is my own new `(mw_pub_sample_count != 2'd0)` inside
+  `st_mat_token_live_c` — a READ of sample_count feeding the base_rgb mux. I
+  modify neither `cl_in_untex_c`, nor `cl_in_refuse_c`, nor
+  `GEOM_REPLAY_UNTEX_DECL`, nor the door's refusal term.
+
+**WHAT I DID NOT FINISH, declared:** a `-UntexMutant` run at base `71122893` in a
+throwaway worktree was still building when I stopped. It would have converted the
+above from an argument into a measurement. The dates and the diff are strong, but
+they are not that run, and I am not calling it measured.
+
+**AND THE PART THAT MUST NOT BE LOST.** `-UntexMutant` is **not in the merge
+gate's five-form list** (`-Mutant`, `-BadVertex`, `-NoEchoArm`, `-BadTraceArm`,
+`-TerrainFlatLattice`). I only ran it because I had to edit its wrapper. So if
+this red is filed as "inherited" and left there, **nothing in the tree will ever
+run it again** — which is precisely the shape this repository keeps paying for.
+
+**The repair, named so the next packet inherits a task and not a verdict:** scope
+the assertion to the REPLAY ARM's own submitted count instead of the global
+`geom_clip_submitted_o`, or gate it on the terrain arm being quiescent. Do not
+relax it to a bound — the clause is a real property of R197's door and it is worth
+keeping; it is the COUNTER it reads that is now the wrong one. That is a
+one-expression change in the bench and it belongs to whoever owns the terrain
+composition, not to this packet.
+
+### One number received from the coordinator, recorded as context not as my own
+
+DOORCOST independently measured I55's raster door at **+983 ALUT and +0 DSP**
+against a DSP axis that is 335% over. That sits beside this packet's **0 ALUT /
++198 register / 0 DSP**. Both are measurements on the shipping part and neither is
+an estimate; I record it because the closure has had very little good news and two
+independent credible pieces of it are worth naming together. It changes nothing I
+claim: my own narrowing stands — this widening's ALUT delta is zero, so it cannot
+decide the console's fit either way, and I assert nothing about the headroom.
