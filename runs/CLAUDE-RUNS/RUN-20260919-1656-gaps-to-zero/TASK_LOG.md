@@ -5027,3 +5027,101 @@ plus the figure nobody had -- **`estimatedAlms 301`**, 0.7% of the device.
 and `zhao_post_lease` mapped **ok twice AT THAT COMMIT**, from the source list
 that reported both errors. Stated with its limit: **those rows prove the two
 files PARSE, not that the console synthesizes.**
+
+### 2026-09-27 LATE - THE CONSOLE MAP IS RUNNING, AND THE TYPESCRIPT SUITE IS GREEN
+
+**`quartus_map` on `zhao_console_core` -- NEVER RUN BEFORE TODAY.** At ~20
+minutes: the whole console **PARSED**, synthesis in progress, **0 errors and 0
+critical warnings** across a 1.45 MB log, ~1 core sustained. That already
+settles more than the `zhao_post_lease` rows could: those proved the two files
+PARSE inside a small block's source list; this is the console itself
+elaborating.
+
+**Why a map and not a fit**, correcting my own plan: `run_block_fit.ps1`'s
+header says a design that overflows 41,910 ALM **produces no ALM number -- the
+fitter stops.** The standing estimate is ~293,352 ALUTs against **227,120 on
+the SIZING part**, so a fit stops on the truth device AND on `5CEBA9F31C7`.
+Analysis & Synthesis returns registers/DSP/estimated-ALMs regardless of how far
+over we are, and **how far over IS the owner's question.**
+
+**`zhao_walk_meta_hold` measured**, closing TAGPHASE's declared-unmeasured
+caveat: `status ok`, 34.5 s, **`registers 211` EXACTLY the hand count**,
+`DSP 0`, `membits 0`, `errors 0`, **`estimatedAlms 301`** (0.7% of the device),
+`rtlCleanAtHead: true`.
+
+---
+
+### THE TYPESCRIPT SUITE: 81/85 -> 85/85, AND ONE SIZE COPIED INTO FOUR PLACES
+
+Red since **2026-09-16**. Both halves are now green.
+
+**LEDGER 64/1 -> 65/0.** Not a validator bug: a TEST LEFT BEHIND BY A
+DELIBERATE, MEASURED NARROWING. `1afe5a30` narrowed V17(d) after measuring all
+118 blocks -- the strict form caught **0** of its target and produced **1** false
+positive. The source is right; `rules.test.ts` kept asserting the retired law.
+**Replaced by TWO cases, not deleted**: the old fixture is now asserted
+ACCEPTED (it is the TEXTURE.AUX shape the measurement vindicated), and a new
+case makes every cited test silent and asserts the real rejection. Coverage
+**up**, 64 -> 65.
+
+**ABI-GEN 17/20 -> 20/20**, and the cause is one change never propagated. Owner
+ruling **R63** (`3361c67b`) grew `SetView` 96 -> 112 (`fx16 eye[3]` + `pad[4]`).
+**That size was written in FOUR places and updated in ONE:**
+
+```
+spec/commands.zidl           112   <- the source, correct
+spec/capture_format.md 1.3    96   <- ratified table, stale
+tools/abi-gen/test            96   <- a PRIVATE COPY of that table
+tools/abi-gen/src/fuzz.ts     96   <- TWICE: a length sum AND a byte offset
+```
+
+Each copy failed differently, which is why it read as three unrelated bugs.
+
+**THE RATIFIED TABLE WAS ALSO 11 COMMANDS SHORT** -- 17 rows against the
+generator's 28, **nine of the missing ones `implemented`**; and
+`SetEnvironment` still read `reserved` after ruling R25 promoted it. The table
+declares itself *"generator-computed"*, which settles the authority question
+TAGPHASE rightly flagged: these are propagations of decisions already made.
+The fill script **refused to overwrite any row whose byte count disagreed**, so
+no ratified number moved silently.
+
+**THE CORPUS WAS TESTING THE VALIDATOR WITH A MALFORMED FRAME AND CALLING THE
+RESULT A REGRESSION.** `valid_all_implemented` declared `commandBytes` as
+`32 + 96 + 48 + 16 + 32` while its payload measured 240 -- so a frame whose own
+NAME says valid validated to `ZH_ABI_BAD_LENGTH`. **And the committed golden had
+`expectedError: 4` RECORDED for it.** A case named `valid_*` carried a recorded
+expectation of BAD_LENGTH, and nothing in the tree reconciles a case's name with
+its own recorded expectation. That is "do not write a test that asserts the bug"
+arriving through a GENERATED file, where no author ever typed the 4.
+
+`enum_out_of_range` mutated at a hardcoded offset whose comment spelled out the
+stale arithmetic. It failed LOUDLY only because its expected error is recorded
+-- **a mutation that had drifted onto a PAD byte would have gone on passing
+while testing nothing.**
+
+**Two structural fixes, so the class cannot recur:** the test now READS
+`capture_format.md` instead of copying it (with an anti-vacuity guard requiring
+>= 25 parsed rows, because a regex matching nothing would make every assertion
+vacuous), and the corpus MEASURES its lengths and offsets from the records
+themselves.
+
+### AND THE INSTRUMENTS WERE BLIND IN BOTH DIRECTIONS
+
+* **`npm run abi:check` stayed CLEAN RC 0 through all of it** -- exactly as
+  `spec/commands.zidl` warns: it *"is a drift gate and goes green on a field
+  nothing reads."*
+* **`node --test dist/test/` cannot reach its tests on Node 24.** It loads the
+  directory as a module, dies `MODULE_NOT_FOUND`, and reports **"1 test, 1
+  fail" having run nothing.** CI pins **node-version 20**, where the directory
+  form works -- so for once **the laptop is NEWER than CI**, and the local red
+  was invisible in the flattering direction locally and real in CI.
+* **Deliberately NOT switched to a glob.** `engines` says `node >=20`, `--test`
+  glob support lands in 21/22, and the CI step runs under **pwsh**, which does
+  not expand globs for native commands -- so no single invocation serves both.
+  Aligning the Node version is a decision with a blast radius past these files.
+
+**STILL RED AND NOT MINE:** `npm run ledger:check` fails with **112 schema
+errors** against `design/blocks.yml` (missing `reference_model`, missing
+`tests.random`, commit hashes failing `^[0-9a-f]{7,40}$`). My diff for that
+commit was one file. CI runs that gate, so it has been failing too. Recorded,
+not absorbed.
