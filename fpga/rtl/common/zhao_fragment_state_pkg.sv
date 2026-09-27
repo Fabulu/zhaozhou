@@ -28,7 +28,8 @@
 // ---------------------------------------------------------------------------
 // That package is the obvious home -- it already declares the 48-bit
 // continuation tail this word travels beside, the Early-Z key that carries it,
-// the 490-bit pretex packet and the retire context. It is the wrong one, for
+// the 491-bit pretex packet and the retire context.  (490 until `ceba0bfe`
+// widened the request on 2026-09-26; corrected 2026-09-27, REDFIX.) It is the wrong one, for
 // two reasons that only became visible by trying it.
 //
 // 1. THE TEXTURE ISLAND CARRIES THIS WORD OPAQUELY AND NEVER DECODES IT. It

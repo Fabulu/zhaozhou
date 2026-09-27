@@ -8242,26 +8242,70 @@ module tb_zhao_console_core_smoke
     // and NONE may enter GEOM.CLIP. The count is compared to the SAME
     // reference number the plain run compares `geom_clip_submitted_o` to, so
     // "the counter fired" cannot be satisfied by a stray increment.
-    $display("SMOKE: MUTANT zhao_console_core_untex_decl_mutant -- geom_untex_refused_o=%0d (want %0d) clip_submitted=%0d setup_submitted=%0d raster_pixels=%0d matwin[unpub/underflow]=[%0d %0d]",
+    $display("SMOKE: MUTANT zhao_console_core_untex_decl_mutant -- geom_untex_refused_o=%0d (want %0d) clip_submitted=%0d terr_cf_emitted=%0d (want %0d) setup_submitted=%0d (want %0d) raster_pixels=%0d matwin[unpub/underflow]=[%0d %0d]",
              geom_untex_refused_o, SGF_EXP_REPLAYED, geom_clip_submitted_o,
-             geom_setup_triangles_submitted_o, render_pixels_o,
+             terr_cf_emitted_o, SGF_EXP_TERR_TRIS,
+             geom_setup_triangles_submitted_o, SGF_EXP_TERR_ACCEPTED,
+             render_pixels_o,
              mat_win_err_unpublished_o, mat_win_err_underflow_o);
     if (geom_untex_refused_o == 0)
       $fatal(1, "MUTANT FAILED: geom_untex_refused_o stayed 0 with GEOM_REPLAY_UNTEX_DECL=1 -- the untextured door did not refuse, so its zero in production is not evidence");
     if (geom_untex_refused_o != SGF_EXP_REPLAYED)
       $fatal(1, "MUTANT FAILED: geom_untex_refused_o=%0d but the reference replays %0d triangles -- the door refused the wrong number",
              geom_untex_refused_o, SGF_EXP_REPLAYED);
-    if (geom_clip_submitted_o != 0 || geom_setup_triangles_submitted_o != 0)
-      $fatal(1, "MUTANT FAILED: %0d triangle(s) entered GEOM.CLIP (%0d reached SETUP) past a refusal -- a refused primitive was sampled after all",
-             geom_clip_submitted_o, geom_setup_triangles_submitted_o);
+    // ---- SCOPED TO THE REPLAY ARM'S OWN ARRIVALS (REDFIX, 2026-09-27) ------
+    // THIS CLAUSE READ THE GLOBAL `geom_clip_submitted_o` AND WAS THEREFORE
+    // FATAL FROM 2026-09-26 UNTIL TODAY, in a form that is NOT in the five-form
+    // merge gate -- so nothing in the tree was ever going to run it again.
+    //
+    // `cl_in_untex_c` is a declaration about ONE door client.
+    // `geom_clip_submitted_o` counts arrivals from ALL FOUR. TERRAIN.CLIPFEED
+    // became the fourth client at `1b6f8895` (CARRIAGE, 2026-09-26) -- five days
+    // AFTER this assertion was written at `addc0be7` (2026-09-21), when
+    // GEOM.REPLAY was the door's only producer. An assertion cannot have
+    // accounted for a client composed five days later, and MATCARRY settled that
+    // by measurement rather than by dates alone: this form fails IDENTICALLY at
+    // base `71122893` -- same counts, same message, same simulation timestamp
+    // `10298916000`, with only the line number shifted.
+    //
+    // THE CLAUSE IS NOT RELAXED TO A BOUND, and that is the whole point.
+    // "Nothing entered GEOM.CLIP past a refusal" is a REAL property of R197's
+    // door and is worth keeping exactly; it was the COUNTER that was wrong, not
+    // the property. A bound (`<= terr_cf_emitted_o`, or "ignore terrain") would
+    // convert a true property into a weaker one that can no longer catch the
+    // thing it exists for -- this campaign's signature mistake, in the
+    // flattering direction. So the property is re-expressed against the arm it
+    // was always about: EVERY arrival at the door must be one TERRAIN.CLIPFEED
+    // emitted, which says the replay arm contributed NONE. That is an EQUALITY
+    // between two independently measured counters -- the door's arrival counter
+    // and the carriage's own emit counter -- so a single leaked replay triangle
+    // makes it 129 against 128 and this fires. The old clause caught a leak of
+    // any size; so does this one.
+    //
+    // AND IT CANNOT PASS VACUOUSLY, which is the trap a scoped check invites.
+    // `geom_clip_submitted_o == terr_cf_emitted_o` is also satisfied by 0 == 0,
+    // i.e. by a DEAD terrain arm -- so the equality is preceded by a demand that
+    // the terrain arm be alive and delivering its reference count. Without that
+    // line this would join the fourteen controls this week that were found to be
+    // comparing nothing with nothing.
+    if (terr_cf_emitted_o != 32'(SGF_EXP_TERR_TRIS))
+      $fatal(1, "MUTANT FAILED: TERRAIN.CLIPFEED emitted %0d triangle(s) and the reference models %0d -- the scoped door check below would be comparing 0 against 0 and proving nothing",
+             terr_cf_emitted_o, SGF_EXP_TERR_TRIS);
+    if (geom_clip_submitted_o != terr_cf_emitted_o)
+      $fatal(1, "MUTANT FAILED: GEOM.CLIP took %0d arrival(s) while TERRAIN.CLIPFEED emitted %0d -- %0d triangle(s) reached the door from the REPLAY arm past a refusal, so a refused primitive was sampled after all",
+             geom_clip_submitted_o, terr_cf_emitted_o,
+             geom_clip_submitted_o - terr_cf_emitted_o);
+    if (geom_setup_triangles_submitted_o != 32'(SGF_EXP_TERR_ACCEPTED))
+      $fatal(1, "MUTANT FAILED: GEOM.SETUP took %0d triangle(s) and terrain's reference accepts %0d -- the surplus reached SETUP from the refused replay arm",
+             geom_setup_triangles_submitted_o, SGF_EXP_TERR_ACCEPTED);
     // The refusal happens BEFORE the material window's span, so the window's
     // structural guards must stay silent: a refusal that leaked into the
     // occupancy would show here as an underflow or an unpublished departure.
     if (mat_win_err_unpublished_o != 0 || mat_win_err_underflow_o != 0)
       $fatal(1, "MUTANT FAILED: the material window's guards fired (unpublished %0d, underflow %0d) -- the door's refusal entered the accounted span",
              mat_win_err_unpublished_o, mat_win_err_underflow_o);
-    $display("SMOKE: MUTANT PASS -- geom_untex_refused_o fired %0d time(s), nothing entered GEOM.CLIP, the window's accounting held. The detector works; production's zero is a measurement.",
-             geom_untex_refused_o);
+    $display("SMOKE: MUTANT PASS -- geom_untex_refused_o fired %0d time(s), nothing from the REPLAY arm entered GEOM.CLIP (%0d arrivals, all %0d of them TERRAIN.CLIPFEED's), the window's accounting held. The detector works; production's zero is a measurement.",
+             geom_untex_refused_o, geom_clip_submitted_o, terr_cf_emitted_o);
     $finish;
     disable run;   // see the slot-overflow arm above: $finish alone is not a stop
 `else
