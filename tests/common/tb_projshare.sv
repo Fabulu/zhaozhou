@@ -229,7 +229,14 @@ module tb_projshare #(
   logic        rl_valid;
   logic [30:0] rl_w;
   logic        rl_behind;
-  /* verilator lint_on UNUSEDSIGNAL */
+  // A PREMATURE `lint_on` USED TO SIT ABOVE THESE FIVE and has been removed.
+  // The waiver opened at the top of this declaration block and closes after
+  // `b_res_payload` below -- one region, covering every DUT output this bench
+  // drives and never reads. It was opened TWICE (a second `lint_off` a few
+  // lines up) and closed twice, on the assumption that the pragmas NEST. They
+  // do not: `lint_on` re-enables the check outright, so the first one ended the
+  // whole region and left lines 233-261 -- twenty declarations -- reporting
+  // UNUSEDSIGNAL. That is what made `lint_tb_projshare` red.
   logic signed [20:0] rf_x, rf_y;
   logic        [30:0] rf_w;
   logic               rf_behind;
