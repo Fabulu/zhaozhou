@@ -4844,3 +4844,82 @@ passes for a counter that increments on every job."*
 
 **Eleven consecutive packets have found their brief wrong in a load-bearing
 place.** The briefs are mine.
+
+### 2026-09-27 EVENING - TAGPHASE MERGED. CLAUSE 6 MEASURED BY THE COORDINATOR.
+
+Merged at `84caa80b` (the repair) and `4670aed6` (the FINDINGS), pushed.
+**IN PROGRESS WHEN THIS WAS WRITTEN: `-FieldActive` and `-FieldUncovered`,
+run by ME in the integration tree.** Next step after they land: if all six
+clauses hold on my own measurement, write `NOT a tie-off` into **I34's HEAD
+LINE at `zhao_console_core.sv:6115`** and re-run the register bare. Then the
+full console fit.
+
+**MY OWN PLAIN SMOKE, PUBLISHER ARMED, ON THE MERGED TREE -- `SMOKE: PASS`,
+RC 0:**
+
+```
+matpub     cells=1024 commits=1 published=1 bursts=64 denied=0
+tagphase3  jobs=101 walk_bus_idle=57 ms_invalid=0 ms_zero_sample=0 ms_nonzero_tag=0
+quiesce    samples 1216 -> 1216 | untagged 2816 -> 2816 | reserved 0 -> 0
+fieldmat   CLAUSE 6 EXECUTED tile_max=6      mosaic tile[max/or]=[6 7]
+```
+
+**I55 UNREGRESSED, re-measured by me at the merge rather than inherited:**
+`tilewalk tiles=11 jobs=101 door=101 failed=0`, `paramwalk tris=101 trisbad=0`,
+`fetcharm vread=303 (invariant vread == 3*tris)`, `raster pixels=2816`.
+
+Register bare **1**, RC **1**. Gate sweep **RC 0, 32/32 at baseline**.
+
+### THE DEFECT: A METADATA SWAP AT THE COMPOSER'S OWN JOIN
+
+`zhao_geom_bin_pipe_v2`'s `JOB_SRC == 1` door takes 1,877 metadata bits from
+its input ports. **2,037 of those bits are held correctly** -- SETUP's and
+ATTRPACK's back ends retire on `tw_be_out_ready_o`, asserted only on
+`job_valid && ready`. **The remaining 378 were held by NOTHING**: the flat
+request, the continuation tail and the fragment state are combinational from
+`pw_t_matstate_w`, GEOM.PARAMWALK's **live output bus**, which
+`zhao_geom_tilewalk` releases in `T_TAKE` while the job is not offered until
+`T_JOB`.
+
+**Sixty of 101 job accepts read that bus while it presented no record at all.**
+The two `badjob` rows carried the exact tag bytes (`0x22`, `0x1d`) and the
+exact fragment state (`0x04c00000`) that reached the framebuffer.
+
+**I VERIFIED THE CAPTURE EDGE STRUCTURALLY AT THE MERGE**, rather than taking
+the packet's word: `zhao_console_core.sv:32838` wires
+`.be_ready_i (st_tri_ready_w && ap_tri_ready_w)`, so `cap_fire_i` **is**
+`be_valid_o && be_ready_i`; and `zhao_geom_tilewalk.sv:212-213` assert
+`t_ready_o` and `be_valid_o` from **the same two state terms**, so that product
+is exactly `t_valid_i && t_ready_o` -- the paramwalk record's own consumption
+handshake. **The capture edge IS the release edge.**
+
+### A NEW SHAPE FOR THE INSTRUMENT CATALOGUE: THE SATURATING AGGREGATE
+
+TAGPHASE's first mosaic probe read `mat_b[or]=ff`,
+`mat_b_nonzero_reqs=1216` -- **which looks like a complete answer and is not.**
+The mosaic lane runs with `req_mosaic_i` tied high and serves **every**
+fragment, mesh included, so an OR across 1,216 picks **saturates** and says
+nothing about terrain's pair. Counting only requests that NAME `{212,30}`:
+**26 requests, `weight[min/max]=[248 250]`, `MAT_A=26`, `MAT_B=0`** -- and
+under the frozen law `pick = p < weight`, `mat_b` needs 5-7 of 255 hash values,
+so over 26 requests **the expected count is ~0.6 and zero is ordinary.**
+Corroborated from the other side by `weight[min/max]=[90 250]` across all
+requests, 90 being the mesh material's constant `0x5A`.
+
+**So the old `tile_or = 222` was evidence of the DEFECT, not of the field
+working**, and clause 4's evidence is STRONGER after the repair: both named
+tiles demonstrably arrive.
+
+**Every other blind instrument this campaign found reads LOW. This one reads
+FULL.** A saturating aggregate is flattering in the same way and invisible in
+a new one -- it is not zero, so the "a counter reading zero is a claim" habit
+does not fire on it.
+
+### ELEVENTH CONSECUTIVE PACKET TO FIND ITS BRIEF WRONG IN A LOAD-BEARING PLACE
+
+**The brief was mine and its central sentence was false.** I named the clear
+path in `zhao_shell_top_v2` as the repair site. `frame_clear_word_i = '0` is
+one 64-bit constant covering colour AND tag, and the tile store has **no byte
+enables by design** -- a cleared pixel's tag is zero **by construction**. Those
+pixels were WRITTEN, not cleared. The number that decided it was
+`plan_accepted=1213`: three fragments never got a plan.
