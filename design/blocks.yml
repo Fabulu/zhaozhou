@@ -3485,7 +3485,7 @@ blocks:
     upstream: [TERRAIN.PAGESTREAM, FIELD.SEQ.EARTH, TERRAIN.PATCH]
     downstream: [TERRAIN.COMPCACHE]
     backpressure: none
-    latency: 1 record
+    latency: fixed:1
     target_throughput: 1 cell per page-stream vertex beat
     reference_model: zref::fieldir::compose_material
     tests:
@@ -3497,19 +3497,27 @@ blocks:
       terrain_matjoin_field_composed: field_composed_o
       terrain_matjoin_token_refused: token_refused_o
       terrain_matjoin_held_overrun: held_overrun_o
+    # Required by the schema and simply absent: this block carries no
+    # per-source identity, is not deferred and supersedes nothing.
+    source_ids: false
+    deferred: false
+    superseded_by: null
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
     maturity_log:
       - state: UNIT_VERIFIED
         date: "2026-09-27"
-        note: >-
-          terrain_matjoin_directed, 50 checks 0 failures, differenced against
-          zref::fieldir::compose_material over 600 pseudo-random vertices with
-          247 enabled and 51 refused words -- so both paths are shown to have
-          been REACHED rather than passing vacuously. Both guards seen to fire
-          against negative controls on identical stimulus, and the test itself
-          fire-tested: a planted failure returns rc 1 and prints
-          "1/51 checks FAILED".
+        commit: "36f260fb5815"
+        evidence: tests/terrain/terrain_matjoin_directed.cpp
+        # evidence prose, demoted from an illegal `note:` key:
+        # terrain_matjoin_directed, 50 checks 0 failures, differenced against
+        # zref::fieldir::compose_material over 600 pseudo-random vertices with
+        # 247 enabled and 51 refused words -- so both paths are shown to have
+        # been REACHED rather than passing vacuously. Both guards seen to fire
+        # against negative controls on identical stimulus, and the test itself
+        # fire-tested: a planted failure returns rc 1 and prints
+        # "1/51 checks FAILED".
+        #
   - id: TERRAIN.MATPUB
     name: Composed material publisher
     kind: rtl
@@ -3534,7 +3542,7 @@ blocks:
     upstream: [TERRAIN.MATJOIN, TERRAIN.COMPCACHE]
     downstream: [MEM.GUARD]
     backpressure: none
-    latency: 64 bursts per published patch
+    latency: batch
     target_throughput: 1 published patch per compose fill
     tests:
       directed: tests/terrain/terrain_matpub_directed.cpp
@@ -3555,23 +3563,31 @@ blocks:
       terrain_matpub_cell_oob: cell_oob_o
       terrain_matpub_short_fill: short_fill_o
       terrain_matpub_commit_busy: commit_busy_o
+    # Required by the schema and simply absent: this block carries no
+    # per-source identity, is not deferred and supersedes nothing.
+    source_ids: false
+    deferred: false
+    superseded_by: null
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
     maturity_log:
       - state: UNIT_VERIFIED
         date: "2026-09-27"
-        note: >-
-          terrain_matpub_directed, 46 checks 0 failures. The plane is read back
-          out of the bench's memory window and differenced CELL BY CELL against
-          what was driven in, with the cell values three different odd functions
-          of the cell index -- so a swapped mat_a/mat_b, a rotated word, a
-          transposed plane or an off-by-one in the burst walk each show, where a
-          plane of equal cells would pass under all four. All ten counters are
-          SEEN TO FIRE by stimulus rather than asserted zero. The case that
-          matters most is the stranger arm: a BIT-IDENTICAL plane committed into
-          the same slot under a different patch id, which a change-only publish
-          gate would silently SKIP, leaving the region describing the previous
-          occupant under the new occupant's address with every counter balanced.
+        commit: "085757acd128"
+        evidence: tests/terrain/terrain_matpub_directed.cpp
+        # evidence prose, demoted from an illegal `note:` key:
+        # terrain_matpub_directed, 46 checks 0 failures. The plane is read back
+        # out of the bench's memory window and differenced CELL BY CELL against
+        # what was driven in, with the cell values three different odd functions
+        # of the cell index -- so a swapped mat_a/mat_b, a rotated word, a
+        # transposed plane or an off-by-one in the burst walk each show, where a
+        # plane of equal cells would pass under all four. All ten counters are
+        # SEEN TO FIRE by stimulus rather than asserted zero. The case that
+        # matters most is the stranger arm: a BIT-IDENTICAL plane committed into
+        # the same slot under a different patch id, which a change-only publish
+        # gate would silently SKIP, leaving the region describing the previous
+        # occupant under the new occupant's address with every counter balanced.
+        #
   - id: TERRAIN.BAKE
     name: Persistent scar bake
     kind: rtl
