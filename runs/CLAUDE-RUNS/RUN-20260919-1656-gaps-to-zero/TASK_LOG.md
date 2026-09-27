@@ -5514,3 +5514,34 @@ while measuring a block that no longer exists. An unused parameter is exactly
 the residue that shape leaves. **Run `tools/budget/mutant_copy_drift.py` against
 it before deciding whether to delete the parameter or refresh the copy** --
 deleting it would silence the only visible symptom.
+
+#### LINT SUITE: 223/228 -> **225/228**, and the last three are ONE decision
+
+Two of the five fixed, each with a cause worth keeping:
+
+**`lint_tb_projshare` -- `verilator lint_off/on` DOES NOT NEST.** The block
+opened the waiver, opened it AGAIN a few lines down, and closed it twice, on the
+assumption that two offs need two ons. `lint_on` re-enables outright, so the
+FIRST one ended the region and twenty declarations after it reported
+UNUSEDSIGNAL. **My first attempt MOVED the stray `lint_on` instead of deleting
+it** -- that fixed five warnings and revealed fifteen more immediately below,
+because the boundary was never the problem. Relocating a symptom moves it; only
+reading BOTH ends showed there were two closers for one opener.
+
+**`lint_..._op3_alias_mutant` -- THE UNUSED PARAMETER IS THE MUTATION.**
+Verilator flagged `UNUSEDPARAM: OpFh2`. Deleting it would have been wrong twice.
+Drift was checked first (`mutant_copy_drift.py`: 80 copies, all at least as new
+as production -- not drift), and then the file's own header explained it: the
+mutation replaces `head_is_fh2 = (q_op[q_ri] == OpFh2)` with `1'b0`, and that
+line was the parameter's ONLY reader. **So the declaration going unread IS the
+mutation.** Deleting it would diverge the copy from production by a SECOND token
+-- a mutant is production with ONE change -- and would buy a green by erasing the
+evidence. Waived in place, scoped, with the reason beside it.
+
+**THE REMAINING THREE ARE ONE DECISION, NOT THREE DEFECTS:**
+`lint_zhao_console_board`, `lint_zhao_field_host`, `lint_tb_procmat_acceptance`
+all fail on `PINCONNECTEMPTY` for `.port_o ()` -- **the exact form Quartus's
+`PINMISSING` gate REQUIRES.** They cannot be fixed in RTL without breaking the
+other gate. The fix is a one-line `-Wno-PINCONNECTEMPTY` (plus `DECLFILENAME`
+for the board) with the reason recorded -- a POLICY call about which linter
+yields, made deliberately rather than at the end of a long session.
