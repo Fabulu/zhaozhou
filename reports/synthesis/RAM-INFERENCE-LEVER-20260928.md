@@ -1,0 +1,109 @@
+# The dominant RAM-inference blocker is an INIT LOOP acting as a second write port
+
+Coordinator, 2026-09-28, for the standing goal's phase 3 (damage control and
+optimization). Derived from `tools/quartus/check_ram_inference.py` over the
+current tree, cross-referenced against
+`reports/synthesis/console_entity_attrib_shipping.md` (`@post-palram`,
+`5CSEBA6U23I7`, A&S successful 2026-09-26 05:21).
+
+## Why this matters
+
+The shipping-part attribution says the binding constraint is **registers**, not
+combinational logic:
+
+| | measured | against `5CSEBA6U23I7` |
+|---|---:|---:|
+| combinational ALUTs | 301,446 | 360% of ~83,820 |
+| dedicated logic registers | 312,114 | **186%** of 167,640 |
+| block memory bits | 3,207,741 | **57%** of 5,662,720 |
+| DSP blocks | 128 | 114% of 112 |
+
+**The registers alone need ~78,028 ALM with the combinational logic at zero,
+while memory sits at 57%.** Storage held in flip-flops is what overflows this
+device, and M10K is the slack — which is the EARTHRAM lever the attribution
+table already names.
+
+## What the scan says
+
+2,281 findings across 184 files. By pattern:
+
+| pattern | count |
+|---|---:|
+| written from an ASYNC-RESET process (declared WEAK) | 988 |
+| **TWO OR MORE distinct write addresses** | **584** |
+| read COMBINATIONALLY through dynamic index | 441 |
+| read at MODULE SCOPE through dynamic index | 172 |
+| MULTIDIMENSIONAL unpacked array | 67 |
+| element written through a bit/part-select | 17 |
+
+**455 of the 584 (78%) have one address that is a short loop-style index**, and
+the shape is an initialisation loop sitting beside the real functional write.
+Verified by hand on `zhao_cmd_exec.sv`:
+
+```systemverilog
+for (vi = 0; vi < 2; vi = vi + 1) begin     // :2035  the init loop
+  sv_eyex[vi] <= 32'd0;                     // :2041
+...
+sv_eyex[sv_view] <= {pkt_byte_i, ...};      // :2239  the real write
+```
+
+Quartus sees two write addresses, so it will not infer a memory and the array
+becomes flip-flops.
+
+## THE CAVEAT THAT STOPS THIS BEING A 584-SITE WIN
+
+**The very case that confirmed the pattern also disqualifies itself.**
+`sv_eyex` is `vi < 2` — **two entries deep**. A two-entry array *should* be
+flip-flops; there is no M10K worth spending on it and removing its init loop
+buys nothing. The count of findings is NOT a count of opportunities.
+
+So this note deliberately does not claim a number. **The lever is the
+intersection of three things, and only the first is measured so far:**
+
+1. the array has two write addresses because of an init loop — 455 sites;
+2. the array is **DEEP ENOUGH** to be worth an M10K (this is unmeasured, and it
+   is the filter that decides whether any given site is a saving or a no-op);
+3. removing the init is **semantically safe** — a RAM does not reset, so the
+   reader must already gate on a validity bit, or one must be added. Where the
+   code relies on power-on zeros this is a behaviour change, not a refactor.
+   `zhao_cmd_exec.sv:2038` says zero is a *defined legal eye*, so its init is
+   load-bearing prose, not dead code.
+
+**Next step is a depth filter, not a repair pass.** Rank the 455 by declared
+array depth x width, keep only those whose bits justify an M10K, and check each
+survivor's readers for a validity gate. Anything else is churn.
+
+## Where to point it first
+
+From the register ranking, the subtrees holding registers with **zero block
+memory bits** — i.e. arrays certainly in flip-flops today:
+
+| entity | registers | % of part | mem bits |
+|---|---:|---:|---:|
+| `zhao_geom_lodstate` | 10,825 | 6% | 0 |
+| `zhao_geom_ladderbank` | 5,951 | 4% | 0 |
+| `zhao_terrain_devstore` | 4,418 | 3% | 0 |
+| `zhao_field_loader` | 2,815 | 2% | 0 |
+| `zhao_terrain_fieldlist` | 2,800 | 2% | 0 |
+| `zhao_part_terrain_tap` | 2,783 | 2% | 0 |
+| `zhao_geom_clipread` | 2,590 | 2% | 0 |
+| `zhao_terrain_pagestream` | 2,470 | 1% | 0 |
+
+~34,650 registers, about **21% of the part's register sites**, in blocks with
+literally no block memory. Every one of them is flagged by the scan except
+`zhao_terrain_devstore`, which has findings of a different kind.
+
+And separately, the largest single holder: **`zhao_forge_assemble`, 39,023
+registers (23% of the part) against 2,048 memory bits** — 15,970 ALUTs, so it is
+storage-dominated rather than logic-dominated. Its flagged arrays are read at
+module scope through a dynamic index (`dqf_*_q` via `dqf_rp_q`), which is a
+different blocker from the init loop and wants its own look.
+
+## Method note
+
+My first extraction of the address pairs used
+`grep -o "...\[[^]]*\]"`, which stops at the first `]` — the addresses contain
+`]`, so it truncated every pair and reported **0 matches** for the init-loop
+shape. A confident zero from a broken pattern, which is this repository's own
+first law; it was caught only by printing the extracted text instead of the
+count. The numbers above come from a parser that reads the whole bracketed list.
