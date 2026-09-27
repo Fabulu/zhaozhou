@@ -4000,3 +4000,88 @@ functional half is a build nobody had scoped.
 Gates **31/31 at baseline** across both merges. Branch
 `claude/ceiling-architecture-20260912` at `62d8b6a7`, pushed. **No console fit
 running and none should start until the register reads 0.**
+
+### 2026-09-27 (evening) - SWAPBUILD REFUTED I55'S PREMISE, AND A CHECKER WAS PRINTING THE KILLER AS ITS CURE
+
+**Register 2. `I34` (MATERIALPATH, running) and `I55` (PVSCHEMA, launched).**
+
+### THE PREMISE FIVE PACKETS QUOTED IS FALSE
+
+Entry `I55` said five times that the 24-byte ProjectedVertex *"carries what
+those need ... so the planes are RECOMPUTABLE"*. **IT DOES NOT.**
+`zhao_geom_vertid.sv:499` stores colour through `unit8_of_fx16` -- `(v+128)>>8`,
+clamped both ends -- **while its inputs are the full 32-bit attribute slots
+attrpack itself reads.** The R/G/B Gouraud planes **cannot be rebuilt from that
+record by ANY back end.**
+
+**Note the direction, which is why it survived five readings:** the false claim
+made the work look **simpler** -- "a second back end" rather than "a wider record
+AND a back end" -- and it listed `rgba` beside `x`, `y` and `u/w` as though the
+four were the same kind of quantity. **Nobody audits good news.**
+
+**And it makes the work SMALLER.** `PV_STRIDE_B` is 32 and the record is 24, so
+every slot carries **eight bytes of declared slack**. A v2 at 242 bits fits with
+14 bits spare: **`VERT_CAP_B` does not move and no `memory_rules.md` section 5c
+region changes.** Narrowing x/y to s21 is **not** a truncation -- `pv_illegal_o`
+already refuses anything failing `fits_s21`. **The open sub-question is stated so
+it gets DECIDED rather than discovered: alpha at 32 bits makes the record 266
+and does not fit.**
+
+### AND THE SECOND BACK END WAS PRICED FOR THE FIRST TIME
+
+`zhao_geom_attrpack` **had zero rows in either synthesis database** -- the block
+five packets demanded had **never been mapped**. With `zhao_geom_setup`'s clean
+row, a second instance is **+1,621 ALUT and +40 DSP: 35.7% of the device's entire
+multiplier budget, 4.4x the bill LANESCOST refused for I34 the same week.**
+Refused.
+
+**The architecture is now a TIME MULTIPLEX**, argued from the binner's own FSM
+rather than from a schedule: bin states 0..5 and drain states 6..11 are
+**disjoint and one FSM owns both**, `drain_req_r` is tested **before**
+`tri_valid_i`, and neither `setup` nor `attrpack` carries state across a triangle
+boundary (`grep -c frame zhao_geom_setup.sv` -> **0**; attrpack's three hits are
+**all comment text**). So both are **provably idle for the whole raster drain**.
+
+### A CHECKER WAS PRINTING THE FOURTH QUARTUS KILLER AS ITS REMEDY
+
+**Found by SWAPBUILD, fixed here.** `check_ram_inference.py` rule 4's remedy was
+corrected by ARENAINFER on 2026-09-26 **into the DOCSTRING** -- and never into
+the string the checker **emits**. So every reader kept getting:
+
+```
+"One flat array per element inside a generate, outer index a genvar."
+```
+
+**That is the killer stated as the cure.** `zhao_geom_arenabin` followed exactly
+that advice and paid **146,414 registers against 1,010** for the identical
+circuit. `reports/synthesis/RAM-INFERENCE-SCAN.txt` repeated it **20+ times**; it
+was 972 lines cut before rule 6 existed and **had no provenance header at all**,
+which is why it went stale invisibly. Both fixed; the report now names the
+command that produces it.
+
+**This is the campaign's signature failure shape:** the knowledge was written
+down, correctly, **in the same file**, and nothing read it back into the code
+path that produces what people read.
+
+**Recorded rather than guessed:** SWAPBUILD found a **live counterexample in the
+binner** to ARENAINFER's *"the killer is the generate for-loop and nothing
+else"*. The cause is not established, so **rule 6 is not complete** -- and this
+checker was once **100% false alarms and 100% miss** on the one file that
+mattered.
+
+### OTHER FALSE CLAIMS BANKED
+
+* The handover says one SDRAM share *"carries two"*. **It carries TEN, and
+  NEITHER share has a free slot.** PVSCHEMA is briefed to confront this before
+  designing its feed.
+* Binner rows quoted as shipping cost were mapped at the default **`METAW=1157`
+  while the console ships `1877`**.
+* `spec/memory_rules.md` **contradicts itself about 22 MiB.**
+* I55's paragraph (4) was stale: ARENAINFER had already re-architected
+  ARENABIN's storage, in an **ancestor of RASTERSWAP's own base**.
+
+### WHERE THINGS STAND
+
+Gates **31/31 at baseline** across all three merges. Branch
+`claude/ceiling-architecture-20260912` at `e9c384d3`, pushed. **No console fit
+running and none should start until the register reads 0.**
