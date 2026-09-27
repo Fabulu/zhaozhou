@@ -3897,3 +3897,106 @@ would fight over a list that must begin with the lock exactly -- it waits for a
 quiet tree); `zhao_terrain_clipfeed` has no directed test; `zhao_geom_arenabin`
 and `zhao_measure_sealplan` have never been through `quartus_map`; ~13 `gz-*`
 worktrees still in place.
+
+### 2026-09-27 (later) - BOTH PACKETS LANDED, BOTH REFUSED THEIR GAP, AND ONE FIXED A LIVE DEFECT
+
+**Register 2 -> 2.** Neither `I34` nor `I55` closed. **Both refusals are sound
+and both are BUILD refusals, not decision refusals** -- which is the distinction
+that decided what to launch next.
+
+### RASTERSWAP: THE IDS ARE CORRECT FOR THE FIRST TIME
+
+**`u_geom_tidq` repaired and PROVEN.** `popped[k] == pushed[k-1]` ->
+`popped[k] == pushed[k]`, and the external arena now **agrees with the binner
+exactly**: `tris=74 unnamed=1 refs=97` (shortfall 4) -> **`tris=75 unnamed=0
+refs=101`**. Seven smoke forms, five scene sizes, `raster pixels=2816`,
+whole-frame `sdram_busy` unmoved (645,849 -> 645,846).
+
+Three blocks, as costed: the door gated on queue occupancy (**valid AND both
+upstream readys** -- gating one half DROPS a triangle instead of misnaming it),
+seal-abort push via `busy_o` with **zero new leaf ports**, and flush **poisoning
+in place rather than discarding**, because discarding an owed entry turns a wrong
+id into a permanent stall once the door is gated. **Deadlock modes exercised, not
+argued:** `geom_tidq_directed`, 83 checks, **21 fail against the base RTL**, in
+cases 5/6/7 only.
+
+**It killed a false PRESENCE.** `geom_tidq_directed` **did not exist** while
+being cited twice -- in the RTL header and in HANDOVER 15.30.1 -- as the reason
+to trust the block. **A false presence is worse than a false absence: a reader
+who greps the name finds the citation and stops.** The test exists now, and it
+immediately found the block's frame-edge behaviour was NOT correct under a gated
+door.
+
+**And a counter that needs a warning label:** `vertid stall` reads **1774 -> 0**,
+and that is **NOT 1,774 clocks saved** -- gating the door moved one of the
+counter's own operands.
+
+### LANESCOST: THE FRONT IS PRICED AND REFUSED, AND THE FEARED PARAMETER WAS NOT THE EXPENSIVE ONE
+
+Four leaf `-MapOnly` rows of `zhao_field_host_v2` on the **shipping part**, all
+`rtlCleanAtHead`, same closure, same digest, at **this console's own twenty
+parameters**. The block **had no fit target at all** -- "one leaf map" was a
+closure to construct, not a run to start.
+
+```
+  A L1G1F1  console today    ALUT 42,789  REG 48,997  mem  85,282  DSP 15
+  B L4G4F4  composed front   ALUT 54,768  REG 59,469  mem 160,930  DSP 24
+  delta                      ALUT +11,979 REG +10,472 mem +75,648  DSP +9
+```
+
+**Refused.** +11,979 ALUTs is **14.3% of the whole part**, the campaign's largest
+ALUT lever is **-1,531** (eight of them just to stand still), DSP has moved **by
+6 in total** across the campaign's lifetime so +9 undoes it **1.5x over** -- and
+it still lands at **3.21x** the 6,000-clock contract.
+
+**The finding recorded BEFORE the conclusion, because it is the one most likely
+to overturn it: `FAB_LANES` is NOT the expensive parameter.** Both documents
+feared four ALU replicas implying ~4x of a 42,789-ALUT block. Measured, the LANES
+step is **+5,070 -- +11%, not +300%** -- because the instruction stream and
+control are SHARED and the mulbank **always computed four lanes with three tied
+off** (hence +9 DSP, not +45). **`FRONT_PTS` + the undocumented `FAB_GROUP_PTS`
+tax = +6,909, MORE than the lanes.**
+
+It also repaired `extract_map_receipt.py`, which **refused all four valid
+reports** by demanding a chosen memory primitive while A&S writes `AUTO` until
+the FITTER chooses -- it refused the commonest output of the only run type it
+exists for.
+
+### WHAT I34 ACTUALLY NEEDS, WHICH IS NOT WHAT THE ENTRY USED TO SAY
+
+Reading the entry after both merges: **three of four channels have owners.**
+Height -> `u_terrain_patch`, live. Velocity -> the veljoin chain reaching
+`zhao_part_collide`, composed by TERRVEL. Nav -> **owner-ruled to SW.CPUCOLL**,
+classified and kept. **Material has NOBODY, and it is the whole remaining gap.**
+
+**Its blocker is an ABSENT ENCODING at BOTH ends.** The reference function and
+`zhao_field_sinks` speak `{u8 mat_a, u8 mat_b, u8 weight}`; the adapter and
+`patch_acc` are `[31:0]`; **nothing packs three u8s into that u32 and nothing
+unpacks it.** `compcache_front` has **one** material write face with **one**
+driver (authored layer E) and no arbitration. **Downstream is worse:** the
+authored triple `tcf_tri_mat_*` has **NO READER**, and `zhao_terrain_clipfeed`
+**has no material input port at all** -- its material outputs are the GEOM
+`{set,id,mode}` trio driven from **constants**.
+
+**So the performance commission and the functional gap are different things**,
+which is owner standing authorization 4 exactly: *separate functional completion
+from performance qualification.* LANESCOST refused the performance half; the
+functional half is a build nobody had scoped.
+
+### LAUNCHED, BOTH SLOTS
+
+* **MATERIALPATH -> `I34`.** The encoding, the second writer and its
+  arbitration, and a downstream reader. Acceptance is the owner's own sentence:
+  **verify that a Field material write changes the intended consumer** -- not
+  that authored terrain materials render, which TERRAINMAT already did and which
+  the owner explicitly named as insufficient.
+* **SWAPBUILD -> `I55`.** Blocker 2 unchanged at **1,749 bits**, but now startable
+  because the ids it reads are correct. Carries one new constraint drawn from
+  LANESCOST: **design for SDRAM, not registers** -- a swap costing comparable
+  logic will be refused on identical arithmetic.
+
+### WHERE THINGS STAND
+
+Gates **31/31 at baseline** across both merges. Branch
+`claude/ceiling-architecture-20260912` at `62d8b6a7`, pushed. **No console fit
+running and none should start until the register reads 0.**
