@@ -4635,3 +4635,105 @@ gate.**
 recomputable"* concealed that the record did not carry the colour; it may equally
 have concealed that it does not carry the material. If so, **the claim PVSCHEMA
 corrected was broader than anyone has yet corrected.**
+
+### 2026-09-27 - THE CONSOLE DRAWS FROM SDRAM, THE FIELD EXECUTES, AND THE FIT WOULD HAVE DIED ON ANALYSIS
+
+**Register 2. Gates 32/32. HEAD `df9e129c`.** Merged PVSCHEMA->...->METASIDE,
+FIELDACTIVE and PHASEFIX. **NOPROG live on I34.**
+
+### THE FIND THAT SAVED THE FIT
+
+**THE PRODUCTION CONSOLE DID NOT PASS `quartus_map`.** Two `Error (10170)` on a
+**second header `import`**, in `zhao_console_core.sv` and
+`zhao_console_board.sv`, **present at base** and **invisible to
+`check_quartus17_syntax.py`**. Fixed and verified: `failed:analysis` -> `ok`.
+
+**It surfaced only because `zhao_post_lease` had ZERO ROWS IN BOTH DATABASES** --
+**nobody had ever asked Quartus about a source list containing the console.**
+The full fit would have died on analysis, hours in, and the cause would have been
+looked for anywhere but here.
+
+### I55: THE CONSOLE DRAWS FROM SDRAM
+
+**`GEOM_WALK_RASTER = 1` gives 2,816 pixels** -- the shipped arrangement's own
+**reference-derived** count -- **11 tiles resolved, EVERY BYTE THROUGH SDRAM.**
+Directive section 4's own test, met.
+
+**AND MY BRIEF NAMED THE SYMPTOM, NOT THE CAUSE.** I called
+`zhao_shell_top_v2.sv:1653` *"THE LINE"*. Editing it would have been wrong. The
+decision is **two modules up**:
+
+```
+raster_done_c = raster_quiet_i && !raster_px_i && fbw_drained_i
+```
+
+`raster_quiet_i` is the **BINNER's** quiet signal -- and at `JOB_SRC = 1` the
+binner issues **no job at all**, so it is **honestly TRUE** at `frame_end` while
+the machine about to draw the whole frame has not started. **A CORRECT SIGNAL
+ASKING THE WRONG QUESTION**, which is a new entry in this campaign's catalogue
+and not the same as a broken one.
+
+The repair adds a second term enabled by a **different producer**, so the two
+sides are **not in lockstep** -- the detector law applied to a repair rather than
+to a checker. **Arbitrating the pixel port was refused NOT ON AREA**: POST reads
+the framebuffer as its source, so arbitration would composite a half-written
+frame.
+
+**The evidence is six modules and six register enables, not one counter:**
+`arenabin refs=101 == binrefs 101 == tilewalk jobs=101 == door=101 ==
+rasterdiag started=101 == paramwalk tris=101`; `vread=303 == 3x101`;
+`setup_submitted=176 == 75 live + 101 walk`.
+
+All three of METASIDE's **silent** round-trip assertions now **FIRE**, in three
+forms because the unpackers read disjoint fields. Leaf A/B on the shipping part:
+**+66 registers (exactly 2+32+32), +69 ALUT, +0 DSP**, identical virtual pins.
+
+**IT DID NOT UN-PARK, AND THAT WAS RIGHT.** Five committed control forms assert
+pixel counts taken **against the binner's drain** and have **never run in
+arrangement 1**, and arrangement 1 has **never been fitted**. **Two measurements,
+not a decision.**
+
+### I34: THE CONSOLE INSTALLED A FIELD, THEN REFUSED TO RUN IT, THEN RAN IT
+
+**FIELDACTIVE** got a real Earth spell (`wave_pool`, 1,472-byte ZFH2 capsule + 43
+doorbell LOAD words) **installed, sealed and published** in the composed console
+-- `installs_ok=1`, `bad_crc=0`, `load_bytes=1536` over the real bridge -- and
+`zhao_terrain_fieldlist` **resolving** it. It also backed **HPS region 6** for the
+staging window `fld_ldr_stage_base_i` **had advertised since the loader was
+composed while NOTHING EVER BACKED IT.**
+
+**And `field_composed` stayed 0**: the adapter answered **`noprog` exactly 1,089
+times**, one per lattice vertex of a 33x33 patch. **The adapter's own header
+documents that fingerprint verbatim**, records that the earlier repair left
+**"ONE NARROWED RESIDUAL"**, and notes `lane_desync_o` **structurally cannot see
+the class** -- a counter reading zero inside the very block at fault.
+
+**No leaf bench could catch it**: every leaf bench submits the record **then** the
+patch job, and **this console has a job pending FIRST** -- the composed-console
+ordering section 13.7 exists to reach. **The owner's "true in the assembled
+console" rule is what surfaced it.**
+
+**NOPROG then made it execute: 1,089 REAL EARTH RUNS**, and its diagnostic
+**found a SECOND wrong-slot defect** nobody had recorded. `COMPOSED_MATERIAL` is
+in progress under the owner's ruling.
+
+**And a cost this campaign carried as inevitable is not owed:** `REGS=32` needs
+**no widening** -- `wave_pool` and `impact_wave` lower clean at 32 via
+`--scalar-base`. **No ALM purchase.**
+
+### THE BRIEFS, AGAIN
+
+**FIELDACTIVE found FIVE false claims in mine, four load-bearing** -- including
+that **section 13.7 is not in the vacation directive at all** (it is the Field
+architecture report) and that **its bar has four clauses, not one**. **PHASEFIX
+found my named line was the symptom.** That is **six consecutive packets** each
+finding its own brief wrong in a load-bearing place.
+
+### WATCHERS
+
+Eleven waiting constructs accumulated across two packets. **Three orphans killed
+-- owners finished and merged, so the re-arming hazard did not apply** -- and the
+live lanes were **told rather than silently cleaned**, which is the half that was
+missing the last time this happened. **METASIDE woke on its poller's death and
+explicitly DECLINED to re-arm, citing the trap by name.** The rule working from
+the lane's side.
