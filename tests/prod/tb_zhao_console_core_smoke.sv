@@ -5587,6 +5587,48 @@ module tb_zhao_console_core_smoke
   end
 
   // --------------------------------------------------------------------------
+  // DESYNCARM: WHICH ARM OF `fld_earth_lane_desync_o` ACTUALLY FIRES
+  // --------------------------------------------------------------------------
+  // The counter reads 1 in BOTH field forms -- identically whether the field
+  // runs 1,089 times or ZERO -- and the coordinator's diagnosis of WHY was
+  // STRUCTURAL, never measured. This probe settles it.
+  //
+  // `zhao_field_earth_adapter` sums three independent conditions into one
+  // counter, so its value cannot say which one moved:
+  //
+  //   (a) vtx_live != ans_ready_i                 -- UNGATED, every cycle
+  //   (b) vtx_fire_i && (rep_idx != lanes_i)
+  //   (c) (state == E_REQ) && (cap_a != lane_a)
+  //
+  // READ-ONLY, hierarchical, and deliberately NOT a new production port: an
+  // output added to answer a diagnostic question costs the port, both wrapper
+  // mutants, a bench wire and a reader, and would put this question inside the
+  // thing it is asking about.
+  //
+  // The arms are mirrored with `!=`, NOT `!==`, so these counts agree with the
+  // adapter's own arithmetic rather than additionally catching X.
+  integer dsa_a_q, dsa_b_q, dsa_c_q;
+  always @(posedge gpu_clk) begin
+    if (!rst_n) begin
+      dsa_a_q <= 0;
+      dsa_b_q <= 0;
+      dsa_c_q <= 0;
+    end else begin
+      if (`PC_CORE.u_field_earth_adapter.vtx_live
+          != `PC_CORE.u_field_earth_adapter.ans_ready_i)
+        dsa_a_q <= dsa_a_q + 1;
+      if (`PC_CORE.u_field_earth_adapter.vtx_fire_i
+          && (`PC_CORE.u_field_earth_adapter.rep_idx
+              != `PC_CORE.u_field_earth_adapter.lanes_i))
+        dsa_b_q <= dsa_b_q + 1;
+      if ((`PC_CORE.u_field_earth_adapter.state == 2'd1)
+          && (`PC_CORE.u_field_earth_adapter.cap_a
+              != `PC_CORE.u_field_earth_adapter.lane_a))
+        dsa_c_q <= dsa_c_q + 1;
+    end
+  end
+
+  // --------------------------------------------------------------------------
   // THE TRIANGLE FRONT DOOR IS GONE (2026-09-19, geom packet). It presented
   // sixteen copies of one hand-placed SCREEN triangle at GEOM.CLIP's input
   // because the replay customer did not exist. GEOM.REPLAY does now, so the
@@ -10779,6 +10821,8 @@ module tb_zhao_console_core_smoke
         $display("SMOKE: early-diag tagphase2 control[%0d] state=%08h tag=%02h addr=%02h", t, tg2_ctl_st_q[t], tg2_ctl_tag_q[t], tg2_ctl_addr_q[t]);
 
     // ---- TAGPHASE ROUND 3: THE JOIN, MEASURED AT THE JOB ACCEPT -----------
+    $display("SMOKE: early-diag desyncarm total=%0d  a[vtx_live!=ans_ready]=%0d  b[vtx_fire&&rep_idx!=lanes]=%0d  c[E_REQ&&cap_a!=lane_a]=%0d",
+             fld_earth_lane_desync_o, dsa_a_q, dsa_b_q, dsa_c_q);
     $display("SMOKE: early-diag tagphase3 jobs=%0d walk_bus_idle=%0d ms_invalid=%0d ms_zero_sample=%0d ms_nonzero_tag=%0d",
              tg3_job_n_q, tg3_job_nopw_q, tg3_job_inval_q, tg3_job_zs_q, tg3_job_tag_q);
     for (int t = 0; t < TG2_CAP_N; t++)
