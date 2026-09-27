@@ -167,8 +167,39 @@ def top_disjoint(rows: list[dict], key: str, n: int) -> list[dict]:
     return out
 
 
+def read_synth_stamp(path: str) -> str:
+    """The report's OWN 'Analysis & Synthesis Status' line.
+
+    This is the only date that describes the MEASUREMENT. A file mtime does
+    not: reports get copied, and a copy carries the copy's date. The tables
+    this tool writes had no provenance at all, which is the failure its own
+    docstring warns about one level up -- "a table with no probe beside it is
+    unverifiable" is also true of a table whose probe cannot be pointed at the
+    same input again.
+    """
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            for i, line in enumerate(fh):
+                if "Analysis & Synthesis Status" in line:
+                    parts = [p.strip() for p in line.split(";")]
+                    if len(parts) > 2 and parts[2]:
+                        return parts[2]
+                # The status line sits at ~1645 in a console report, after a
+                # long header. A cap of 400 found NOTHING and returned
+                # "UNKNOWN" silently -- an invented bound failing in the
+                # flattering direction, which is this repository's own law
+                # in miniature. 50k lines is still a fraction of a 24 MB
+                # report and the entity table is far below it anyway.
+                if i > 50000:
+                    break
+    except OSError:
+        pass
+    return "UNKNOWN"
+
+
 def render(rows: list[dict], top_n: int, drills: list[str],
-           device: str = "UNKNOWN") -> str:
+           device: str = "UNKNOWN", source: str = "UNKNOWN",
+           synth_stamp: str = "UNKNOWN") -> str:
     top = rows[0]
     L: list[str] = []
     a = L.append
@@ -183,6 +214,18 @@ def render(rows: list[dict], top_n: int, drills: list[str],
     a("Synthesis entity table. **Synthesis estimates, not a placement result:**")
     a("this design has never placed, so there are no ALM figures and no Fmax,")
     a("and nothing here should be quoted as either.")
+    a("")
+    a("| provenance | |")
+    a("|---|---|")
+    a("| source report | `%s` |" % source)
+    a("| Analysis & Synthesis | %s |" % synth_stamp)
+    a("")
+    a("**The stamp above is the MEASUREMENT's date, not this file's.** It is read")
+    a("from the report's own status line rather than a file mtime, because a")
+    a("copied report carries the copy's date. The source `.map.rpt` is")
+    a("gitignored, so this row is the only thing tying the numbers below to an")
+    a("input anyone can go and re-read -- and a table that cannot be traced to")
+    a("one is a number somebody once pasted.")
     a("")
     a("| | measured | against %s |" % SHIP_PART)
     a("|---|---:|---:|")
@@ -289,7 +332,8 @@ def main() -> int:
               file=sys.stderr)
         return 2
 
-    text = render(rows, args.top, args.drill, read_device(args.report))
+    text = render(rows, args.top, args.drill, read_device(args.report),
+                  args.report.replace("\\", "/"), read_synth_stamp(args.report))
     if args.markdown:
         with open(args.markdown, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(text)

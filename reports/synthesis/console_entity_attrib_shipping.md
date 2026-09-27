@@ -9,6 +9,18 @@ Synthesis entity table. **Synthesis estimates, not a placement result:**
 this design has never placed, so there are no ALM figures and no Fmax,
 and nothing here should be quoted as either.
 
+| provenance | |
+|---|---|
+| source report | `reports/synthesis/blockpaths/zhao_console_core@post-palram.map.rpt` |
+| Analysis & Synthesis | Successful - Sat Sep 26 05:21:08 2026 |
+
+**The stamp above is the MEASUREMENT's date, not this file's.** It is read
+from the report's own status line rather than a file mtime, because a
+copied report carries the copy's date. The source `.map.rpt` is
+gitignored, so this row is the only thing tying the numbers below to an
+input anyone can go and re-read -- and a table that cannot be traced to
+one is a number somebody once pasted.
+
 | | measured | against 5CSEBA6U23I7 |
 |---|---:|---:|
 | combinational ALUTs | 301446 | 360% of ~83820 |
@@ -41,6 +53,10 @@ is what overflows this device, and M10K is where the slack is.
 | `zhao_part_update:u_part_update` | 3266 | 4% | 687 | 0 | 0 |
 | `zhao_terrain_pageio:u_terrain_pageio` | 3171 | 4% | 1357 | 26624 | 0 |
 | `zhao_geom_cull:u_geom_cull` | 3061 | 4% | 1825 | 0 | 2 |
+| `zhao_geom_vattr:u_geom_vattr` | 3054 | 4% | 2557 | 41720 | 2 |
+| `zhao_geom_skin_norm:u_geom_skin_norm` | 3035 | 4% | 920 | 0 | 4 |
+| `zhao_forge_prim_eval:u_forge_prim_eval` | 2654 | 3% | 2415 | 4608 | 2 |
+| `zhao_geom_loom:u_geom_loom` | 2652 | 3% | 3337 | 408849 | 1 |
 
 ## Biggest subtrees by REGISTERS
 
@@ -67,6 +83,10 @@ are: one such array cost 5,181 registers and ~2,698 estimated ALMs, and
 | `zhao_field_loader:u_field_loader` | 2815 | 2% | 3803 | 0 |
 | `zhao_terrain_fieldlist:u_terrain_fieldlist` | 2800 | 2% | 1057 | 0 |
 | `zhao_part_terrain_tap:u_part_terrain_tap` | 2783 | 2% | 2508 | 0 |
+| `zhao_geom_clipread:u_geom_clipread` | 2590 | 2% | 2128 | 0 |
+| `zhao_geom_vattr:u_geom_vattr` | 2557 | 2% | 3054 | 41720 |
+| `zhao_terrain_pagestream:u_terrain_pagestream` | 2470 | 1% | 3804 | 0 |
+| `zhao_forge_prim_eval:u_forge_prim_eval` | 2415 | 1% | 2654 | 4608 |
 
 ## Biggest subtrees by DSP
 
@@ -92,4 +112,8 @@ is a different programme from moving an array into a memory.
 | `zhao_forge_ring_eval:u_forge_ring_eval` | 2 | 2% | 2628 |
 | `zhao_geom_clip:u_geom_clip` | 2 | 2% | 1000 |
 | `zhao_geom_cull:u_geom_cull` | 2 | 2% | 3061 |
+| `zhao_geom_meshfetch:u_geom_meshfetch` | 2 | 2% | 1787 |
+| `zhao_geom_pose_decode:u_geom_pose_decode` | 2 | 2% | 1958 |
+| `zhao_geom_vattr:u_geom_vattr` | 2 | 2% | 3054 |
+| `zhao_part_terrain_tap:u_part_terrain_tap` | 2 | 2% | 2508 |
 
