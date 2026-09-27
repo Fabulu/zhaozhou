@@ -2489,6 +2489,25 @@ module zhao_console_board
   output logic [31:0]             terr_cc_mat_oob_o,
   output logic [31:0]             terr_cc_mat_cells_o,
 
+  // ---- TERRAIN.MATJOIN, entry I34's material channel (MATERIALPATH) -------
+  // Three of the block's five counters reach this edge. The two left inside
+  // are CENSUSES -- `cells_written_o` restates `terr_cc_mat_cells_o` one hop
+  // up, and `lane_no_cell_o` counts the 65 lattice vertices per patch that own
+  // no cell, which is arithmetic rather than news. Both are asserted in
+  // `terrain_matjoin_directed`. Exporting a port for a number nobody reads is
+  // the uncashed cheque this tree keeps finding, so they are not exported.
+  //
+  // `terr_mj_held_overrun_o` IS exported although it is structurally zero in
+  // this arrangement, and that is the point: it is the guard on the sequencing
+  // assumption the join rests on -- that TERRAIN.PATCH holds ONE vertex at a
+  // time -- and a fault counter the console cannot read is exactly the shape
+  // `CLAUDE.md` records as unauditable. It is seen to FIRE at the block's own
+  // ports in `terrain_matjoin_directed`, so its zero here is a measurement and
+  // not an unproven claim.
+  output logic [31:0]             terr_mj_field_composed_o,
+  output logic [31:0]             terr_mj_token_refused_o,
+  output logic [31:0]             terr_mj_held_overrun_o,
+
   // ---- TERRAIN PAGING evidence -------------------------------------------
   // Events, never cycles, except where the name says otherwise. These are the
   // instrument that says the spine carried a beat rather than merely
@@ -5418,6 +5437,9 @@ module zhao_console_board
       .terr_cc_cs_oob_o                   (terr_cc_cs_oob_o),
       .terr_cc_mat_oob_o                  (terr_cc_mat_oob_o),
       .terr_cc_mat_cells_o                (terr_cc_mat_cells_o),
+      .terr_mj_field_composed_o           (terr_mj_field_composed_o),
+      .terr_mj_token_refused_o            (terr_mj_token_refused_o),
+      .terr_mj_held_overrun_o             (terr_mj_held_overrun_o),
       .terr_cmd_sets_accepted_o           (terr_cmd_sets_accepted_o),
       .terr_cmd_sets_refused_o            (terr_cmd_sets_refused_o),
       .terr_cmd_records_emitted_o         (terr_cmd_records_emitted_o),

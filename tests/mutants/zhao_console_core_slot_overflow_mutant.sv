@@ -2214,6 +2214,13 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             terr_cc_mat_oob_o,
   output logic [31:0]             terr_cc_mat_cells_o,
 
+  // ---- TERRAIN.MATJOIN (MATERIALPATH, 2026-09-27) -------------------------
+  // Carried verbatim from production's port block, per this file's header
+  // recipe. `.*` would fail to elaborate without them.
+  output logic [31:0]             terr_mj_field_composed_o,
+  output logic [31:0]             terr_mj_token_refused_o,
+  output logic [31:0]             terr_mj_held_overrun_o,
+
   // ---- TERRAIN PAGING evidence -------------------------------------------
   // Events, never cycles, except where the name says otherwise. These are the
   // instrument that says the spine carried a beat rather than merely

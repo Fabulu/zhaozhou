@@ -10035,6 +10035,42 @@ set_tests_properties(lint_terrain_veljoin PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# TERRAIN.MATJOIN: entry I34's MATERIAL channel. Earth out-lane 2, decoded
+# through the v1 material token and composed onto the authored layer-E triple
+# per `zref::fieldir::compose_material` -- last ENABLED writer wins, in
+# accepted command order. The sibling of TERRAIN.VELJOIN, which does the same
+# for out-lane 1.
+#
+# The directed test is also where both of this block's guards are SEEN TO FIRE.
+# `held_overrun_o` is unreachable in the composed console, because
+# `zhao_terrain_patch` holds one vertex at a time -- so it is driven at this
+# block's own ports here rather than argued about, which is why the block has a
+# bench of its own and not only a console case.
+add_executable(test_terrain_matjoin_directed terrain/terrain_matjoin_directed.cpp)
+target_link_libraries(test_terrain_matjoin_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_matjoin_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain)
+verilate(test_terrain_matjoin_directed
+  PREFIX Vzhao_terrain_matjoin
+  TOP_MODULE zhao_terrain_matjoin
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_material_token_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_matjoin.sv)
+add_test(NAME terrain_matjoin_directed COMMAND test_terrain_matjoin_directed)
+set_tests_properties(terrain_matjoin_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
+# -Wall EXPLICITLY, and with no waiver file. `tests/shell/v3_closure_inherited.vlt`
+# waives UNUSEDSIGNAL across whole directories including `fpga/rtl/common`, so a
+# dead wire in either of these two files would raise nothing inside the console
+# closure. This lint is the one place they are held to the bare standard.
+add_test(NAME lint_terrain_matjoin
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_matjoin
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_material_token_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_matjoin.sv)
+set_tests_properties(lint_terrain_matjoin PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 add_test(NAME lint_terrain_velocity
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_terrain_velocity

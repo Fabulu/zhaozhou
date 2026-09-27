@@ -97,6 +97,18 @@ package zhao_material_token_pkg;
     zmt_encode = {ZMT_TAG_V1, mat_a, mat_b, weight};
   endfunction
 
+  // ---- ACCESSORS, AND THE ONE NARROW WAIVER THEY NEED -----------------------
+  // An accessor reads a SLICE of its argument by definition, so Verilator's
+  // UNUSEDSIGNAL fires on the bits each one does not name. The waiver is scoped
+  // to exactly these functions and states its reason, DELIBERATELY rather than
+  // by leaning on `tests/shell/v3_closure_inherited.vlt`, which waives
+  // UNUSEDSIGNAL across the whole of `fpga/rtl/common` and would have silenced
+  // this without anybody choosing to. `zhao_texture_ident_pkg`'s identical
+  // accessors are covered by that blanket today; this file is clean under a
+  // bare `--lint-only -Wall` instead, which is the standard the campaign is
+  // trying to get back to.
+  /* verilator lint_off UNUSEDSIGNAL */
+
   // ---- the predicate that makes a refusal possible -------------------------
   function automatic logic zmt_tag_ok(input logic [ZMT_TOKEN_W-1:0] tok);
     zmt_tag_ok = (tok[ZMT_TAG_LO +: ZMT_FIELD_W] == ZMT_TAG_V1);
@@ -123,6 +135,8 @@ package zhao_material_token_pkg;
   function automatic logic [ZMT_TRIPLE_W-1:0] zmt_triple(input logic [ZMT_TOKEN_W-1:0] tok);
     zmt_triple = tok[ZMT_TRIPLE_W-1:0];
   endfunction
+
+  /* verilator lint_on UNUSEDSIGNAL */
 
 endpackage
 
