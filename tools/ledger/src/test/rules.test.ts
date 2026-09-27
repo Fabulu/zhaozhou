@@ -462,7 +462,43 @@ test('V17c: the same phantom contract citation is LEGAL while the block is SPECI
   assert.deepEqual(errors, []);
 });
 
-test('V17d: an existing test file that never names its oracle is an alias, rejected', () => {
+// V17(d) WAS NARROWED ON 2026-09-16 (`1afe5a30`) AND THESE TWO TESTS ENCODE THE
+// RULE AS IT NOW STANDS. The old single case asserted the STRICT form -- every
+// cited test must name the oracle -- and was left behind when the rule changed,
+// so it failed for eleven days while asserting a law the tree no longer has.
+//
+// The narrowing was measured, not argued: across all 118 blocks the strict form
+// caught 0 of the blocks it was written for and produced exactly 1 false
+// positive (TEXTURE.AUX, where a real passing differential sits beside a
+// self-declared PROTOCOL GATE). The rule now fails a block only when NONE of
+// its cited tests names the oracle -- the MEM.HPS.BRIDGE failure.
+//
+// Both directions are asserted deliberately. A rule that only has its failing
+// case tested can be satisfied by a check that rejects everything, and one that
+// only has its passing case tested can be satisfied by a check that rejects
+// nothing. Neither half is evidence on its own.
+test('V17d: a block where NO cited test names its oracle is an alias, rejected', () => {
+  const doc = blocksDoc([v17Block()]);
+  const errors = checkCitations(
+    doc,
+    v17opts({
+      // Every cited test is silent about `CmdDecoder`, and none of them
+      // #includes a sibling that would supply it, so the one-level follow
+      // cannot rescue them either.
+      readText: (p: string): string | null => {
+        if (p === 'design/contracts/CMD.DECODER.md') return '## Scalar reference function\n\n`zref::CmdDecoder`\n';
+        if (p.startsWith('tests/command/cmd_decoder_')) return '// random soak of something else entirely\n';
+        return null;
+      },
+    })
+  );
+  assert.ok(
+    errors.some((e) => e.includes('V17') && e.includes('NONE mentions') && e.includes('alias')),
+    errors.join('\n')
+  );
+});
+
+test('V17d: SOME-but-not-all naming the oracle is accepted (the TEXTURE.AUX case)', () => {
   const doc = blocksDoc([v17Block()]);
   const errors = checkCitations(
     doc,
@@ -475,7 +511,7 @@ test('V17d: an existing test file that never names its oracle is an alias, rejec
       },
     })
   );
-  assert.ok(errors.some((e) => e.includes('V17') && e.includes('alias') && e.includes('cmd_decoder_random.cpp')), errors.join('\n'));
+  assert.deepEqual(errors.filter((e) => e.includes('V17')), []);
 });
 
 // ---------------------------------------------------------------------------
