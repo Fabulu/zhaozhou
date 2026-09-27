@@ -531,9 +531,22 @@ module tb_zhao_console_core_smoke
   logic [31:0] geom_ab_flushcut_o;
   logic [15:0] geom_ab_max_chunks_o;
   logic        geom_ab_overflow_o;
-  logic [ 9:0] geom_ab_head_tile_i = 10'd0;
+  // `geom_ab_head_tile_i` WAS DECLARED HERE AND IS GONE (SWAPCLOSE,
+  // 2026-09-27). It was the group's only input, held at tile 0 forever,
+  // because nothing in the machine chose a tile. `u_geom_tilewalk` chooses one
+  // now, so the console port was removed and this net with it -- and the two
+  // outputs below stopped describing tile 0 and started describing whichever
+  // tile the sequencer is querying.
   logic [31:0] geom_ab_head_chunk_o;
   logic        geom_ab_head_valid_o;
+  // ---- GEOM.TILEWALK, entry I55's sequencer ------------------------------
+  logic [31:0] geom_tw_tiles_o;
+  logic [31:0] geom_tw_empty_o;
+  logic [31:0] geom_tw_jobs_o;
+  logic [31:0] geom_tw_failed_o;
+  logic [31:0] geom_tw_stall_o;
+  logic [31:0] geom_tw_overlap_o;
+  logic [31:0] geom_tw_door_o;
   logic [31:0] geom_pw_dirs_o;
   logic [31:0] geom_pw_dirmiss_o;
   logic [31:0] geom_pw_chunks_o;
@@ -6982,6 +6995,36 @@ module tb_zhao_console_core_smoke
     // (geom_paramarena_alignmut_fires) that makes them evidence.
     $display("SMOKE: paramalign arena_unaligned=%0d walk_unaligned=%0d",
              geom_pa_unaligned_o, geom_pw_unaligned_o);
+    // ---- I55's RASTER SWAP, AND THIS IS WHERE IT IS READ -----------------
+    // `tilewalk` is the sequencer; `door` is `zhao_geom_bin_pipe_v2`'s
+    // `walk_jobs_taken_o`, the raster door's own traffic count. In the
+    // arrangement this console now elaborates -- `JOB_SRC = 1` -- the door is
+    // the ONLY way a job reaches `zhao_raster_tile_pipe_v2`, so `door` and
+    // `raster pixels` stand or fall together.
+    $display("SMOKE: tilewalk   tiles=%0d empty=%0d jobs=%0d failed=%0d stall=%0d overlap=%0d door=%0d",
+             geom_tw_tiles_o, geom_tw_empty_o, geom_tw_jobs_o,
+             geom_tw_failed_o, geom_tw_stall_o, geom_tw_overlap_o,
+             geom_tw_door_o);
+    // THE JOB AND THE DOOR ARE COUNTED IN DIFFERENT MODULES, ON DIFFERENT
+    // REGISTER ENABLES -- `jobs_issued_o` inside GEOM.TILEWALK on its own
+    // handshake, `walk_jobs_taken_o` inside the bin pipe on the tile pipe's.
+    // So this comparison is NOT the pattern where one enable drives both sides
+    // and the checker is blind to the timing it exists to catch.
+    if (geom_tw_jobs_o != geom_tw_door_o) begin
+      $fatal(1, "GEOM.TILEWALK: %0d job(s) issued but the raster door took %0d",
+             geom_tw_jobs_o, geom_tw_door_o);
+    end
+    // A walk that failed part way leaves a tile's list half drawn, and `last`
+    // -- which RESOLVES the tile -- may never be asserted for it.
+    if (geom_tw_failed_o != 32'd0) begin
+      $fatal(1, "GEOM.TILEWALK: %0d walk(s) ended badly", geom_tw_failed_o);
+    end
+    // Unreachable while the serial handshake holds; the committed mutant
+    // `zhao_geom_tilewalk_overlap_mutant` is what shows it CAN fire.
+    if (geom_tw_overlap_o != 32'd0) begin
+      $fatal(1, "GEOM.TILEWALK: %0d overlapping triangle offer(s)", geom_tw_overlap_o);
+    end
+
     $display("SMOKE: paramwalk  dirs=%0d dirmiss=%0d chunks=%0d stale=%0d illegal=%0d depth=%0d",
              geom_pw_dirs_o, geom_pw_dirmiss_o, geom_pw_chunks_o,
              geom_pw_stale_o, geom_pw_illegal_o, geom_pw_depth_o);

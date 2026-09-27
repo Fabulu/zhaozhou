@@ -344,9 +344,17 @@ int main(int argc, char** argv) {
     };
     const C cases[] = {
         {0x00, true, "domain MESH, nothing else set"},
-        {0x0F, false, "domain 3 is reserved -- illegal"},
+        // WAS `false` UNTIL 2026-09-27 AND IT ASSERTED A DEFECT.
+        // 0x0F has a ZERO reserved nibble and domain 3, so it fired on the
+        // domain rule alone -- the rule that refused every terrain vertex in
+        // the arena. Domain 3 is TERRAIN and is legal, so this record is
+        // well formed.
+        {0x0F, true, "domain 3 is TERRAIN -- legal, and the reserve is zero"},
         {0x0A, true, "shared_capable + domain PARTICLE"},
-        {0x03, false, "domain 3 alone"},
+        {0x03, true, "domain 3 (TERRAIN) alone -- legal"},
+        // A REPLACEMENT ILLEGAL CASE, so the table still contains one that
+        // fires on the rule that remains: a nonzero reserved nibble.
+        {0x10, false, "reserved bit 4 set -- a malformed record"},
         {0x10, false, "a reserved bit set: nonzero [7:4] is malformed"},
         {0x80, false, "the top reserved bit"},
         {0x0C, true, "shared_capable + untextured, domain MESH"},
@@ -374,7 +382,7 @@ int main(int argc, char** argv) {
     }
     zhao::check(bad == 0,
                 "a malformed status byte is refused and REPORTED not corrected -- "
-                "both the reserved-bits rule and the reserved-domain rule, neither "
+                "the reserved-bits rule, which is the rule that remains, neither "
                 "of which had any detector before schema v2",
                 0, bad);
     zhao::check(fired > 0, "and the malformed cases are not vacuous: some were offered",

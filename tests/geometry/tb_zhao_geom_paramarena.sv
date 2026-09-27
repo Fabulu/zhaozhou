@@ -787,6 +787,12 @@ module tb_zhao_geom_paramarena
       .t_max_x_o   (t_max_x_o),
       .t_min_y_o   (t_min_y_o),
       .t_max_y_o   (t_max_y_o),
+      // The tile list's brackets. Not compared here -- this bench has no
+      // tile grid and no raster -- but EXPLICIT rather than omitted,
+      // because an omitted pin is a PINMISSING and cannot be told apart
+      // from an oversight.
+      .t_first_o   (),
+      .t_last_o    (),
 
       .t_a_x_o (t_a_x_o), .t_a_y_o (t_a_y_o), .t_a_invw_o (t_a_invw_o),
       .t_a_uow_o (t_a_uow_o), .t_a_vow_o (t_a_vow_o),

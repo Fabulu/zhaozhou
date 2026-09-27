@@ -90,7 +90,9 @@
 // v2 (design/contracts/GEOM.VERTID.md, "The ProjectedVertex status byte"):
 //
 //   * `status[7:4]` is "reserved, written 0. Nonzero is a malformed record."
-//   * `status[1:0]` domain 3 is "reserved (illegal)".
+//   * `status[1:0]` carries the PRODUCER DOMAIN, and all four values are
+//     legal: 0 MESH, 1 FORGE, 2 PARTICLE, 3 TERRAIN. See the repair note
+//     beside `pv_illegal_o` below.
 //
 // Both are reachable with legal stimulus and both are exercised by
 // `geom_parambuf_directed`. This is strictly more enforcement than v1 had, not
@@ -323,12 +325,28 @@ module zhao_geom_parambuf
   // s21-stored field; these two CAN fire and had no detector before v2.
   // design/contracts/GEOM.VERTID.md, "The ProjectedVertex status byte":
   //   [7:4] "reserved, written 0. Nonzero is a malformed record."
-  //   [1:0] domain 3 is "reserved (illegal)".
+  //   [1:0] the producer domain: 0 MESH, 1 FORGE, 2 PARTICLE, 3 TERRAIN.
+  //         All four are legal; see the repair note below.
   wire status_reserved_bad_c =
       (pv_status_o[ZHAO_PV_STATUS_W-1:4] != 4'd0);
-  wire status_domain_bad_c   = (pv_status_o[1:0] == 2'b11);
-
-  assign pv_illegal_o = pv_valid_i && (status_reserved_bad_c || status_domain_bad_c);
+  // THE DOMAIN RULE WAS HERE AND IT REFUSED LEGAL RECORDS (SWAPCLOSE,
+  // 2026-09-27). It read `(pv_status_o[1:0] == 2'b11)`, implementing
+  // GEOM.VERTID.md's "3 reserved (illegal)". `zhao_console_core` declares
+  // `GEOM_VID_DOM_TERR = 2'd3`, `u_geom_clipdoor` grants it to every triangle
+  // of the TERRAIN arm, and `SHARED_DOMAINS` is a FOUR-bit mask over four
+  // domains -- so domain 3 is a live producer domain and always was; the
+  // contract line predates the terrain arm being one.
+  //
+  // MEASURED, NOT ARGUED: the first console frame in which anything read
+  // `pv_illegal_o` refused 30 of 45 fetched vertices, and the refused ones are
+  // the terrain vertices. It survived because the port had NO CONSUMER
+  // ANYWHERE -- PVSCHEMA's FINDINGS say so in those words -- so a rule firing
+  // on legal data had nobody to hear it. That is the broken-instrument law
+  // with its sign flipped, and it is caught the same way: by giving the
+  // detector a reader.
+  //
+  // THE RESERVE RULE STAYS, because it is a real rule about a real reserve.
+  assign pv_illegal_o = pv_valid_i && status_reserved_bad_c;
 
   // ---- TriangleDescriptor -- SCHEMA v2 ------------------------------------
   // EVERY SLICE IS NAMED. The v1 form read `td_bytes_i[64 +: 32]` and friends

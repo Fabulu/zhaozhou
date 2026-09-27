@@ -13209,9 +13209,37 @@ module zhao_console_core
   output logic [31:0] geom_ab_flushcut_o,    // partial chunks cut by frame end
   output logic [15:0] geom_ab_max_chunks_o,  // deepest tile list, in chunks
   output logic        geom_ab_overflow_o,
-  input  logic [ 9:0] geom_ab_head_tile_i,
+  // `geom_ab_head_tile_i` WAS HERE AND IS REMOVED (SWAPCLOSE, 2026-09-27).
+  // It was a console INPUT choosing which tile's head to read, driven by
+  // nothing and held at zero by the bench. The comment above it already said
+  // this table is "what a walk starts FROM: entry I55's consumer reads it" --
+  // and the consumer did not exist, so the query came from outside the
+  // machine. `u_geom_tilewalk` drives it now. Removed rather than left dead,
+  // because an input with no reader is a tie-off shape and ruling R159 makes
+  // an undeclared one LOWER the completion register.
+  //
+  // The two OUTPUTS stay, and they are better evidence than before: they now
+  // show the head the sequencer is actually querying, tile by tile, instead of
+  // tile zero forever.
   output logic [31:0] geom_ab_head_chunk_o,
   output logic        geom_ab_head_valid_o,
+
+  // ---- GEOM.TILEWALK's evidence (SWAPCLOSE, 2026-09-27) ------------------
+  // `geom_tw_door_o` is `zhao_geom_bin_pipe_v2`'s `walk_jobs_taken_o` brought
+  // to the boundary. The shell's binding comment asked for exactly this --
+  // "it wants a real reader at the console boundary then, not an empty pin"
+  // -- and it is the number that says the raster door carried traffic.
+  //
+  // `geom_tw_overlap_o` is UNREACHABLE while the sequencer's serial handshake
+  // is correct, so it owes a committed mutant rather than an argument:
+  // `tests/mutants/zhao_geom_tilewalk_overlap_mutant.sv`.
+  output logic [31:0] geom_tw_tiles_o,
+  output logic [31:0] geom_tw_empty_o,
+  output logic [31:0] geom_tw_jobs_o,
+  output logic [31:0] geom_tw_failed_o,
+  output logic [31:0] geom_tw_stall_o,
+  output logic [31:0] geom_tw_overlap_o,
+  output logic [31:0] geom_tw_door_o,
   output logic [31:0] geom_pw_dirs_o,
   output logic [31:0] geom_pw_dirmiss_o,
   output logic [31:0] geom_pw_chunks_o,
@@ -20785,6 +20813,98 @@ module zhao_console_core
   wire signed [31:0]  vid_pv_r, vid_pv_g, vid_pv_b, vid_pv_alpha;
   wire [17:0]         vid_pv_id;
   wire                vid_td_valid, vid_td_ready, vid_td_accept;
+  // =====================================================================
+  // I55's RASTER SWAP -- THE WALK'S SIDE (SWAPCLOSE, 2026-09-27)
+  // =====================================================================
+  // `zhao_geom_paramwalk`'s outputs were all `()` and entry I55 refused a
+  // sequencer six times on one ground, which was correct every time: with
+  // every `t_*` dangling, a sequencer would count triangles and DROP them.
+  // The three things that changed are DOORCOST's door (`JOB_SRC`, +983 comb
+  // ALUT / +0 DSP), TriangleDescriptor SCHEMA v2 (`area2` and the scissored
+  // box, which GEOM.SETUP consumes and v1 could not carry), and this block --
+  // so the triangles now have a consumer and it draws pixels.
+  wire               pw_t_valid_w, pw_t_ready_w, pw_t_illegal_w, pw_t_untex_w;
+  wire               pw_t_first_w, pw_t_last_w;
+  wire [15:0]        pw_t_v0_w, pw_t_v1_w, pw_t_v2_w, pw_t_material_w;
+  wire [31:0]        pw_t_raster_w, pw_t_source_w;
+  wire signed [47:0] pw_t_area2_w;
+  wire signed [11:0] pw_t_min_x_w, pw_t_max_x_w, pw_t_min_y_w, pw_t_max_y_w;
+  wire signed [20:0] pw_t_a_x_w, pw_t_a_y_w, pw_t_b_x_w, pw_t_b_y_w,
+                     pw_t_c_x_w, pw_t_c_y_w;
+  wire        [23:0] pw_t_a_invw_w, pw_t_b_invw_w, pw_t_c_invw_w;
+  wire signed [31:0] pw_t_a_uow_w, pw_t_a_vow_w, pw_t_a_r_w, pw_t_a_g_w,
+                     pw_t_a_b_w, pw_t_a_alpha_w;
+  wire signed [31:0] pw_t_b_uow_w, pw_t_b_vow_w, pw_t_b_r_w, pw_t_b_g_w,
+                     pw_t_b_b_w, pw_t_b_alpha_w;
+  wire signed [31:0] pw_t_c_uow_w, pw_t_c_vow_w, pw_t_c_r_w, pw_t_c_g_w,
+                     pw_t_c_b_w, pw_t_c_alpha_w;
+
+  // GEOM.TILEWALK's own nets.
+  wire        tw_walk_valid_w, tw_walk_ready_w, tw_walk_done_w, tw_walk_failed_w;
+  wire [31:0] tw_walk_head_w;
+  wire [ 9:0] tw_head_tile_w;
+  wire        tw_be_valid_w, tw_be_out_ready_w;
+  wire        tw_job_valid_w, tw_job_first_w, tw_job_last_w;
+  wire signed [11:0] tw_job_tile_x_w, tw_job_tile_y_w;
+  wire        tw_active_w, tw_frame_done_w;
+
+  // ---- THE ATTRIBUTE PACKET, BUILT WHERE THE SLOT ORDER ALREADY LIVES -----
+  // `zhao_geom_paramwalk` emits DECODED fields and deliberately does not pack
+  // them: ruling 5's slot order is `GEOM_ATTR_SLOT_*`, declared in this file
+  // and already spent on the live path, and a second packer in the walker
+  // would be a second EXPRESSION of that layout with two copies free to
+  // disagree about which slot carries green. So the packing happens here, out
+  // of the SAME named constants the live producers use -- one expression,
+  // used twice, which `zhao_forge_assemble` states is the admissible form:
+  // "a second INSTANCE of one law is not a second law".
+  //
+  // SLOT 0 IS `{8'd0, invw}` AND THAT IS COPIED, NOT CHOSEN.
+  // `zhao_terrain_clipfeed` writes `w[32*SLOT_INVW +: 32] = {8'd0, invw};` --
+  // the invw24 zero-extended into a 32-bit slot -- and every other producer in
+  // the tree agrees. A different widening here would change every depth.
+  function automatic logic [GEOM_CLIP_ATTRW-1:0] walk_attr_pack(
+      input logic [23:0]        invw,
+      input logic signed [31:0] uow,
+      input logic signed [31:0] vow,
+      input logic signed [31:0] rr,
+      input logic signed [31:0] gg,
+      input logic signed [31:0] bb,
+      input logic signed [31:0] aa);
+    begin
+      walk_attr_pack = '0;
+      walk_attr_pack[32*GEOM_ATTR_SLOT_INVW     +: 32] = {8'd0, invw};
+      walk_attr_pack[32*GEOM_ATTR_SLOT_U_OVER_W +: 32] = uow;
+      walk_attr_pack[32*GEOM_ATTR_SLOT_V_OVER_W +: 32] = vow;
+      walk_attr_pack[32*GEOM_ATTR_SLOT_R        +: 32] = rr;
+      walk_attr_pack[32*GEOM_ATTR_SLOT_G        +: 32] = gg;
+      walk_attr_pack[32*GEOM_ATTR_SLOT_B        +: 32] = bb;
+      walk_attr_pack[32*GEOM_ATTR_SLOT_ALPHA    +: 32] = aa;
+    end
+  endfunction
+
+  wire [GEOM_CLIP_ATTRW-1:0] pw_attr_a_w = walk_attr_pack(
+      pw_t_a_invw_w, pw_t_a_uow_w, pw_t_a_vow_w,
+      pw_t_a_r_w, pw_t_a_g_w, pw_t_a_b_w, pw_t_a_alpha_w);
+  wire [GEOM_CLIP_ATTRW-1:0] pw_attr_b_w = walk_attr_pack(
+      pw_t_b_invw_w, pw_t_b_uow_w, pw_t_b_vow_w,
+      pw_t_b_r_w, pw_t_b_g_w, pw_t_b_b_w, pw_t_b_alpha_w);
+  wire [GEOM_CLIP_ATTRW-1:0] pw_attr_c_w = walk_attr_pack(
+      pw_t_c_invw_w, pw_t_c_uow_w, pw_t_c_vow_w,
+      pw_t_c_r_w, pw_t_c_g_w, pw_t_c_b_w, pw_t_c_alpha_w);
+
+  // ---- THE WALK'S IDENTITY RIDER -----------------------------------------
+  // `GEOM_TRI_IDENTW` is {domain[1:0], material token[31:0], src_id[15:0]}.
+  // Only the src_id reaches the raster: `u_shell.render_src_id_i` is
+  // `st_ident[15:0]`, sixteen bits, and the descriptor carries exactly that in
+  // `t_source_o[15:0]`. The material TOKEN and the domain feed one consumer,
+  // the terrain material-weight publisher below, and that is a GEOMETRY-PHASE
+  // publication: re-running it during the drain would publish a second recipe
+  // for a frame already sealed. So the token is ZERO here and the publisher is
+  // additionally gated on `!tw_active_w` -- belt and braces, because "the
+  // token is zero so the tag test fails" is an argument about another block's
+  // function, and this file should not depend on one.
+  wire [GEOM_TRI_IDENTW-1:0] pw_ident_w = {2'd0, 32'd0, pw_t_source_w[15:0]};
+
   wire [15:0]         vid_td_v0, vid_td_v1, vid_td_v2, vid_td_material;
   wire [31:0]         vid_td_raster, vid_td_source;
   // TriangleDescriptor SCHEMA v2's second sixteen bytes (SWAPCLOSE,
@@ -20812,6 +20932,8 @@ module zhao_console_core
   wire         door_tri_valid_w, door_tri_ready_w;
   // ARENACOMPOSE: the two halves of the fork the door became.
   wire         shell_tri_ready_w;   // zhao_shell_top_v2's own ready
+  // I55's raster door, through the shell to `u_render_bin`'s `walk_job_*`.
+  wire         shell_walk_job_ready_w;
   wire         ab_tri_ready_w;      // zhao_geom_arenabin's own ready
 
   zhao_geom_setup #(
@@ -20825,20 +20947,47 @@ module zhao_console_core
 
     // REAL: GEOM.CLIP's accepted packet, field for field -- now through the
     // FORK declared above, because GEOM.ATTRPACK takes the same packet.
-    .tri_valid_i (cl_o_valid && ap_tri_ready_w && vid_tri_ready_w),
+    // ---- I55's SOURCE SELECT, UPSTREAM OF THE FORK (SWAPCLOSE) -----------
+    // `reports/DECISION-20260927-I55-SWAP-ARCHITECTURE.md` requires the mux to
+    // select the SOURCE OF THE TRIANGLE RECORD and to sit upstream of the
+    // three-way fork rather than inside one of its legs. That is what this is:
+    // every `tri_*` below takes one source or the other, so all three of a
+    // record's consumers see one coherent triangle.
+    //
+    // THE FORK'S CONJUNCTION IS UNTOUCHED IN THE PHASE IT GOVERNS. During
+    // geometry `tw_active_w` is low and this reads exactly as RASTERSWAP left
+    // it. During the walk `cl_o_valid` is low -- the frame's geometry is over,
+    // the arena has SEALED and PUBLISHED -- so the fork is empty and the walk
+    // admits to TWO consumers, not three.
+    //
+    // GEOM.VERTID IS DELIBERATELY NOT ONE OF THEM, and this is the one place
+    // that asymmetry lives. Its job is to WRITE the arena, and it finished when
+    // the frame sealed; feeding it walk-sourced triangles would publish a
+    // second copy of every vertex and descriptor into the next frame's build
+    // view. So its valid keeps `cl_o_valid` alone and its ready leaves the
+    // walk's admission. A "mux into one leg" is forbidden because it can drop
+    // or misname a triangle the other legs took; here no leg is taking
+    // anything, because the producer of that phase is idle.
+    .tri_valid_i (tw_active_w ? (tw_be_valid_w && ap_tri_ready_w)
+                              : (cl_o_valid && ap_tri_ready_w && vid_tri_ready_w)),
     .tri_ready_o (st_tri_ready_w),
-    .tri_ax_i    (cl_o_ax),
-    .tri_ay_i    (cl_o_ay),
-    .tri_bx_i    (cl_o_bx),
-    .tri_by_i    (cl_o_by),
-    .tri_cx_i    (cl_o_cx),
-    .tri_cy_i    (cl_o_cy),
-    .tri_area2_i (cl_o_area2),
-    .tri_min_x_i (cl_o_min_x),
-    .tri_max_x_i (cl_o_max_x),
-    .tri_min_y_i (cl_o_min_y),
-    .tri_max_y_i (cl_o_max_y),
-    .tri_src_id_i(cl_o_ident),
+    .tri_ax_i    (tw_active_w ? pw_t_a_x_w   : cl_o_ax),
+    .tri_ay_i    (tw_active_w ? pw_t_a_y_w   : cl_o_ay),
+    .tri_bx_i    (tw_active_w ? pw_t_b_x_w   : cl_o_bx),
+    .tri_by_i    (tw_active_w ? pw_t_b_y_w   : cl_o_by),
+    .tri_cx_i    (tw_active_w ? pw_t_c_x_w   : cl_o_cx),
+    .tri_cy_i    (tw_active_w ? pw_t_c_y_w   : cl_o_cy),
+    // THE TWO QUANTITIES SCHEMA v2 EXISTS FOR. `tri_area2_i` is load-bearing
+    // input arithmetic and not a passthrough -- this block DEFINES `kc2` as
+    // `area2 - kc0 - kc1` -- so a walk feeding it a recomputed or convenient
+    // value would produce plausible planes from an unconstrained number with
+    // every handshake healthy. These come out of the record, bit-identical.
+    .tri_area2_i (tw_active_w ? pw_t_area2_w : cl_o_area2),
+    .tri_min_x_i (tw_active_w ? pw_t_min_x_w : cl_o_min_x),
+    .tri_max_x_i (tw_active_w ? pw_t_max_x_w : cl_o_max_x),
+    .tri_min_y_i (tw_active_w ? pw_t_min_y_w : cl_o_min_y),
+    .tri_max_y_i (tw_active_w ? pw_t_max_y_w : cl_o_max_y),
+    .tri_src_id_i(tw_active_w ? pw_ident_w   : cl_o_ident),
 
     // REAL: the shell's triangle door.
     .out_valid_o (st_o_valid),
@@ -20942,26 +21091,32 @@ module zhao_console_core
     .rst_n (rst_n),
 
     // REAL: the same GEOM.CLIP packet GEOM.SETUP takes, through the fork.
-    .tri_valid_i  (cl_o_valid && st_tri_ready_w && vid_tri_ready_w),
+    // The same select, the same phase argument. See `u_geom_setup` above.
+    .tri_valid_i  (tw_active_w ? (tw_be_valid_w && st_tri_ready_w)
+                               : (cl_o_valid && st_tri_ready_w && vid_tri_ready_w)),
     .tri_ready_o  (ap_tri_ready_w),
-    .tri_ax_i     (cl_o_ax),
-    .tri_ay_i     (cl_o_ay),
-    .tri_bx_i     (cl_o_bx),
-    .tri_by_i     (cl_o_by),
-    .tri_cx_i     (cl_o_cx),
-    .tri_cy_i     (cl_o_cy),
+    .tri_ax_i     (tw_active_w ? pw_t_a_x_w : cl_o_ax),
+    .tri_ay_i     (tw_active_w ? pw_t_a_y_w : cl_o_ay),
+    .tri_bx_i     (tw_active_w ? pw_t_b_x_w : cl_o_bx),
+    .tri_by_i     (tw_active_w ? pw_t_b_y_w : cl_o_by),
+    .tri_cx_i     (tw_active_w ? pw_t_c_x_w : cl_o_cx),
+    .tri_cy_i     (tw_active_w ? pw_t_c_y_w : cl_o_cy),
     // REAL: GEOM.CLIP's winding-flipped attributes, which until now left this
     // module with no customer. Their own producer is still at the edge (I24),
     // and that is the honest state: the PLANE now has a producer, the VERTEX
     // ATTRIBUTE still arrives from outside.
-    .tri_attr_a_i (geom_clip_attr_a_o),
-    .tri_attr_b_i (geom_clip_attr_b_o),
-    .tri_attr_c_i (geom_clip_attr_c_o),
-    .tri_src_id_i (cl_o_ident),
+    .tri_attr_a_i (tw_active_w ? pw_attr_a_w : geom_clip_attr_a_o),
+    .tri_attr_b_i (tw_active_w ? pw_attr_b_w : geom_clip_attr_b_o),
+    .tri_attr_c_i (tw_active_w ? pw_attr_c_w : geom_clip_attr_c_o),
+    .tri_src_id_i (tw_active_w ? pw_ident_w  : cl_o_ident),
     // REAL: R197's declaration, off GEOM.CLIP's accepted packet. GEOM.ATTRPACK
     // is the ONLY reader of the u/w and v/w slots in the tree, and with this
     // bit set it does not read them (its header says what it packs instead).
-    .tri_untex_i  (cl_o_untex),
+    // R197's declaration. On the walk it is `status[2]` of the triangle's own
+    // vertices, which the record already carries and the decoder already
+    // reads -- NOT a second storage site, which is why SCHEMA v2 did not add
+    // an `untex` field to the descriptor.
+    .tri_untex_i  (tw_active_w ? pw_t_untex_w : cl_o_untex),
 
     // REAL: the shell's Packet-D attribute carriage.
     .out_valid_o          (ap_o_valid_w),
@@ -20969,7 +21124,7 @@ module zhao_console_core
     // required, not defensive: without it GEOM.ATTRPACK would retire a packet
     // on a clock the door did not fire, and the join would lose a triangle
     // instead of misnaming one. See the door block for the whole argument.
-    .out_ready_i          (door_tri_ready_w && st_o_valid && tidq_have_w),
+    .out_ready_i          (ap_out_ready_w),
     .out_invw_plane_o     (ap_invw_plane_w),
     .out_u_over_w_plane_o (ap_u_over_w_plane_w),
     .out_v_over_w_plane_o (ap_v_over_w_plane_w),
@@ -21321,11 +21476,40 @@ module zhao_console_core
   // id. The wait the door now takes is time the fork was already spending.
   wire [3:0] tidq_level_w;
   wire       tidq_have_w = (tidq_level_w != 4'd0);
+  wire       ap_out_ready_w;
 
   // The fork's single ready and the join's single valid.
-  assign cl_o_ready       = st_tri_ready_w && ap_tri_ready_w && vid_tri_ready_w;
-  assign st_o_ready       = door_tri_ready_w && ap_o_valid_w && tidq_have_w;
-  assign door_tri_valid_w = st_o_valid && ap_o_valid_w && tidq_have_w;
+  //
+  // ---- AND THE WALK'S HALF OF EACH (SWAPCLOSE, 2026-09-27) ---------------
+  // Three nets change shape here and nowhere else, which is the point: the
+  // select is ONE place, not a term sprinkled through a composition.
+  //
+  //   * `cl_o_ready` must be LOW during the walk. GEOM.CLIP is idle then, but
+  //     telling it a triangle was taken on a clock the fork did not fire is
+  //     how a triangle goes missing, and "it cannot happen" is not a reason to
+  //     leave the term out.
+  //   * `door_tri_valid_w` must be LOW during the walk. It is the SHELL door,
+  //     and on the walk path the triangle does not go through it -- it goes to
+  //     `u_render_bin`'s `walk_job_*` door instead, with the binner and
+  //     GEOM.ARENABIN taking nothing. Gated explicitly rather than left to
+  //     `tidq_have_w` being zero: that is a claim about another block's queue
+  //     depth at frame end, and a join should not rest on one.
+  //   * `st_o_ready` and `ap_out_ready_w` are the two back ends' retirement,
+  //     and on the walk they retire on the JOB being taken.
+  //
+  // `tw_be_out_ready_o` is asserted only on `job_valid_o && job_ready_i`, so
+  // both back ends retire on the SAME clock as each other and as the job --
+  // which is the invariant the geometry-phase join spends three paragraphs
+  // above establishing, restated for the second arrangement rather than
+  // assumed to carry over.
+  assign cl_o_ready       = !tw_active_w && st_tri_ready_w && ap_tri_ready_w
+                            && vid_tri_ready_w;
+  assign st_o_ready       = tw_active_w ? tw_be_out_ready_w
+                            : (door_tri_ready_w && ap_o_valid_w && tidq_have_w);
+  assign ap_out_ready_w   = tw_active_w ? tw_be_out_ready_w
+                            : (door_tri_ready_w && st_o_valid && tidq_have_w);
+  assign door_tri_valid_w = !tw_active_w && st_o_valid && ap_o_valid_w
+                            && tidq_have_w;
   // THE FORK'S CONJUNCTION. Neither `shell_tri_ready_w` nor `ab_tri_ready_w`
   // is a function of any valid -- the binner's is `(state == S_IDLE) &&
   // !drain_req_r` and GEOM.ARENABIN's is `(st_q == A_IDLE) && ...` -- so this
@@ -24679,7 +24863,27 @@ module zhao_console_core
   zhao_shell_top_v2 #(
     .FRAMER_Q    (FRAMER_Q),
     .WFIFO_W     (WFIFO_W),
-    .BUILD_HPS_N (2)
+    .BUILD_HPS_N (2),
+    // ---- I55: THE RASTER READS FROM SDRAM (SWAPCLOSE, 2026-09-27) --------
+    // Arrangement 1. `u_tile` takes its jobs from the SDRAM walk and the
+    // binner's on-chip drain reaches it no longer -- which is the whole of
+    // owner directive section 4's "a parallel legacy on-chip frame arena that
+    // still supplies the actual pixels is NOT closure", executed rather than
+    // quoted.
+    //
+    // THE BINNER IS STILL BUILT AND STILL BINS, and that is deliberate, not
+    // an oversight: section 7 asks to "retain the correct complete oracle",
+    // and `zhao_geom_bin_pipe_v2` at `JOB_SRC = 1` assigns
+    // `bin_job_ready_w = 1'b1`, so the drain runs and its jobs are consumed
+    // and discarded. It supplies no pixel. Retiring it BY REMOVAL is the
+    // -606,592 memory bits DOORCOST measured as AVAILABLE and did not take,
+    // and it is a binner question rather than a door one.
+    //
+    // A RUN-TIME MULTIPLEX IS NOT WHAT THIS IS. The selection happens at
+    // ELABORATION, which costs zero logic; the run-time form is priced at
+    // 2,050 comb ALUT by `zhao_probe_doorcost_jobmux` and is the forbidden
+    // concurrent arrangement with a select line on it.
+    .JOB_SRC     (1)
   ) u_shell (
     // THE BINNER'S SERIALISE PASS WAS EXPORTED HERE AND IS RETIRED
     // (ARENACOMPOSE, 2026-09-26, console entry I55). `render_ser_req_i` and
@@ -24903,6 +25107,23 @@ module zhao_console_core
     // still the signal that means "the door took one".
     .render_tri_valid_i        (door_tri_valid_w && ab_tri_ready_w),
     .render_tri_ready_o        (shell_tri_ready_w),
+
+    // ---- I55's RASTER DOOR, DRIVEN (SWAPCLOSE, 2026-09-27) ---------------
+    // Twenty-eight bits: which TILE, whether the reference opens or closes
+    // that tile's list, and the handshake. The 1,877-bit metadata is not here
+    // and never needed to be -- the time multiplex feeds the same
+    // setup/attrpack pair, so it arrives on `u_render_bin`'s own `tri_*`
+    // ports whichever source fed them.
+    .walk_job_valid_i          (tw_job_valid_w),
+    .walk_job_ready_o          (shell_walk_job_ready_w),
+    .walk_job_tile_x_i         (tw_job_tile_x_w),
+    .walk_job_tile_y_i         (tw_job_tile_y_w),
+    .walk_job_first_i          (tw_job_first_w),
+    .walk_job_last_i           (tw_job_last_w),
+    // READ, not an empty pin. The door's own traffic count is the number that
+    // must move off zero before any claim about I55 is worth reading, and the
+    // shell's binding comment said so before there was anything to read it.
+    .walk_jobs_taken_o         (geom_tw_door_o),
     // REAL: the shell's ONE geometry guard socket, driven by
     // `u_geom_mem_adapter`, which merges GEOM.MESHFETCH and GEOM.ASSETFETCH
     // into it. These five were boundary ports (a bench answered the grants
@@ -31315,7 +31536,13 @@ module zhao_console_core
       .lk_next_o  (ab_lk_next),
       .lk_count_o (ab_lk_count),
 
-      .head_tile_i   (geom_ab_head_tile_i),
+      // DRIVEN BY THE SEQUENCER (SWAPCLOSE, 2026-09-27), not by a console
+      // input held at zero. This port's own comment already said this is "what
+      // a walk starts FROM: entry I55's consumer reads it", and until now the
+      // consumer did not exist, so the query came from outside the machine --
+      // an external placeholder for logic that belongs in hardware, which is
+      // exactly what the completion register counts as a gap.
+      .head_tile_i   (tw_head_tile_w),
       .head_chunk_o  (geom_ab_head_chunk_o),
       .head_valid_o  (geom_ab_head_valid_o),
 
@@ -31575,23 +31802,26 @@ module zhao_console_core
       .scr_req_o   (pw_scr_req),
       .scr_grant_i (pa_scr_grant),
 
-      // ---- the walk request: TIED, declared at entry I55 -------------------
-      .walk_valid_i  (1'b0),
-      .walk_ready_o  (),
-      .walk_head_i   (32'd0),
-      .walk_done_o   (),
-      .walk_failed_o (),
+      // ---- the walk request: DRIVEN (SWAPCLOSE, 2026-09-27) ----------------
+      // `u_geom_tilewalk` is the sequencer entry I55 names as step 3. It asks
+      // GEOM.ARENABIN's head table which chunk each tile's list starts at and
+      // offers that head here, tile by tile, once the arena has published.
+      .walk_valid_i  (tw_walk_valid_w),
+      .walk_ready_o  (tw_walk_ready_w),
+      .walk_head_i   (tw_walk_head_w),
+      .walk_done_o   (tw_walk_done_w),
+      .walk_failed_o (tw_walk_failed_w),
 
-      // ---- the decoded triangles: TIED, declared at entry I55 --------------
-      .t_valid_o    (),
-      .t_ready_i    (1'b1),
-      .t_v0_o       (),
-      .t_v1_o       (),
-      .t_v2_o       (),
-      .t_material_o (),
-      .t_raster_o   (),
-      .t_source_o   (),
-      .t_illegal_o  (),
+      // ---- the decoded triangles: DRIVEN, into the time-multiplexed pair ---
+      .t_valid_o    (pw_t_valid_w),
+      .t_ready_i    (pw_t_ready_w),
+      .t_v0_o       (pw_t_v0_w),
+      .t_v1_o       (pw_t_v1_w),
+      .t_v2_o       (pw_t_v2_w),
+      .t_material_o (pw_t_material_w),
+      .t_raster_o   (pw_t_raster_w),
+      .t_source_o   (pw_t_source_w),
+      .t_illegal_o  (pw_t_illegal_w),
       // SCHEMA v2's five, and they are EXPLICIT EMPTY CONNECTIONS rather than
       // omissions for the reason the block below states: an omitted pin is a
       // PINMISSING, gate 31 refuses it, and an omission cannot be told apart
@@ -31599,11 +31829,16 @@ module zhao_console_core
       // quantities `u_geom_setup` takes and the v1 record could not carry --
       // and they are unconnected in exactly the same arrangement, and for
       // exactly the same reason, as the twenty-eight vertex fields below.
-      .t_area2_o    (),
-      .t_min_x_o    (),
-      .t_max_x_o    (),
-      .t_min_y_o    (),
-      .t_max_y_o    (),
+      .t_area2_o    (pw_t_area2_w),
+      .t_min_x_o    (pw_t_min_x_w),
+      .t_max_x_o    (pw_t_max_x_w),
+      .t_min_y_o    (pw_t_min_y_w),
+      .t_max_y_o    (pw_t_max_y_w),
+      // The tile list's brackets, published by the walk because only the walk
+      // knows whether a chain continues. They are what CLEARS a tile and what
+      // RESOLVES it (`rs_state_q <= last_q ? RS_SWAP : RS_IDLE`).
+      .t_first_o    (pw_t_first_w),
+      .t_last_o     (pw_t_last_w),
 
       // ---- THE FETCH ARM'S VERTEX FIELDS: TIED, SAME DECLARATION ---------
       // MUXBUILD built the ProjectedVertex fetch arm and PROVED it (550
@@ -31619,34 +31854,34 @@ module zhao_console_core
       // the merge. An omission cannot be told apart from an oversight, and
       // "the t_* outputs dangle" is precisely what five packets refused to
       // FAKE a consumer for -- so it must be stated, not left implied.
-      .t_a_x_o         (),
-      .t_a_y_o         (),
-      .t_a_invw_o      (),
-      .t_a_uow_o       (),
-      .t_a_vow_o       (),
-      .t_a_r_o         (),
-      .t_a_g_o         (),
-      .t_a_b_o         (),
-      .t_a_alpha_o     (),
-      .t_b_x_o         (),
-      .t_b_y_o         (),
-      .t_b_invw_o      (),
-      .t_b_uow_o       (),
-      .t_b_vow_o       (),
-      .t_b_r_o         (),
-      .t_b_g_o         (),
-      .t_b_b_o         (),
-      .t_b_alpha_o     (),
-      .t_c_x_o         (),
-      .t_c_y_o         (),
-      .t_c_invw_o      (),
-      .t_c_uow_o       (),
-      .t_c_vow_o       (),
-      .t_c_r_o         (),
-      .t_c_g_o         (),
-      .t_c_b_o         (),
-      .t_c_alpha_o     (),
-      .t_untex_o    (),
+      .t_a_x_o         (pw_t_a_x_w),
+      .t_a_y_o         (pw_t_a_y_w),
+      .t_a_invw_o      (pw_t_a_invw_w),
+      .t_a_uow_o       (pw_t_a_uow_w),
+      .t_a_vow_o       (pw_t_a_vow_w),
+      .t_a_r_o         (pw_t_a_r_w),
+      .t_a_g_o         (pw_t_a_g_w),
+      .t_a_b_o         (pw_t_a_b_w),
+      .t_a_alpha_o     (pw_t_a_alpha_w),
+      .t_b_x_o         (pw_t_b_x_w),
+      .t_b_y_o         (pw_t_b_y_w),
+      .t_b_invw_o      (pw_t_b_invw_w),
+      .t_b_uow_o       (pw_t_b_uow_w),
+      .t_b_vow_o       (pw_t_b_vow_w),
+      .t_b_r_o         (pw_t_b_r_w),
+      .t_b_g_o         (pw_t_b_g_w),
+      .t_b_b_o         (pw_t_b_b_w),
+      .t_b_alpha_o     (pw_t_b_alpha_w),
+      .t_c_x_o         (pw_t_c_x_w),
+      .t_c_y_o         (pw_t_c_y_w),
+      .t_c_invw_o      (pw_t_c_invw_w),
+      .t_c_uow_o       (pw_t_c_uow_w),
+      .t_c_vow_o       (pw_t_c_vow_w),
+      .t_c_r_o         (pw_t_c_r_w),
+      .t_c_g_o         (pw_t_c_g_w),
+      .t_c_b_o         (pw_t_c_b_w),
+      .t_c_alpha_o     (pw_t_c_alpha_w),
+      .t_untex_o    (pw_t_untex_w),
 
       .guard_req_o  (pw_req),
       .guard_rsp_i  (pw_rsp),
@@ -31677,6 +31912,77 @@ module zhao_console_core
       .verts_illegal_o  (geom_pw_vbad_o),
       .t_pv_split_o     (geom_pw_pvsplit_o),
       .busy_o           (pw_busy)
+  );
+
+  // =====================================================================
+  // GEOM.TILEWALK -- the sequencer on `walk_valid_i` (SWAPCLOSE, 2026-09-27)
+  // =====================================================================
+  // Entry I55's step 3, and the reason it is no longer "logic added to make a
+  // counter move": the triangles it sequences reach `u_tile` through
+  // `zhao_geom_bin_pipe_v2`'s `JOB_SRC = 1` door and become pixels. Six
+  // packets refused this block and every one of them was right at the time --
+  // the refusal's stated ground was that every `t_*` output dangled, and it
+  // does not any more.
+  //
+  // PARAMETERS MATCH GEOM.ARENABIN's, AND THEY HAVE TO. That block addresses
+  // its head table as `ty * GRID_W + tx` with the compile-time parameter, so a
+  // sequencer using a different stride would query one tile's list and label it
+  // with another tile's coordinates -- in range, decoding cleanly, invisible to
+  // every guard downstream, and wrong on the screen. Written as the same three
+  // numbers, beside each other, rather than derived twice.
+  zhao_geom_tilewalk #(
+      .TILES  (576),
+      .GRID_W (24),
+      .TIDX_W (10)
+  ) u_geom_tilewalk (
+      .clk   (gpu_clk),
+      .rst_n (rst_n),
+
+      // A LEVEL. The block takes its own rising edge, so the composer keeps no
+      // register of its own for this. The walk cannot start before publication
+      // in any case, because `walk_ready_o` carries `pub_valid_i`.
+      .start_i (pub_valid),
+
+      .head_tile_o  (tw_head_tile_w),
+      .head_chunk_i (geom_ab_head_chunk_o),
+      .head_valid_i (geom_ab_head_valid_o),
+
+      .walk_valid_o  (tw_walk_valid_w),
+      .walk_ready_i  (tw_walk_ready_w),
+      .walk_head_o   (tw_walk_head_w),
+      .walk_done_i   (tw_walk_done_w),
+      .walk_failed_i (tw_walk_failed_w),
+
+      .t_valid_i (pw_t_valid_w),
+      .t_ready_o (pw_t_ready_w),
+      .t_first_i (pw_t_first_w),
+      .t_last_i  (pw_t_last_w),
+
+      // THE TIME-MULTIPLEXED PAIR. `be_ready_i` is the two back ends' readys
+      // ANDed and `be_out_valid_i` is their two valids ANDed -- the same
+      // "both or neither" the geometry-phase fork requires of the same pair,
+      // restated for this arrangement rather than assumed to carry over.
+      .be_valid_o     (tw_be_valid_w),
+      .be_ready_i     (st_tri_ready_w && ap_tri_ready_w),
+      .be_out_valid_i (st_o_valid && ap_o_valid_w),
+      .be_out_ready_o (tw_be_out_ready_w),
+
+      .job_valid_o  (tw_job_valid_w),
+      .job_ready_i  (shell_walk_job_ready_w),
+      .job_tile_x_o (tw_job_tile_x_w),
+      .job_tile_y_o (tw_job_tile_y_w),
+      .job_first_o  (tw_job_first_w),
+      .job_last_o   (tw_job_last_w),
+
+      .active_o     (tw_active_w),
+      .frame_done_o (tw_frame_done_w),
+
+      .tiles_walked_o    (geom_tw_tiles_o),
+      .tiles_empty_o     (geom_tw_empty_o),
+      .jobs_issued_o     (geom_tw_jobs_o),
+      .walks_failed_o    (geom_tw_failed_o),
+      .be_stall_clocks_o (geom_tw_stall_o),
+      .overlap_o         (geom_tw_overlap_o)
   );
 
   // ---- MEASURE.SEALPLAN: the producer of the seal (entry I56) -------------
