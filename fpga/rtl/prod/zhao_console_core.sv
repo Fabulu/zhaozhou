@@ -8517,6 +8517,29 @@
 //      corrections are the part a later reader needs. The closing account is
 //      the last paragraph block of this entry.
 //
+//      AND A FIFTH, WHICH IS THE SHARPEST OF THEM (RASTERSWAP, 2026-09-27).
+//      THIS ENTRY WAS CLOSED WHILE ITS OWN NAMED FAILURE WAS LIVE IN THE
+//      COMPOSED CONSOLE. The failure it exists to prevent is written three
+//      paragraphs down -- "a chunk of BINNER SLOTS would decode cleanly into
+//      the wrong triangles with every range guard passing" -- and from the day
+//      `u_geom_tidq` was composed until 2026-09-27 the queue ran PERMANENTLY
+//      ONE ENTRY BEHIND: `popped[k] == pushed[k-1]`, so 74 of 75 triangles
+//      were binned under their PREDECESSOR's arena descriptor index. In range.
+//      Decoding cleanly. Every range guard passing. Exactly the sentence.
+//
+//      The cause was not this block and not the identity: it was the JOIN.
+//      GEOM.SETUP is three stages while GEOM.VERTID needs `S_PUB` x3 plus
+//      `S_TD`, so the shell door was structurally AHEAD of the id from the
+//      first beat of every run. It is repaired by gating the door on the
+//      queue's occupancy; see entry I55's RASTERSWAP paragraph for the
+//      measurement, the deadlock modes and the test.
+//
+//      THE LESSON FOR A CLOSING PACKET, and it is this file's own law arriving
+//      one level up: THE ENTRY NAMED THE FAILURE, THE GUARD AGAINST IT WAS
+//      BUILT AND CORRECT, AND NOTHING EVER CHECKED THAT THE TWO WERE WIRED
+//      TOGETHER IN THE RIGHT ORDER. `underflow_o` was the one trace it left,
+//      it read 1, and a 1 looks like a rounding error rather than like 99%.
+//
 //      `zhao_geom_binner_v2` builds exactly these chunks -- 64 bytes, a
 //      `next` pointer, a count and fourteen triangle ids -- in an ON-CHIP
 //      arena (CHUNKS = 256, CHUNK_REFS = 4) that R7's external arena exists to
@@ -9126,6 +9149,62 @@
 //          REVEALED it, because BINARENA was forbidden the fit that would
 //          have. Un-composing would hide it again and restore the series
 //          directive section 4 forbids, so it was considered and refused.
+//
+//      -- RASTERSWAP, 2026-09-27. STILL TIED, AND THE IDS ARE NOW CORRECT.
+//      The swap is not built. What is built is its PRECONDITION, and until
+//      today nobody knew it was unmet.
+//
+//      THE ARENA WAS NAMING THE WRONG TRIANGLES, 74 OF 75. `u_geom_tidq` was
+//      permanently ONE ENTRY BEHIND, so every triangle after the first was
+//      binned under its PREDECESSOR'S arena descriptor index. ARENAINFER
+//      measured it and costed the repair; this packet took it. The paragraph
+//      above that calls it "one per frame" and "four references short of the
+//      picture" is RIGHT ABOUT THE VISIBLE PART AND WRONG ABOUT THE SIZE: the
+//      four dropped references were one triangle with no identity, and the
+//      other 74 triangles carried a neighbour's index -- in range, decoding
+//      cleanly, invisible to every guard, and invisible to the refs comparison
+//      too, because that differences two TOTALS.
+//
+//      MEASURED BEFORE AND AFTER, SAME FIXTURE, SAME SCRIPT:
+//
+//        before  tidqids  pushed=0 1 2 3 4 5 6 7 | popped=262143 0 1 2 3 4 5 6
+//                tidq     underflow=1   arenabin tris=74 unnamed=1 refs=97
+//                arenabin SHORTFALL 4 reference(s) against GEOM.BINNER's 101
+//
+//        after   tidqids  pushed=0 1 2 3 4 5 6 7 | popped=0 1 2 3 4 5 6 7
+//                tidq     underflow=0   arenabin tris=75 unnamed=0 refs=101
+//                arenabin AGREES WITH THE BINNER EXACTLY: 101
+//
+//      `raster pixels=2816` and `frames_admitted=1` are UNCHANGED, and the
+//      whole-frame cost is unchanged too: `sdram_busy` 645,849 -> 645,846 over
+//      the same fixture, three clocks in ~730,000, with identical burst
+//      counts. The door gate is free because `zhao_geom_vertid.tri_ready_o` is
+//      `(st_q == S_IDLE)` -- the fork already could not hand over triangle N+1
+//      until VERTID finished N, which is the same event that pushes N's id.
+//
+//      BEWARE ONE COUNTER HERE. `vertid stall` reads 1774 before and 0 after.
+//      THAT IS NOT 1,774 CLOCKS SAVED. `vid_stall_o` counts
+//      `tri_valid_i && !tri_ready_o`, and this block's `tri_valid_i` is
+//      qualified by GEOM.SETUP's ready -- so gating the door moved one of the
+//      counter's own operands and the wait is now absorbed upstream of the
+//      fork instead of being counted at VERTID's input. The frame costs the
+//      same. Quoting that zero as a speed-up would be this campaign's
+//      "measured refusals and called it a 62x speed-up" in new clothes.
+//
+//      WHAT THIS CHANGES FOR THE SWAP, precisely and no further: a walk over
+//      the external arena would, until this commit, have followed chunk lists
+//      in which 99% of the triangle ids named the wrong triangle. Directive
+//      section 4 asks for "a complete frame whose output depends on the bytes
+//      written and read through the real guard/arbiter/controller path" -- and
+//      those bytes were present and DESCRIBED THE WRONG GEOMETRY. They no
+//      longer do. That is a precondition met, NOT a swap performed.
+//
+//      BLOCKER 2 IS UNTOUCHED AND IS STILL 1,749 BITS. Nothing here reduces
+//      the second GEOM.SETUP and GEOM.ATTRPACK back end, the vertex-fetch arm,
+//      or the consumer side's 7.18x. `paramwalk dirs/chunks/tris` is STILL
+//      0/0/0 and is refused for the third time on the same ground: every `t_*`
+//      output dangles, so a tile sequencer would count triangles and drop
+//      them. This packet ran NO Quartus map and makes NO area or timing claim.
 //
 // I56. GEOM.PARAMBUF's FRAME SEAL -- NOT a tie-off: `u_measure_sealplan` validates a per-view admission plan and produces it. CLOSED 2026-09-26 (SEALPLAN).
 //      `u_geom_paramarena.seal_*_i`, in the same standing as I9, I25 and I40.
@@ -20055,9 +20134,20 @@ module zhao_console_core
       // arena id belongs (:26881).
       //
       // It survived because the block was right and the COMPOSITION was
-      // wrong: `geom_tidq_directed` drives a real clock and passes, and the
-      // console smoke runs `-Wno-fatal`, so Verilator's IMPLICIT warning was
-      // printed and ignored. Entry I34 records the identical failure -- an
+      // wrong, and the console smoke runs `-Wno-fatal`, so Verilator's
+      // IMPLICIT warning was printed and ignored.
+      //
+      // THIS SENTENCE USED TO CITE `geom_tidq_directed` AS "drives a real
+      // clock and passes", AND THAT TEST DID NOT EXIST (RASTERSWAP,
+      // 2026-09-27). `zhao_geom_tidq` had exactly one entry in the whole tree
+      // -- `lint_geom_tidq` -- while this line and
+      // `reports/HANDOVER-20260919.md:3159` both offered it as the evidence
+      // that the block was sound. That is the campaign's false-PRESENCE shape
+      // and it is the worse one: a reader who greps the name finds the
+      // citation and stops looking. The test is written now
+      // (`tests/geometry/geom_tidq_directed.cpp`, 83 checks, registered), so
+      // the claim is true as of this commit -- but it was made first and
+      // earned second, which is the part worth leaving on the record. Entry I34 records the identical failure -- an
       // adapter composed at the wrong arity, caught only by an explicit -Wall
       // lint of the closure -- which is why that lint is now worth running
       // before a fit rather than after one.
