@@ -370,12 +370,24 @@ count at all, so "widen `N`" understates the cost.
   routed around. This is the deliverable the brief said a refusal with a number
   would be.
 * **Building TD v2.** Decided and recorded with its capacity arithmetic; not
-  built. It is a PVSCHEMA-sized change — package, encoder, decoder, five new
-  ports on `zhao_geom_vertid` and five on the arena, the whole instantiation
-  chain, every bench, three regenerated mutants — and stacking it on the vertex
-  arm in one packet would have put two schema changes and a new fetch arm into
-  one unfitted commit. **The decision is executed to the point of being
-  buildable, and I say plainly that I stopped there.**
+  built. The size is the weak reason and I give the strong one: **TD v2 costs
+  live SDRAM write bandwidth every frame for a consumer that cannot exist yet.**
+  The descriptor arm goes from 2 beats to 4 on the WRITE path, which runs on
+  every triangle of every frame in the shipped console — while the only thing
+  that would read `area2` and the box is a back end that has nowhere to deliver
+  a `job_*` until the 2,065 wires above are opened. That is an uncashed cheque
+  with a measured price attached, which is the one shape this campaign has paid
+  for most often.
+
+  **The vertex arm is deliberately not in that category**, and the distinction
+  is worth stating because it is what made one buildable now and not the other:
+  `walk_valid_i` is tied off, so the walker never walks in the console and the
+  arm costs **no traffic at all** there — it is area, and it is measured by the
+  coordinator'''s fit like any other. TD v2 would start paying immediately.
+
+  So the ordering is: open the raster door, THEN TD v2, THEN the multiplex. The
+  decision is executed to the point of being buildable and I say plainly that I
+  stopped there, and why.
 * **Wiring `walk_valid_i` / `t_ready_i`.** Sixth refusal; §4.
 * **ORing the walk into the live stream.** Forbidden and not done.
 * **Recomputing `2A` or the scissored box on the walk side.** A second
