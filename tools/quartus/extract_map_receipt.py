@@ -127,13 +127,37 @@ def parse(path):
     out["ramSummaryPresent"] = present
     out["ramSummary"] = ram
 
-    # SELF-CHECK: a present table whose rows name no memory primitive means the
+    # SELF-CHECK: a present table whose rows are not RAM rows at all means the
     # anchor slipped again. Fail loudly rather than emit a reassuring receipt.
-    if present and not any(
-            k in r for r in ram for k in ("M10K", "MLAB", "M20K", "M9K", "LUTRAM")):
+    #
+    # `AUTO` IS A LEGAL TYPE AND THIS CHECK USED TO REFUSE IT. Corrected
+    # 2026-09-27 by packet LANESCOST, which could not get a receipt out of four
+    # perfectly good `zhao_field_host_v2` leaf maps. The `Type` column of the
+    # Analysis & Synthesis RAM Summary carries the chosen primitive only when
+    # A&S has ALREADY chosen one; when the packing is still open it carries the
+    # literal string `AUTO`, and the FITTER decides later. So requiring
+    # M10K/MLAB/M20K/M9K/LUTRAM made the check refuse the commonest output of a
+    # `-MapOnly` run -- which is the only run this tool exists to read, per this
+    # file's own docstring ("the memory question, which is the one a `-MapOnly`
+    # run is for"). All 23 arrays in those reports read `AUTO`.
+    #
+    # NOTE THE SHAPE, because it is this repo's chapter 5 rather than its
+    # chapter 1: the alarm was RIGHT to be loud and its EXPLANATION was wrong.
+    # "the anchor slipped" sends the next reader to re-derive a header regex
+    # that was working correctly, which is "a wrong diagnosis attached to a
+    # right alarm". The message now says what was actually observed.
+    #
+    # What keeps the check meaningful is the megafunction name: the original
+    # defect collected `; Legal Notice ;` out of the table of CONTENTS, and no
+    # such row carries ALTSYNCRAM/altsyncram/altdpram/lpm_ram either. A real
+    # RAM row always names the inferred megafunction even when its Type is AUTO.
+    RAM_ROW_TOKENS = ("M10K", "MLAB", "M20K", "M9K", "LUTRAM",
+                      "ALTSYNCRAM", "altsyncram", "altdpram", "lpm_ram")
+    if present and not any(k in r for r in ram for k in RAM_ROW_TOKENS):
         raise SystemExit(
-            "extract_map_receipt: RAM summary matched but no row names a memory "
-            "primitive -- the anchor slipped. Rows: %r" % (ram[:5],))
+            "extract_map_receipt: a table matched the RAM Summary header but no "
+            "row names a memory primitive OR an inferred RAM megafunction, so "
+            "these are not RAM rows. Rows: %r" % (ram[:5],))
 
     # Every "uninferred" complaint Quartus made, which is the OTHER half: a
     # refusal it explains is a different finding from an array it never looked
