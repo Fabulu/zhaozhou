@@ -615,9 +615,14 @@ def check_file_text(raw, sizes=None):
             findings.append(
                 (name, "MULTIDIMENSIONAL unpacked array %s -- Quartus cannot "
                        "regroup this into a memory; it muxes across the outer "
-                       "dimension and the whole array becomes flip-flops. One "
-                       "flat array per element inside a generate, outer index a "
-                       "genvar." % "".join(unpacked_dims)))
+                       "dimension and the whole array becomes flip-flops. "
+                       "REMEDY: one flat array per element AT A MODULE'S OWN "
+                       "SCOPE -- its own module, instantiated inside the loop "
+                       "(zhao_dc_sdp_ram is that module). DO NOT declare the "
+                       "flat arrays inside a generate for-loop: that is rule "
+                       "6's killer, and it cost zhao_geom_arenabin 146,414 "
+                       "registers against 1,010 for the identical circuit."
+                       % "".join(unpacked_dims)))
 
         if len(write_addrs) > 1:
             findings.append(
