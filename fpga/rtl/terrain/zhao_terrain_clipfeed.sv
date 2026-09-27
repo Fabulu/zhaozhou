@@ -302,6 +302,25 @@ module zhao_terrain_clipfeed #(
     input  var logic        [30:0] t_cw_i,
     // The depth profile the result was projected under, per triangle.
     input  var logic        [ 1:0] t_profile_i,
+    // ---- THE LAYER-E MATERIAL TOKEN, PER TRIANGLE (MATCARRY, 2026-09-27) ---
+    // The v1 32-bit material token of `zhao_material_token_pkg` -- the
+    // {matA, matB, weight} the projector forwards on `proj_out_*`, encoded
+    // once at the composer rather than a second time here.
+    //
+    // OPAQUE. This block does not decode it, does not check its tag and does
+    // not act on it, exactly as it does not read inside the attribute packet.
+    // It exists here for ONE reason and it is alignment: the composer has the
+    // triple on the projector's beat, and this block is strictly SERIAL --
+    // "it accepts one triangle, converts its three corners, packs, emits, and
+    // only then accepts another". A token read live at the door would
+    // therefore be a DIFFERENT triangle's, which is the metadata-swap shape
+    // CLAUDE.md has a chapter about. Latched with the corners, it cannot be.
+    //
+    // This is why entry I34's carriage is FOUR files and not the three
+    // reports/DECISION-20260927-I34-MATERIAL-CARRIER.md names: the terrain
+    // arm's per-triangle triple is not at the door, it is upstream of a
+    // serial converter.
+    input  var logic        [31:0] t_material_token_i,
 
     // ---- the LIGHT stream (`terr_light_*`) ---------------------------------
     input  var logic               l_valid_i,
@@ -391,6 +410,9 @@ module zhao_terrain_clipfeed #(
     output var logic [31:0]          o_material_set_o,
     output var logic [15:0]          o_material_id_o,
     output var logic [1:0]           o_material_mode_o,
+    // The token this triangle was accepted with, granted at the door on the
+    // triangle's OWN beat. See `t_material_token_i`.
+    output var logic [31:0]          o_material_token_o,
     output var logic [7:0]           o_vertex_alpha_o,
     output var logic [31:0]          o_frag_state_o,
     output var logic [7:0]           o_quality_tier_o,
@@ -464,6 +486,11 @@ module zhao_terrain_clipfeed #(
   // legality filter that feeds it.
   logic [31:0] mset_q;
   logic [15:0] mid_q;
+  // The layer-E material token, captured by the SAME enable as `mset_q` and
+  // the corners. No legality filter: the token carries its own v1 tag and its
+  // CONSUMER refuses a tag it does not recognise, which is the whole reason
+  // the tag is not padding. Filtering it here would be a second opinion.
+  logic [31:0] mtok_q;
   // An id with no set is discarded rather than presented: `mode_contra_c`
   // would make it a FAULT and drop the frame's terrain. THE ORPHAN RULE.
   wire         mat_orphan_c = (mat_set_i == 32'd0) && (mat_id_i != 16'd0);
@@ -810,6 +837,7 @@ module zhao_terrain_clipfeed #(
   assign o_material_set_o = mset_q;
   assign o_material_id_o  = mid_q;
   assign o_material_mode_o= (mset_q != 32'd0) ? MATMODE_BACKED_C : MATMODE_NONE_C;
+  assign o_material_token_o = mtok_q;
   assign o_vertex_alpha_o = TERR_VERTEX_ALPHA;
   assign o_frag_state_o   = TERR_FRAG_STATE;
   assign o_quality_tier_o = 8'd0;
@@ -835,6 +863,10 @@ module zhao_terrain_clipfeed #(
       src_id_q          <= {IDW{1'b0}};
       mset_q            <= 32'd0;
       mid_q             <= 16'd0;
+      // Tag 8'h00 is NOT a v1 token, so the reset value is REFUSED by the
+      // consumer rather than decoding as the legal triple {0,0,0}. That is
+      // the ratified presence law -- an absent output is not a write of zero.
+      mtok_q            <= 32'd0;
       mat_backed_o      <= 32'd0;
       mat_id_orphan_o   <= 32'd0;
       profile_q         <= 2'd0;
@@ -880,6 +912,7 @@ module zhao_terrain_clipfeed #(
             // captured with its corners and not read live at the door.
             mset_q    <= mat_set_c;
             mid_q     <= mat_id_c;
+            mtok_q    <= t_material_token_i;
             if (mat_orphan_c && (mat_id_orphan_o != 32'hffff_ffff))
               mat_id_orphan_o <= mat_id_orphan_o + 32'd1;
             profile_q <= t_profile_i;

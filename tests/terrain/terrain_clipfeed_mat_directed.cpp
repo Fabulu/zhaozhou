@@ -78,6 +78,36 @@ constexpr uint32_t kW = 0x0010'0000u;
 // silent. The shade's VALUE is not this file's subject.
 constexpr uint32_t kShade = 32768u;
 
+// ---------------------------------------------------------------------------
+// I34's v1 MATERIAL TOKEN, and a per-triangle value an off-by-one CANNOT pass
+// (MATCARRY, 2026-09-27)
+// ---------------------------------------------------------------------------
+// `zhao_material_token_pkg::ZMT_TAG_V1` and `zmt_encode`'s byte order:
+// {tag[31:24], matA[23:16], matB[15:8], weight[7:0]}.
+constexpr uint32_t kZmtTagV1 = 0xE1u;
+
+inline uint32_t zmt_encode(uint8_t a, uint8_t b, uint8_t w) {
+  return (kZmtTagV1 << 24) | (static_cast<uint32_t>(a) << 16) |
+         (static_cast<uint32_t>(b) << 8) | static_cast<uint32_t>(w);
+}
+
+// THE STIMULUS IS ASYMMETRIC ON PURPOSE. The three bytes advance at three
+// different rates and matB advances DOWNWARD, so the token for triangle k is
+// not the token for k-1, k+1, or any byte rotation of either. That matters
+// because the fault this is written to catch is `u_geom_tidq`'s: a value that
+// stays IN RANGE and DECODES CLEANLY while belonging to the previous triangle.
+// A monotone or constant stimulus would pass such a defect.
+inline uint32_t token_of(int k) {
+  const uint8_t a = static_cast<uint8_t>(0x11u + 0x27u * static_cast<uint32_t>(k));
+  const uint8_t b = static_cast<uint8_t>(0x93u - 0x3Du * static_cast<uint32_t>(k));
+  const uint8_t w = static_cast<uint8_t>(0x05u + 0x5Bu * static_cast<uint32_t>(k));
+  return zmt_encode(a, b, w);
+}
+
+// The source id that must arrive WITH that token. The pair is the whole check:
+// a skew moves one and not the other.
+inline uint16_t src_of(int k) { return static_cast<uint16_t>(0x1000 + k); }
+
 struct Dut {
   Vtb_terrain_clipfeed_mat& d;
   uint64_t cycles = 0;
@@ -87,6 +117,7 @@ struct Dut {
     uint16_t id;
     uint8_t mode;
     uint16_t src;
+    uint32_t tok;
   };
   Seen last{};
   int seen_count = 0;
@@ -101,6 +132,7 @@ struct Dut {
       last.id = static_cast<uint16_t>(d.o_material_id);
       last.mode = static_cast<uint8_t>(d.o_material_mode);
       last.src = static_cast<uint16_t>(d.o_src_id);
+      last.tok = d.o_material_token;
       ++seen_count;
     }
     // SECTION 4, EVALUATED EVERY CYCLE rather than once at the end. A counter
@@ -117,7 +149,8 @@ struct Dut {
 
   // Offer one triangle on all three join handshakes and run until the door
   // grants it. The block is strictly serial, so exactly one is in flight.
-  void offer(uint16_t src) {
+  void offer(uint16_t src, uint32_t tok = 0) {
+    d.t_material_token = tok;
     d.t_valid = 1;
     d.l_valid = 1;
     d.u_valid = 1;
@@ -161,6 +194,7 @@ void reset(Vtb_terrain_clipfeed_mat& d) {
   d.l_degenerate = 0;
   d.mat_set = 0;
   d.mat_id = 0;
+  d.t_material_token = 0;
   d.o_ready = 1;
   d.eval();
   for (int i = 0; i < 8; ++i) zhao::tick(d);
@@ -354,6 +388,82 @@ int main(int argc, char** argv) {
         dv.mat_id_orphan);
   check(dv.src_id_mismatch == 0, "6.the three-way join never disagreed", 0u,
         dv.src_id_mismatch);
+
+  // =========================================================================
+  // 7. I34's CARRIAGE: THE TOKEN ARRIVES WITH ITS OWN TRIANGLE (MATCARRY)
+  // =========================================================================
+  // THE BAR THIS ANSWERS, in the brief's words: "prove the triple arrives WITH
+  // ITS OWN TRIANGLE under interleaving, not merely that it arrives ... the
+  // discriminator is an equality against the producer, per triangle, never a
+  // variety check on the consumer."
+  //
+  // So this is an equality against `token_of(k)` -- what the producer offered
+  // on THAT triangle's accept -- and it is checked together with `src_of(k)`.
+  // Two fields that must move together, compared per triangle.
+  //
+  // WHY THIS BLOCK IS WHERE THE CHECK BELONGS. `zhao_terrain_clipfeed` is
+  // strictly serial: it accepts one triangle, converts it over several clocks
+  // and only then accepts another. That gap is the whole reason the token
+  // cannot be read live at the door, and it is the gap a skew would hide in.
+  {
+    const int kFirst = static_cast<int>(dv.emitted);  // 5 triangles already ran
+    const int kN = 12;
+
+    // THE STIMULUS'S OWN VACUITY CHECK, FIRST, because twelve packets this
+    // week found their controls could not fail. If consecutive tokens were
+    // equal, every assertion below would pass under a one-behind defect --
+    // which is exactly the defect being tested for.
+    bool distinct = true;
+    for (int k = 1; k < kN; ++k) {
+      if (token_of(k) == token_of(k - 1)) distinct = false;
+    }
+    check(distinct,
+          "7.consecutive tokens DIFFER -- without this every check below would pass "
+          "under the one-behind defect it exists to catch",
+          1u, distinct ? 1u : 0u);
+
+    uint32_t ok_pairs = 0;
+    for (int k = 0; k < kN; ++k) {
+      // INTERLEAVING: the door is held off for a varying number of clocks
+      // BEFORE the triangle is offered and the sink stalls for a varying
+      // number AFTER, so the offered beat sits unaccepted across a changing
+      // boundary. A carriage that only works at full readiness fails here.
+      dv.o_ready = 0;
+      t.idle(k % 5);
+      dv.o_ready = 1;
+      t.offer(src_of(k), token_of(k));
+      dv.o_ready = ((k % 3) != 0) ? 1 : 0;
+      t.idle(k % 4);
+      dv.o_ready = 1;
+      if (!t.drain_to(static_cast<uint32_t>(kFirst + k + 1))) {
+        check(false, "7.triangle reached the door", 1u, 0u);
+        break;
+      }
+      const bool pair_ok = (t.last.tok == token_of(k)) && (t.last.src == src_of(k));
+      if (pair_ok) ++ok_pairs;
+      // Reported per triangle rather than as a total, so a failure names WHICH
+      // triangle and what it carried instead.
+      if (!pair_ok) {
+        std::printf(
+            "  7.triangle %d carried token %08x with src %04x; expected token %08x "
+            "with src %04x\n",
+            k, t.last.tok, t.last.src, token_of(k), src_of(k));
+      }
+    }
+    check(ok_pairs == static_cast<uint32_t>(kN),
+          "7.EVERY triangle arrived at the door carrying ITS OWN token and ITS OWN "
+          "src_id, under varying backpressure on both sides",
+          static_cast<uint32_t>(kN), ok_pairs);
+
+    // AND THE TOKEN IS NOT NARROWED. The tag lives in the top byte, which is
+    // the first thing a truncation to 24 bits would lose -- and a zero tag is
+    // exactly what the consumer treats as ABSENT, so a silent narrowing would
+    // read as "this triangle has no material" rather than as a fault.
+    check((t.last.tok >> 24) == kZmtTagV1,
+          "7.the v1 tag survived the trip -- a 24-bit truncation would present as an "
+          "ABSENT material rather than as a fault",
+          kZmtTagV1, t.last.tok >> 24);
+  }
 
   dv.final();
   return zhao::report_and_exit("terrain_clipfeed_mat_directed");

@@ -208,6 +208,11 @@
 
 module zhao_console_board
   import zhao_pkg::*, zhao_abi_pkg::*, zhao_fb_tuple_pkg::*;
+  // I34's v1 material token. Imported so the tag and the byte order are
+  // read from `zhao_material_token_pkg` rather than transcribed a fourth
+  // time -- that package exists precisely because three composed sites
+  // had already committed to {matA, matB, weight} independently.
+  import zhao_material_token_pkg::*;
 #(
     // ======================================================================
     // THE BOARD'S OWN KNOBS.
@@ -336,8 +341,49 @@ module zhao_console_board
   // GEOM.CLIP both carry it opaquely and three literals would drift.
   parameter int unsigned GEOM_VID_KEYW   = GEOM_ARENA_W + GEOM_GEN_W + GEOM_INDEX_W,
   // The per-primitive rider GEOM.CLIP carries beside `src_id`:
-  // {material_id[15:0], R28 raster_state[31:0], producer domain[1:0]}.
-  parameter int unsigned GEOM_VID_RIDERW = 16 + 32 + 2,
+  // {v1 material token[31:0], material_id[15:0], R28 raster_state[31:0],
+  //  producer domain[1:0]}.
+  //
+  // THE TOKEN IS NEW (MATCARRY, 2026-09-27) AND IT IS ADDED AT THE TOP, which
+  // is not cosmetic: `[49:34]`, `[33:2]` and `[1:0]` keep the exact bit
+  // positions `u_geom_vertid` already reads, so widening costs those three
+  // connections nothing and cannot silently re-seat a field.
+  //
+  // IT IS NOT A REUSE OF THE THIRTY ZERO BITS on three of the four client
+  // arms. Those are R28's `raster_state`, allocated and not spare, and the
+  // owner directive section 4 forbids overloading a field or substituting a
+  // convenient zero. Bits that happen to be zero today are not free bits, so
+  // this is thirty-two NEW bits and a fit prices them.
+  //
+  // WHY A WIDENING RATHER THAN AN ALIGNED SIDE QUEUE:
+  // reports/DECISION-20260927-I34-MATERIAL-CARRIER.md. A side FIFO that must
+  // stay in lockstep with a pipeline is the `u_geom_tidq` defect class -- it
+  // ran permanently one behind and binned 74 of 75 triangles under their
+  // predecessor's descriptor while every range guard passed, because the ids
+  // stayed in range and decoded cleanly. A value riding INSIDE the record has
+  // no alignment invariant to break.
+  parameter int unsigned GEOM_VID_RIDERW = 32 + 16 + 32 + 2,
+  // ---- THE PER-TRIANGLE IDENTITY PAST GEOM.CLIP (MATCARRY, 2026-09-27) -----
+  // GEOM.SETUP and GEOM.ATTRPACK are the fork that carries a triangle from
+  // GEOM.CLIP's output to the shell's door, and the ONLY per-triangle sideband
+  // that survived that trip was a 16-bit source id. This is that sideband,
+  // widened to carry the material token and the producer domain with it:
+  //
+  //   {domain[1:0], v1 material token[31:0], src_id[15:0]}
+  //
+  // BOTH HALVES OF THE FORK CARRY IT, and that is the point rather than a
+  // symmetry: the composed assertion `a_attrpack_setup_same_triangle` already
+  // differences the two, and its own comment concedes it "cannot fail" on a
+  // single-source frame because every triangle there carries the same
+  // `src_id`. A material token VARIES PER TRIANGLE on exactly such a frame,
+  // so widening both sides turns a near-vacuous check into a live
+  // per-triangle discriminator whose two operands are loaded by two different
+  // enables in two different modules.
+  // The derived bit positions for both layouts are LOCALPARAMS in the body,
+  // not parameters: they are consequences of the rider layout rather than
+  // choices, and `zhao_console_board` is generated from this port list, so a
+  // parameter here becomes a board knob somebody could set into a layout the
+  // slices do not agree with.
   // Rows per arena in the identity map. GEOM.ASSETFETCH's MAX_VERTICES, which
   // is also `zhao_geom_vattr`'s VSLOTS -- the same bound said once.
   parameter int unsigned GEOM_VID_VSLOTS = GEOM_ASSET_MAX_VERTICES,
@@ -1547,6 +1593,14 @@ module zhao_console_board
   output logic [31:0] geom_pw_stray_o,
   output logic [31:0] geom_pw_genrace_o,
   output logic [31:0] geom_pw_unaligned_o,
+  // GEOM.PARAMWALK's fetch arm (MUXBUILD, 2026-09-27). `geom_pw_vread_o`
+  // counts RECORDS FETCHED, so `vread == 3 * geom_pw_tris_o` is the
+  // invariant; `geom_pw_vbad_o` counts a vertex the arm refused; and
+  // `geom_pw_pvsplit_o` counts the three vertices of one triangle
+  // disagreeing on their untextured flag.
+  output logic [31:0] geom_pw_vread_o,
+  output logic [31:0] geom_pw_vbad_o,
+  output logic [31:0] geom_pw_pvsplit_o,
   output logic [15:0] geom_pw_depth_o,
   // The write-capable ENGINE1 share that now sits in front of the guard.
   output logic [31:0] geom_ws_denied_o,
@@ -5009,6 +5063,9 @@ module zhao_console_board
       .geom_pw_stray_o                    (geom_pw_stray_o),
       .geom_pw_genrace_o                  (geom_pw_genrace_o),
       .geom_pw_unaligned_o                (geom_pw_unaligned_o),
+      .geom_pw_vread_o                    (geom_pw_vread_o),
+      .geom_pw_vbad_o                     (geom_pw_vbad_o),
+      .geom_pw_pvsplit_o                  (geom_pw_pvsplit_o),
       .geom_pw_depth_o                    (geom_pw_depth_o),
       .geom_ws_denied_o                   (geom_ws_denied_o),
       .geom_ws_contention_o               (geom_ws_contention_o),

@@ -41,6 +41,10 @@ module tb_terrain_clipfeed_mat (
     // ---- THE FIELDS UNDER TEST --------------------------------------------
     input  var logic [31:0] mat_set,
     input  var logic [15:0] mat_id,
+    // I34's v1 material token, offered on the TRIANGLE's beat (MATCARRY,
+    // 2026-09-27). Unlike `mat_set`/`mat_id`, which are frame-scoped, this
+    // varies PER TRIANGLE -- which is the whole property under test.
+    input  var logic [31:0] t_material_token,
 
     // ---- the door ----------------------------------------------------------
     output var logic        o_valid,
@@ -48,6 +52,9 @@ module tb_terrain_clipfeed_mat (
     output var logic [31:0] o_material_set,
     output var logic [15:0] o_material_id,
     output var logic [ 1:0] o_material_mode,
+    // The token granted at the door. The test asserts this equals the token
+    // offered WITH THIS TRIANGLE, per triangle, under interleaving.
+    output var logic [31:0] o_material_token,
     output var logic [15:0] o_src_id,
     output var logic        o_untex,
 
@@ -129,6 +136,7 @@ module tb_terrain_clipfeed_mat (
 
       .mat_set_i (mat_set),
       .mat_id_i  (mat_id),
+      .t_material_token_i(t_material_token),
 
       .o_valid_o        (o_valid),
       .o_ready_i        (o_ready),
@@ -162,6 +170,7 @@ module tb_terrain_clipfeed_mat (
       .o_material_set_o (o_material_set),
       .o_material_id_o  (o_material_id),
       .o_material_mode_o(o_material_mode),
+      .o_material_token_o(o_material_token),
 
       .triangles_o      (triangles),
       .emitted_o        (emitted),
