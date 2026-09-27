@@ -118,6 +118,15 @@ module zhao_render_texture_layout_top;
     aux.wx           = 32'sh1020_3040;
 
     request = '0;
+    // ADDED 2026-09-27 (REDFIX).  `ceba0bfe` grew the request one bit at its top
+    // and did not teach this fixture, whose entire value is being an
+    // INDEPENDENTLY WRITTEN statement of the same layout.  The exact-vector
+    // check below then built 362 bits against a 363-bit declaration, so
+    // `render_texture_packet_a` failed at VERILATION on a width warning -- a
+    // registered ctest, red since 2026-09-26, that nothing in the campaign's
+    // gate list looks at.  Set to 1 rather than left at 0 so the bit carries a
+    // value a mis-splice can actually disturb.
+    request.detail_required       = 1'b1;
     request.u_over_w              = 32'sh8102_0304;
     request.v_over_w              = 32'sh0506_0708;
     request.sample_count          = 2'b11;
@@ -254,6 +263,7 @@ module zhao_render_texture_layout_top;
           32'hA1B2_C3D4, 32'hD00D_F00D, 32'h1020_3040})
       $fatal(1, "AUX exact vector mismatch (low word must be wx, high word wz)");
     if (request_bits !== {
+          1'b1,
           32'h8102_0304, 32'h0506_0708, 2'b11, 8'h91, 8'hA2,
           3'b101, 8'hB3, 1'b1,
           32'hFEDC_BA98, 32'h7654_3210, 32'h89AB_CDEF, 32'h0123_4567,
@@ -355,7 +365,9 @@ endmodule
 // Parameterized simulation fire control.  CONTROL=1..9 forces each literal
 // width/offset family false independently.  CONTROL=10..15 flips one bit in
 // every non-AUX layout fingerprint; the committed reversed-wx/wz mutant remains
-// the independent AUX fingerprint control.  Each selected model must compile
+// the independent AUX fingerprint control.  CONTROL=17 is the fragment-state
+// package's own guard.  CONTROL=18..19 are the two relational PRETEX checks
+// added 2026-09-27 (REDFIX); 16 stays reserved for the AUX mutant.  Each selected model must compile
 // normally and then stop at its unique guard $fatal during execution.
 module zhao_render_texture_elab_control_top #(
   parameter int unsigned CONTROL = 0
@@ -375,6 +387,15 @@ module zhao_render_texture_elab_control_top #(
       {{(RASTER_RETIRE_CTX_W-1){1'b0}}, 1'b1};
   localparam logic [TEXTURE_RESULT_W-1:0] RESULT_ONE =
       {{(TEXTURE_RESULT_W-1){1'b0}}, 1'b1};
+
+  // CONTROL 18 does NOT flip a boolean.  It asks the PRODUCTION tiling
+  // function about a layout in which field 20 (`source_id`) has moved by one
+  // bit -- which is precisely the fault `ceba0bfe` created -- so the control
+  // exercises the CHECK rather than overriding its answer.  Overriding the
+  // answer is the vacuity this whole repair exists to remove, and doing it here
+  // would have been the same mistake one level up.
+  localparam bit PRETEX_TILE_CONTROLLED =
+      (CONTROL == 18) ? pretex_fields_tile(20, 1) : PRETEX_FIELDS_TILE_OK;
 
   localparam logic [RASTER_CONTINUATION_W-1:0] CONT_PROBE =
       continuation_layout_probe() ^ ((CONTROL == 10) ? CONT_ONE : '0);
@@ -400,6 +421,13 @@ module zhao_render_texture_elab_control_top #(
     .PRETEX_OFFSET_CONTRACT_OK_P(PRETEX_OFFSET_CONTRACT_OK && (CONTROL != 7)),
     .RETIRE_OFFSET_CONTRACT_OK_P(RETIRE_OFFSET_CONTRACT_OK && (CONTROL != 8)),
     .RESULT_OFFSET_CONTRACT_OK_P(RESULT_OFFSET_CONTRACT_OK && (CONTROL != 9)),
+    .PRETEX_FIELDS_TILE_OK_P(PRETEX_TILE_CONTROLLED),
+    // CONTROL 19 is a plain override, and its evidence is stated honestly in
+    // FINDINGS-redfix.md: the cross-record check is a fixed conjunction with no
+    // fault argument, so what proves IT fires is that it evaluates FALSE at the
+    // base commit's own constants -- the real historical fault, not a synthetic
+    // one.  That was measured, not argued.
+    .PRETEX_CROSS_RECORD_OK_P(PRETEX_CROSS_RECORD_OK && (CONTROL != 19)),
     .CONTINUATION_LAYOUT_PROBE_P(CONT_PROBE),
     .TEXREQ_LAYOUT_PROBE_P(TEXREQ_PROBE),
     .EZPAY_LAYOUT_PROBE_P(EZPAY_PROBE),

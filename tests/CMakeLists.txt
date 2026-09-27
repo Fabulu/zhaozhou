@@ -14319,6 +14319,30 @@ add_test(NAME packet_d_registration_static
 set_tests_properties(packet_d_registration_static PROPERTIES
   LABELS "fast;nightly;packet-d" TIMEOUT 1800)
 
+# The PRETEX record's layout crosses a LANGUAGE boundary, and that seam is what
+# `ceba0bfe` broke on 2026-09-26: the package moved and the fourteen bare
+# literals in `geom_bin_pipe_v2_directed.cpp` did not, so six required Packet-D
+# tests read four fields one bit low for a week while the package's own
+# self-check compared every constant to its own literal and reported nothing.
+# No SystemVerilog check can reach a C++ literal, so this gate holds the two
+# sides together; the package's `PRETEX_FIELDS_TILE_OK` holds the constants to
+# each other.  Added 2026-09-27 (REDFIX).
+add_test(NAME pretex_offset_agreement
+  COMMAND "${Python3_EXECUTABLE}"
+          ${CMAKE_CURRENT_SOURCE_DIR}/../tools/rtl/check_pretex_offsets.py)
+set_tests_properties(pretex_offset_agreement PROPERTIES
+  LABELS "fast;nightly;packet-d" TIMEOUT 300)
+
+# ... and the gate's own positive control.  A detector that has not been shown to
+# FIRE has not been tested, and the detector this one replaces is a live example.
+# Nine mutations, each naming the check it must wake, each required to be caught.
+add_test(NAME pretex_offset_agreement_control
+  COMMAND "${Python3_EXECUTABLE}"
+          ${CMAKE_CURRENT_SOURCE_DIR}/../tools/rtl/check_pretex_offsets.py --selftest)
+set_tests_properties(pretex_offset_agreement_control PROPERTIES
+  LABELS "fast;nightly;packet-d" TIMEOUT 300
+  PASS_REGULAR_EXPRESSION "SELFTEST OK: 9 of 9 mutations detected")
+
 # Independent configure-time inventory: deleting the static checker registration
 # cannot make the remaining Packet-D tests look complete.
 set(ZHAO_PACKET_D_REQUIRED_TESTS
@@ -14339,7 +14363,12 @@ set(ZHAO_PACKET_D_REQUIRED_TESTS
   packet_d_registration_static)
 list(LENGTH ZHAO_PACKET_D_REQUIRED_TESTS ZHAO_PACKET_D_REQUIRED_TEST_COUNT)
 if(NOT ZHAO_PACKET_D_REQUIRED_TEST_COUNT EQUAL 15)
-  message(FATAL_ERROR "Packet-D required CTest inventory must contain exactly 13 names")
+  # CORRECTED 2026-09-27 (REDFIX): this message said 13 while the guard beside
+  # it checked 15 and the list held 15.  The handover, BRIEF-REDFIX and
+  # FINDINGS-doorcost all then said "six of the THIRTEEN required Packet-D
+  # tests", because the message is the sentence a reader reaches for and nothing
+  # in the tree compared it to the number one line above.
+  message(FATAL_ERROR "Packet-D required CTest inventory must contain exactly 15 names")
 endif()
 foreach(required_packet_d_test IN LISTS ZHAO_PACKET_D_REQUIRED_TESTS)
   if(NOT TEST "${required_packet_d_test}")

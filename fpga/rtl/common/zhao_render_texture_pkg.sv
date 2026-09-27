@@ -174,9 +174,14 @@ package zhao_render_texture_pkg;
     logic         [7:0]          palette_generation;   // [7:0]
   } zhao_texture_v3_request_v2_t;
 
-  // ---- the 410-bit opaque Early-Z payload -----------------------------------
+  // ---- the 411-bit opaque Early-Z payload -----------------------------------
   localparam int unsigned EZPAY_TEXTURE_REQUEST_LO       = 0;
-  localparam int unsigned EZPAY_TEXTURE_REQUEST_HI       = 361;
+  // 362, NOT 361: this names the `texture_request` MEMBER, which is 363 bits
+  // and INCLUDES `detail_required` at its top.  `ceba0bfe` declared the new
+  // bit as a sibling span and left the member's own HI a bit short, so the
+  // runtime span probe compared a 363-bit member against a 362-bit mask and
+  // `render_texture_packet_a` has been red ever since.  Corrected 2026-09-27.
+  localparam int unsigned EZPAY_TEXTURE_REQUEST_HI       = 362;
   // THE REQUEST GREW ONE BIT AT ITS TOP (NORMALMAP, 2026-09-26), so every
   // offset ABOVE it moves by exactly one and nothing below it moves at all.
   localparam int unsigned EZPAY_DETAIL_REQUIRED_LO        = 362;
@@ -195,7 +200,7 @@ package zhao_render_texture_pkg;
     zhao_texture_v3_request_v2_t       texture_request;
   } zhao_raster_earlyz_payload_v2_t;
 
-  // ---- the complete 490-bit post-coverage/pretexture packet -----------------
+  // ---- the complete 491-bit post-coverage/pretexture packet -----------------
   localparam int unsigned PRETEX_PALETTE_GENERATION_LO = 0;
   localparam int unsigned PRETEX_PALETTE_GENERATION_HI = 7;
   localparam int unsigned PRETEX_PALETTE_SLOT_LO       = 8;
@@ -224,30 +229,47 @@ package zhao_render_texture_pkg;
   localparam int unsigned PRETEX_V_OVER_W_HI           = 329;
   localparam int unsigned PRETEX_U_OVER_W_LO           = 330;
   localparam int unsigned PRETEX_U_OVER_W_HI           = 361;
-  localparam int unsigned PRETEX_STENCIL_REFERENCE_LO  = 362;
-  localparam int unsigned PRETEX_STENCIL_REFERENCE_HI  = 369;
-  localparam int unsigned PRETEX_EFFECT_TAG_LO          = 370;
-  localparam int unsigned PRETEX_EFFECT_TAG_HI          = 377;
-  localparam int unsigned PRETEX_VERTEX_ALPHA_LO        = 378;
-  localparam int unsigned PRETEX_VERTEX_ALPHA_HI        = 385;
-  localparam int unsigned PRETEX_VERTEX_RGB_LO          = 386;
-  localparam int unsigned PRETEX_VERTEX_RGB_HI          = 409;
-  localparam int unsigned PRETEX_SOURCE_ID_LO           = 410;
-  localparam int unsigned PRETEX_SOURCE_ID_HI           = 425;
-  localparam int unsigned PRETEX_FRAGMENT_STATE_LO      = 426;
-  localparam int unsigned PRETEX_FRAGMENT_STATE_HI      = 457;
-  localparam int unsigned PRETEX_INVW24_LO              = 458;
-  localparam int unsigned PRETEX_INVW24_HI              = 481;
-  localparam int unsigned PRETEX_IN_TILE_ADDR_LO        = 482;
-  localparam int unsigned PRETEX_IN_TILE_ADDR_HI        = 489;
+  // REPAIRED 2026-09-27 (REDFIX).  `ceba0bfe` (NORMALMAP, 2026-09-26) grew the
+  // texture request one bit at its top for `detail_required` and moved the
+  // TEXREQ, EZPAY, EARLYZ_KEY and CONTINUATION constants with it -- but NOT the
+  // PRETEX field constants, which describe the same layout seen from the whole
+  // record.  `PRETEX_EARLYZ_PAYLOAD_HI` therefore said 409 while
+  // `PRETEX_EARLYZ_KEY_LO` said 411, so BIT 410 BELONGED TO NO FIELD, and six
+  // required Packet-D tests read four fields one bit low for a week.
+  //
+  // NOTE FOR THE NEXT READER, because the handover says four: NINE fields move,
+  // not four.  The continuation tail sits INSIDE the payload above the request,
+  // so it moved with the request, and `detail_required` had no PRETEX constant
+  // at all.  Moving only source_id/fragment_state/invw24/in_tile_addr leaves
+  // vertex_rgb ending at 409 and source_id starting at 411 -- the SAME orphaned
+  // bit 410, relocated by one field.  `PRETEX_FIELDS_TILE_OK` below now refuses
+  // that arrangement, which is why the shortcut cannot be taken again.
+  localparam int unsigned PRETEX_DETAIL_REQUIRED_LO      = 362;
+  localparam int unsigned PRETEX_DETAIL_REQUIRED_HI      = 362;
+  localparam int unsigned PRETEX_STENCIL_REFERENCE_LO  = 363;
+  localparam int unsigned PRETEX_STENCIL_REFERENCE_HI  = 370;
+  localparam int unsigned PRETEX_EFFECT_TAG_LO          = 371;
+  localparam int unsigned PRETEX_EFFECT_TAG_HI          = 378;
+  localparam int unsigned PRETEX_VERTEX_ALPHA_LO        = 379;
+  localparam int unsigned PRETEX_VERTEX_ALPHA_HI        = 386;
+  localparam int unsigned PRETEX_VERTEX_RGB_LO          = 387;
+  localparam int unsigned PRETEX_VERTEX_RGB_HI          = 410;
+  localparam int unsigned PRETEX_SOURCE_ID_LO           = 411;
+  localparam int unsigned PRETEX_SOURCE_ID_HI           = 426;
+  localparam int unsigned PRETEX_FRAGMENT_STATE_LO      = 427;
+  localparam int unsigned PRETEX_FRAGMENT_STATE_HI      = 458;
+  localparam int unsigned PRETEX_INVW24_LO              = 459;
+  localparam int unsigned PRETEX_INVW24_HI              = 482;
+  localparam int unsigned PRETEX_IN_TILE_ADDR_LO        = 483;
+  localparam int unsigned PRETEX_IN_TILE_ADDR_HI        = 490;
   localparam int unsigned PRETEX_EARLYZ_PAYLOAD_LO      = 0;
-  localparam int unsigned PRETEX_EARLYZ_PAYLOAD_HI      = 409;
+  localparam int unsigned PRETEX_EARLYZ_PAYLOAD_HI      = 410;
   localparam int unsigned PRETEX_EARLYZ_KEY_LO          = 411;
   localparam int unsigned PRETEX_EARLYZ_KEY_HI          = 490;
   localparam int unsigned PRETEX_CONTINUATION_LO        = 363;
   localparam int unsigned PRETEX_CONTINUATION_HI        = 490;
   localparam int unsigned PRETEX_TEXTURE_REQUEST_LO     = 0;
-  localparam int unsigned PRETEX_TEXTURE_REQUEST_HI     = 361;
+  localparam int unsigned PRETEX_TEXTURE_REQUEST_HI     = 362;
 
   typedef struct packed {
     zhao_raster_earlyz_key_v2_t      earlyz;
@@ -373,10 +395,14 @@ package zhao_render_texture_pkg;
       (TEXREQ_BASE_BINDING_LO == 288) && (TEXREQ_BASE_BINDING_HI == 295) &&
       (TEXREQ_SAMPLE_COUNT_LO == 296) && (TEXREQ_SAMPLE_COUNT_HI == 297) &&
       (TEXREQ_V_OVER_W_LO == 298) && (TEXREQ_V_OVER_W_HI == 329) &&
-      (TEXREQ_U_OVER_W_LO == 330) && (TEXREQ_U_OVER_W_HI == 361);
+      (TEXREQ_U_OVER_W_LO == 330) && (TEXREQ_U_OVER_W_HI == 361) &&
+      // ADDED 2026-09-27 (REDFIX).  NORMALMAP declared these two and pinned
+      // neither, so Verilator reported them as UNUSEDPARAM and the request's
+      // new top bit had no contract of its own anywhere.
+      (TEXREQ_DETAIL_REQUIRED_LO == 362) && (TEXREQ_DETAIL_REQUIRED_HI == 362);
 
   localparam bit EZPAY_OFFSET_CONTRACT_OK =
-      (EZPAY_TEXTURE_REQUEST_LO == 0) && (EZPAY_TEXTURE_REQUEST_HI == 361) &&
+      (EZPAY_TEXTURE_REQUEST_LO == 0) && (EZPAY_TEXTURE_REQUEST_HI == 362) &&
       (EZPAY_DETAIL_REQUIRED_LO == 362) && (EZPAY_DETAIL_REQUIRED_HI == 362) &&
       (EZPAY_STENCIL_REFERENCE_LO == 363) && (EZPAY_STENCIL_REFERENCE_HI == 370) &&
       (EZPAY_EFFECT_TAG_LO == 371) && (EZPAY_EFFECT_TAG_HI == 378) &&
@@ -398,18 +424,19 @@ package zhao_render_texture_pkg;
       (PRETEX_SAMPLE_COUNT_LO == 296) && (PRETEX_SAMPLE_COUNT_HI == 297) &&
       (PRETEX_V_OVER_W_LO == 298) && (PRETEX_V_OVER_W_HI == 329) &&
       (PRETEX_U_OVER_W_LO == 330) && (PRETEX_U_OVER_W_HI == 361) &&
-      (PRETEX_STENCIL_REFERENCE_LO == 362) && (PRETEX_STENCIL_REFERENCE_HI == 369) &&
-      (PRETEX_EFFECT_TAG_LO == 370) && (PRETEX_EFFECT_TAG_HI == 377) &&
-      (PRETEX_VERTEX_ALPHA_LO == 378) && (PRETEX_VERTEX_ALPHA_HI == 385) &&
-      (PRETEX_VERTEX_RGB_LO == 386) && (PRETEX_VERTEX_RGB_HI == 409) &&
-      (PRETEX_SOURCE_ID_LO == 410) && (PRETEX_SOURCE_ID_HI == 425) &&
-      (PRETEX_FRAGMENT_STATE_LO == 426) && (PRETEX_FRAGMENT_STATE_HI == 457) &&
-      (PRETEX_INVW24_LO == 458) && (PRETEX_INVW24_HI == 481) &&
-      (PRETEX_IN_TILE_ADDR_LO == 482) && (PRETEX_IN_TILE_ADDR_HI == 489) &&
-      (PRETEX_EARLYZ_PAYLOAD_LO == 0) && (PRETEX_EARLYZ_PAYLOAD_HI == 409) &&
+      (PRETEX_DETAIL_REQUIRED_LO == 362) && (PRETEX_DETAIL_REQUIRED_HI == 362) &&
+      (PRETEX_STENCIL_REFERENCE_LO == 363) && (PRETEX_STENCIL_REFERENCE_HI == 370) &&
+      (PRETEX_EFFECT_TAG_LO == 371) && (PRETEX_EFFECT_TAG_HI == 378) &&
+      (PRETEX_VERTEX_ALPHA_LO == 379) && (PRETEX_VERTEX_ALPHA_HI == 386) &&
+      (PRETEX_VERTEX_RGB_LO == 387) && (PRETEX_VERTEX_RGB_HI == 410) &&
+      (PRETEX_SOURCE_ID_LO == 411) && (PRETEX_SOURCE_ID_HI == 426) &&
+      (PRETEX_FRAGMENT_STATE_LO == 427) && (PRETEX_FRAGMENT_STATE_HI == 458) &&
+      (PRETEX_INVW24_LO == 459) && (PRETEX_INVW24_HI == 482) &&
+      (PRETEX_IN_TILE_ADDR_LO == 483) && (PRETEX_IN_TILE_ADDR_HI == 490) &&
+      (PRETEX_EARLYZ_PAYLOAD_LO == 0) && (PRETEX_EARLYZ_PAYLOAD_HI == 410) &&
       (PRETEX_EARLYZ_KEY_LO == 411) && (PRETEX_EARLYZ_KEY_HI == 490) &&
       (PRETEX_CONTINUATION_LO == 363) && (PRETEX_CONTINUATION_HI == 490) &&
-      (PRETEX_TEXTURE_REQUEST_LO == 0) && (PRETEX_TEXTURE_REQUEST_HI == 361);
+      (PRETEX_TEXTURE_REQUEST_LO == 0) && (PRETEX_TEXTURE_REQUEST_HI == 362);
 
   localparam bit RETIRE_OFFSET_CONTRACT_OK =
       (RETIRE_STENCIL_REFERENCE_LO == 0) && (RETIRE_STENCIL_REFERENCE_HI == 7) &&
@@ -645,6 +672,211 @@ package zhao_render_texture_pkg;
     return value;
   endfunction
 
+  // ---------------------------------------------------------------------------
+  // THE RELATIONAL LAYOUT SELF-CHECK.  Added 2026-09-27 (REDFIX).
+  //
+  // `PRETEX_OFFSET_CONTRACT_OK` above compares every constant TO ITS OWN
+  // LITERAL.  That pin is worth keeping -- it refuses one unreviewed edit -- but
+  // it is structurally incapable of noticing that the record has stopped being a
+  // record.  It asserts 410 == 410, and says nothing whatever about bit 410
+  // belonging to no field.  A nine-field desync therefore survived a week with
+  // that check sitting beside it and six required Packet-D tests red.  This is
+  // CLAUDE.md's "detector wired to two operands that move together", with the
+  // two operands being ONE operand written twice.
+  //
+  // The two checks below relate the constants TO EACH OTHER, so neither can pass
+  // while the layout is inconsistent:
+  //
+  //   * `PRETEX_FIELDS_TILE_OK`  -- every bit of the record belongs to exactly
+  //     one field.  No hole, no overlap, nothing past the end, and the fields
+  //     reach the declared width exactly.
+  //   * `PRETEX_CROSS_RECORD_OK` -- the same layout seen from the sub-records
+  //     agrees with this one.  THIS IS THE CHECK THAT WOULD HAVE FAILED THE DAY
+  //     `ceba0bfe` LANDED: that commit moved TEXREQ_*, EZPAY_*, the key and the
+  //     continuation and left PRETEX_* behind, and those sets are maintained by
+  //     hand and independently -- so they are exactly the two operands a
+  //     detector needs in order to be able to fire at all.
+  //
+  // Both are SEEN TO FIRE rather than merely present.  `pretex_fields_tile`
+  // takes a fault-injection argument, and the guard's runtime block displaces
+  // every field by one bit in each direction and requires refusal all 46 times,
+  // plus one unperturbed call that must be ACCEPTED so the check cannot pass by
+  // always returning zero.  That asserts the CORRECT behaviour -- a displaced
+  // field is not a tiling -- so it keeps working after the repair instead of
+  // expiring with the bug, and it is not a copy of anything, so it cannot go
+  // stale in the flattering direction either.
+  // ---------------------------------------------------------------------------
+  localparam int unsigned PRETEX_FIELD_COUNT = 23;
+
+  // The record's fields in ascending offset order.  A field missing from this
+  // table cannot tile, because the neighbours either side would then abut.
+  function automatic int unsigned pretex_field_lo(input int unsigned idx);
+    case (idx)
+      0:       return PRETEX_PALETTE_GENERATION_LO;
+      1:       return PRETEX_PALETTE_SLOT_LO;
+      2:       return PRETEX_RESPONSE_CLASS_LO;
+      3:       return PRETEX_BASE_ALPHA_LO;
+      4:       return PRETEX_BASE_RGB_LO;
+      5:       return PRETEX_AUX_SURFACE_CTX_LO;
+      6:       return PRETEX_AUX_REQUIRED_LO;
+      7:       return PRETEX_RECIPE_WEIGHT_LO;
+      8:       return PRETEX_MATERIAL_RECIPE_LO;
+      9:       return PRETEX_LOD_Q4_4_LO;
+      10:      return PRETEX_BASE_BINDING_LO;
+      11:      return PRETEX_SAMPLE_COUNT_LO;
+      12:      return PRETEX_V_OVER_W_LO;
+      13:      return PRETEX_U_OVER_W_LO;
+      14:      return PRETEX_DETAIL_REQUIRED_LO;
+      15:      return PRETEX_STENCIL_REFERENCE_LO;
+      16:      return PRETEX_EFFECT_TAG_LO;
+      17:      return PRETEX_VERTEX_ALPHA_LO;
+      18:      return PRETEX_VERTEX_RGB_LO;
+      19:      return PRETEX_SOURCE_ID_LO;
+      20:      return PRETEX_FRAGMENT_STATE_LO;
+      21:      return PRETEX_INVW24_LO;
+      22:      return PRETEX_IN_TILE_ADDR_LO;
+      default: return RASTER_PRETEX_W;
+    endcase
+  endfunction
+
+  function automatic int unsigned pretex_field_hi(input int unsigned idx);
+    case (idx)
+      0:       return PRETEX_PALETTE_GENERATION_HI;
+      1:       return PRETEX_PALETTE_SLOT_HI;
+      2:       return PRETEX_RESPONSE_CLASS_HI;
+      3:       return PRETEX_BASE_ALPHA_HI;
+      4:       return PRETEX_BASE_RGB_HI;
+      5:       return PRETEX_AUX_SURFACE_CTX_HI;
+      6:       return PRETEX_AUX_REQUIRED_HI;
+      7:       return PRETEX_RECIPE_WEIGHT_HI;
+      8:       return PRETEX_MATERIAL_RECIPE_HI;
+      9:       return PRETEX_LOD_Q4_4_HI;
+      10:      return PRETEX_BASE_BINDING_HI;
+      11:      return PRETEX_SAMPLE_COUNT_HI;
+      12:      return PRETEX_V_OVER_W_HI;
+      13:      return PRETEX_U_OVER_W_HI;
+      14:      return PRETEX_DETAIL_REQUIRED_HI;
+      15:      return PRETEX_STENCIL_REFERENCE_HI;
+      16:      return PRETEX_EFFECT_TAG_HI;
+      17:      return PRETEX_VERTEX_ALPHA_HI;
+      18:      return PRETEX_VERTEX_RGB_HI;
+      19:      return PRETEX_SOURCE_ID_HI;
+      20:      return PRETEX_FRAGMENT_STATE_HI;
+      21:      return PRETEX_INVW24_HI;
+      22:      return PRETEX_IN_TILE_ADDR_HI;
+      default: return RASTER_PRETEX_W;
+    endcase
+  endfunction
+
+  // `fault_field` is 1-based and 0 means "no fault"; `fault_delta` displaces
+  // that field's LO and HI together.  That is the exact shape of the real
+  // defect -- a field that moved in one record and not in the other -- so the
+  // positive control exercises the fault class that actually occurred.
+  function automatic bit pretex_fields_tile(input int unsigned fault_field,
+                                            input int fault_delta);
+    int prev_hi;
+    int lo;
+    int hi;
+    bit ok;
+    ok = 1'b1;
+    prev_hi = -1;
+    for (int unsigned idx = 0; idx < PRETEX_FIELD_COUNT; idx++) begin
+      lo = int'(pretex_field_lo(idx));
+      hi = int'(pretex_field_hi(idx));
+      if ((fault_field != 0) && (idx == (fault_field - 1))) begin
+        lo = lo + fault_delta;
+        hi = hi + fault_delta;
+      end
+      if (lo != (prev_hi + 1)) ok = 1'b0;  // a HOLE or an OVERLAP at this seam
+      if (hi < lo)             ok = 1'b0;  // an empty or inverted field
+      prev_hi = hi;
+    end
+    // The top field must end ON the last bit: one short is a hole nothing else
+    // can see, one over runs off the record.
+    if (prev_hi != (int'(RASTER_PRETEX_W) - 1)) ok = 1'b0;
+    return ok;
+  endfunction
+
+  localparam bit PRETEX_FIELDS_TILE_OK = pretex_fields_tile(0, 0);
+
+  localparam bit PRETEX_CROSS_RECORD_OK =
+      // The payload's low half IS the texture request, at offset zero.
+      (PRETEX_PALETTE_GENERATION_LO == TEXREQ_PALETTE_GENERATION_LO) &&
+      (PRETEX_PALETTE_GENERATION_HI == TEXREQ_PALETTE_GENERATION_HI) &&
+      (PRETEX_PALETTE_SLOT_LO == TEXREQ_PALETTE_SLOT_LO) &&
+      (PRETEX_PALETTE_SLOT_HI == TEXREQ_PALETTE_SLOT_HI) &&
+      (PRETEX_RESPONSE_CLASS_LO == TEXREQ_RESPONSE_CLASS_LO) &&
+      (PRETEX_RESPONSE_CLASS_HI == TEXREQ_RESPONSE_CLASS_HI) &&
+      (PRETEX_BASE_ALPHA_LO == TEXREQ_BASE_ALPHA_LO) &&
+      (PRETEX_BASE_ALPHA_HI == TEXREQ_BASE_ALPHA_HI) &&
+      (PRETEX_BASE_RGB_LO == TEXREQ_BASE_RGB_LO) &&
+      (PRETEX_BASE_RGB_HI == TEXREQ_BASE_RGB_HI) &&
+      (PRETEX_AUX_SURFACE_CTX_LO == TEXREQ_AUX_SURFACE_CTX_LO) &&
+      (PRETEX_AUX_SURFACE_CTX_HI == TEXREQ_AUX_SURFACE_CTX_HI) &&
+      (PRETEX_AUX_REQUIRED_LO == TEXREQ_AUX_REQUIRED_LO) &&
+      (PRETEX_AUX_REQUIRED_HI == TEXREQ_AUX_REQUIRED_HI) &&
+      (PRETEX_RECIPE_WEIGHT_LO == TEXREQ_RECIPE_WEIGHT_LO) &&
+      (PRETEX_RECIPE_WEIGHT_HI == TEXREQ_RECIPE_WEIGHT_HI) &&
+      (PRETEX_MATERIAL_RECIPE_LO == TEXREQ_MATERIAL_RECIPE_LO) &&
+      (PRETEX_MATERIAL_RECIPE_HI == TEXREQ_MATERIAL_RECIPE_HI) &&
+      (PRETEX_LOD_Q4_4_LO == TEXREQ_LOD_Q4_4_LO) &&
+      (PRETEX_LOD_Q4_4_HI == TEXREQ_LOD_Q4_4_HI) &&
+      (PRETEX_BASE_BINDING_LO == TEXREQ_BASE_BINDING_LO) &&
+      (PRETEX_BASE_BINDING_HI == TEXREQ_BASE_BINDING_HI) &&
+      (PRETEX_SAMPLE_COUNT_LO == TEXREQ_SAMPLE_COUNT_LO) &&
+      (PRETEX_SAMPLE_COUNT_HI == TEXREQ_SAMPLE_COUNT_HI) &&
+      (PRETEX_V_OVER_W_LO == TEXREQ_V_OVER_W_LO) &&
+      (PRETEX_V_OVER_W_HI == TEXREQ_V_OVER_W_HI) &&
+      (PRETEX_U_OVER_W_LO == TEXREQ_U_OVER_W_LO) &&
+      (PRETEX_U_OVER_W_HI == TEXREQ_U_OVER_W_HI) &&
+      (PRETEX_DETAIL_REQUIRED_LO == TEXREQ_DETAIL_REQUIRED_LO) &&
+      (PRETEX_DETAIL_REQUIRED_HI == TEXREQ_DETAIL_REQUIRED_HI) &&
+      // The same fields seen from the Early-Z payload record.
+      (PRETEX_DETAIL_REQUIRED_LO == EZPAY_DETAIL_REQUIRED_LO) &&
+      (PRETEX_DETAIL_REQUIRED_HI == EZPAY_DETAIL_REQUIRED_HI) &&
+      (PRETEX_STENCIL_REFERENCE_LO == EZPAY_STENCIL_REFERENCE_LO) &&
+      (PRETEX_STENCIL_REFERENCE_HI == EZPAY_STENCIL_REFERENCE_HI) &&
+      (PRETEX_EFFECT_TAG_LO == EZPAY_EFFECT_TAG_LO) &&
+      (PRETEX_EFFECT_TAG_HI == EZPAY_EFFECT_TAG_HI) &&
+      (PRETEX_VERTEX_ALPHA_LO == EZPAY_VERTEX_ALPHA_LO) &&
+      (PRETEX_VERTEX_ALPHA_HI == EZPAY_VERTEX_ALPHA_HI) &&
+      (PRETEX_VERTEX_RGB_LO == EZPAY_VERTEX_RGB_LO) &&
+      (PRETEX_VERTEX_RGB_HI == EZPAY_VERTEX_RGB_HI) &&
+      // The key IS the Early-Z key record, lifted to its base here.
+      (PRETEX_SOURCE_ID_LO == (PRETEX_EARLYZ_KEY_LO + EARLYZ_SOURCE_ID_LO)) &&
+      (PRETEX_SOURCE_ID_HI == (PRETEX_EARLYZ_KEY_LO + EARLYZ_SOURCE_ID_HI)) &&
+      (PRETEX_FRAGMENT_STATE_LO == (PRETEX_EARLYZ_KEY_LO + EARLYZ_FRAGMENT_STATE_LO)) &&
+      (PRETEX_FRAGMENT_STATE_HI == (PRETEX_EARLYZ_KEY_LO + EARLYZ_FRAGMENT_STATE_HI)) &&
+      (PRETEX_INVW24_LO == (PRETEX_EARLYZ_KEY_LO + EARLYZ_INVW24_LO)) &&
+      (PRETEX_INVW24_HI == (PRETEX_EARLYZ_KEY_LO + EARLYZ_INVW24_HI)) &&
+      (PRETEX_IN_TILE_ADDR_LO == (PRETEX_EARLYZ_KEY_LO + EARLYZ_IN_TILE_ADDR_LO)) &&
+      (PRETEX_IN_TILE_ADDR_HI == (PRETEX_EARLYZ_KEY_LO + EARLYZ_IN_TILE_ADDR_HI)) &&
+      // Every GROUP span brackets exactly the fields it claims, and is
+      // exactly as wide as the declaration whose bits it describes.
+      (PRETEX_EARLYZ_PAYLOAD_LO == PRETEX_PALETTE_GENERATION_LO) &&
+      (PRETEX_EARLYZ_PAYLOAD_HI == PRETEX_VERTEX_RGB_HI) &&
+      ((PRETEX_EARLYZ_PAYLOAD_HI - PRETEX_EARLYZ_PAYLOAD_LO + 1) ==
+       RASTER_EARLYZ_PAYLOAD_W) &&
+      (PRETEX_EARLYZ_KEY_LO == (PRETEX_EARLYZ_PAYLOAD_HI + 1)) &&
+      (PRETEX_EARLYZ_KEY_LO == PRETEX_SOURCE_ID_LO) &&
+      (PRETEX_EARLYZ_KEY_HI == PRETEX_IN_TILE_ADDR_HI) &&
+      ((PRETEX_EARLYZ_KEY_HI - PRETEX_EARLYZ_KEY_LO + 1) == RASTER_EARLYZ_KEY_W) &&
+      (PRETEX_CONTINUATION_LO == PRETEX_STENCIL_REFERENCE_LO) &&
+      (PRETEX_CONTINUATION_HI == PRETEX_EARLYZ_KEY_HI) &&
+      ((PRETEX_CONTINUATION_HI - PRETEX_CONTINUATION_LO + 1) ==
+       RASTER_CONTINUATION_W) &&
+      (PRETEX_TEXTURE_REQUEST_LO == PRETEX_PALETTE_GENERATION_LO) &&
+      (PRETEX_TEXTURE_REQUEST_HI == PRETEX_DETAIL_REQUIRED_HI) &&
+      ((PRETEX_TEXTURE_REQUEST_HI - PRETEX_TEXTURE_REQUEST_LO + 1) ==
+       TEXTURE_V3_REQUEST_W) &&
+      ((PRETEX_VERTEX_RGB_HI - PRETEX_STENCIL_REFERENCE_LO + 1) ==
+       RASTER_CONTINUATION_TAIL_W) &&
+      // The request's declared width INCLUDES its new top bit.  Omitting this
+      // is what let the fixture keep an independently built 362-bit expectation
+      // against a 363-bit declaration.
+      ((PRETEX_DETAIL_REQUIRED_HI - PRETEX_TEXTURE_REQUEST_LO + 1) ==
+       TEXTURE_V3_REQUEST_W);
+
 endpackage : zhao_render_texture_pkg
 
 // Static/runtime instrument for the package itself.  It is deliberately
@@ -667,6 +899,10 @@ module zhao_render_texture_layout_guard #(
       zhao_render_texture_pkg::EZPAY_OFFSET_CONTRACT_OK,
   parameter bit PRETEX_OFFSET_CONTRACT_OK_P =
       zhao_render_texture_pkg::PRETEX_OFFSET_CONTRACT_OK,
+  parameter bit PRETEX_FIELDS_TILE_OK_P =
+      zhao_render_texture_pkg::PRETEX_FIELDS_TILE_OK,
+  parameter bit PRETEX_CROSS_RECORD_OK_P =
+      zhao_render_texture_pkg::PRETEX_CROSS_RECORD_OK,
   parameter bit RETIRE_OFFSET_CONTRACT_OK_P =
       zhao_render_texture_pkg::RETIRE_OFFSET_CONTRACT_OK,
   parameter bit RESULT_OFFSET_CONTRACT_OK_P =
@@ -707,6 +943,10 @@ module zhao_render_texture_layout_guard #(
       $fatal(1, "ZHAO_RENDER_TEXTURE_CONTRACT_FIRE[6]: EZPAY_OFFSET_CONTRACT");
     if (!PRETEX_OFFSET_CONTRACT_OK_P)
       $fatal(1, "ZHAO_RENDER_TEXTURE_CONTRACT_FIRE[7]: PRETEX_OFFSET_CONTRACT");
+    if (!PRETEX_FIELDS_TILE_OK_P)
+      $fatal(1, "ZHAO_RENDER_TEXTURE_CONTRACT_FIRE[17]: PRETEX_FIELDS_TILE");
+    if (!PRETEX_CROSS_RECORD_OK_P)
+      $fatal(1, "ZHAO_RENDER_TEXTURE_CONTRACT_FIRE[18]: PRETEX_CROSS_RECORD");
     if (!RETIRE_OFFSET_CONTRACT_OK_P)
       $fatal(1, "ZHAO_RENDER_TEXTURE_CONTRACT_FIRE[8]: RETIRE_OFFSET_CONTRACT");
     if (!RESULT_OFFSET_CONTRACT_OK_P)
@@ -743,6 +983,7 @@ module zhao_render_texture_layout_guard #(
   logic [MAX_LAYOUT_W-1:0] expected;
   integer field_span_control;
   integer field_span_call_index;
+  integer tiling_refusals;
   zhao_raster_earlyz_key_v2_t earlyz;
   zhao_raster_continuation_tail_v2_t tail;
   zhao_raster_continuation_v2_t continuation;
@@ -780,7 +1021,7 @@ module zhao_render_texture_layout_guard #(
     field_span_control = 0;
     field_span_call_index = 0;
     if ($value$plusargs("FIELD_SPAN_CONTROL=%d", field_span_control)) begin
-      if ((field_span_control < 1) || (field_span_control > 45))
+      if ((field_span_control < 1) || (field_span_control > 46))
         $fatal(1, "invalid FIELD_SPAN_CONTROL=%0d", field_span_control);
     end
 
@@ -899,6 +1140,14 @@ module zhao_render_texture_layout_guard #(
     if (aux.env_z0 >= 0) $fatal(1, "render-texture aux.env_z0 lost signed type");
     aux.env_z1 = 32'sh8000_0000;
     if (aux.env_z1 >= 0) $fatal(1, "render-texture aux.env_z1 lost signed type");
+    // ADDED 2026-09-27 (REDFIX).  `detail_required` was the bit `ceba0bfe`
+    // added, and it was the ONLY request field with no span probe -- so the one
+    // field whose offsets had just moved was the one field nothing tied to its
+    // declaration.  That is the gap through which the whole desync walked.
+    request = '0; request.detail_required = 1'b1;
+    observed = '0; observed[TEXTURE_V3_REQUEST_W-1:0] = request;
+    expect_span("request.detail_required", observed,
+                TEXREQ_DETAIL_REQUIRED_LO, TEXREQ_DETAIL_REQUIRED_HI);
     request = '0; request.u_over_w = 32'sh8000_0000;
     if (request.u_over_w >= 0) $fatal(1, "render-texture request.u_over_w lost signed type");
     request.v_over_w = 32'sh8000_0000;
@@ -947,13 +1196,39 @@ module zhao_render_texture_layout_guard #(
     observed = '0; observed[TEXTURE_RESULT_W-1:0] = result;
     expect_span("result.status", observed, TEXTURE_RESULT_STATUS_LO, TEXTURE_RESULT_STATUS_HI);
 
-    if (field_span_call_index != 45)
-      $fatal(1, "render-texture field-span census expected 45, found %0d",
+    if (field_span_call_index != 46)
+      $fatal(1, "render-texture field-span census expected 46, found %0d",
              field_span_call_index);
     if (field_span_control != 0)
       $fatal(1, "ZHAO_RENDER_TEXTURE_FIELD_SPAN_ESCAPED[%0d]",
              field_span_control);
-    $display("ZHAO_RENDER_TEXTURE_LAYOUT_GUARD_OK field_spans=45");
+
+    // ---- THE TILING CHECK, SEEN TO FIRE, 46 TIMES, ON EVERY RUN ------------
+    // A detector that has not been shown to FIRE has not been tested, and the
+    // check this one stands beside is a live example of exactly that.  So do
+    // not argue that it can fire: displace every field by one bit in each
+    // direction and require it to refuse all 46 arrangements.  The plain run
+    // carries this, so no plusarg and no separate control build can rot.
+    tiling_refusals = 0;
+    for (int unsigned faulted = 1; faulted <= PRETEX_FIELD_COUNT; faulted++) begin
+      if (pretex_fields_tile(faulted, 1) !== 1'b0)
+        $fatal(1, "PRETEX tiling accepted field %0d displaced by +1", faulted);
+      tiling_refusals = tiling_refusals + 1;
+      if (pretex_fields_tile(faulted, -1) !== 1'b0)
+        $fatal(1, "PRETEX tiling accepted field %0d displaced by -1", faulted);
+      tiling_refusals = tiling_refusals + 1;
+    end
+    if (tiling_refusals != (2 * int'(PRETEX_FIELD_COUNT)))
+      $fatal(1, "PRETEX tiling control ran %0d of %0d", tiling_refusals,
+             2 * int'(PRETEX_FIELD_COUNT));
+    // ANTI-VACUITY.  A refusal count of 46 is also what a function that always
+    // returns zero would produce, so require the DECLARED layout to be accepted
+    // by the same function in the same run.
+    if (pretex_fields_tile(0, 0) !== 1'b1)
+      $fatal(1, "PRETEX tiling refused the declared layout");
+
+    $display("ZHAO_RENDER_TEXTURE_LAYOUT_GUARD_OK field_spans=46 tiling_refusals=%0d",
+             tiling_refusals);
   end
   // synthesis translate_on
 
