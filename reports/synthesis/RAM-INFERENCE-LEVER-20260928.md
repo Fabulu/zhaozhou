@@ -149,3 +149,60 @@ My first extraction of the address pairs used
 shape. A confident zero from a broken pattern, which is this repository's own
 first law; it was caught only by printing the extracted text instead of the
 count. The numbers above come from a parser that reads the whole bracketed list.
+
+## THE ACTUAL TARGET LIST, BY REGISTERS *OWNED*
+
+Added after the correction above, and this is the section to act on. The
+ranking in "Where to point it first" uses the AGGREGATED register column, which
+charges a parent for storage its children declare -- so it points at wrappers.
+`reg_own` attributes storage to the module whose own body declares it, which is
+the module you would actually edit.
+
+From `@post-palram` (`5CSEBA6U23I7`, A&S 2026-09-26 05:21):
+
+| module | `reg_own` | % of 167,640 sites | `mem` bits |
+|---|---:|---:|---:|
+| `zhao_forge_assemble` | 37,662 | 22.5% | 2,048 |
+| `zhao_field_v3_exec` | 24,795 | 14.8% | 25,344 |
+| `zhao_cmd_exec` | 12,149 | 7.2% | 18,472 |
+| `zhao_geom_lodstate` | 10,009 | 6.0% | **0** |
+| `zhao_project_core` | 6,561 | 3.9% | 3,532 |
+| `zhao_geom_ladderbank` | 5,951 | 3.6% | **0** |
+| `zhao_material_resolve` | 5,207 | 3.1% | 896 |
+| `zhao_field_host_v2` | 5,115 | 3.1% | 85,282 |
+
+**Eight modules own 107,449 registers -- 64% of the device's register sites.**
+The registers are not spread thin; they are concentrated, and that is good news
+for phase 3.
+
+### `zhao_forge_assemble` is the one to look at first, and it is not a wrapper
+
+**37,662 registers owned, 22.5% of the part, against 2,048 memory bits** -- with
+only 14,104 owned ALUTs. It is storage-dominated rather than logic-dominated,
+which is the exact profile the M10K trade exists for.
+
+**And it is NOT a composition artefact**, which was the first thing worth ruling
+out. Its standalone census (`@flop-census-20260926`, same device) reads 15,648
+ALUTs / **39,167 registers** / 2,198 memory bits, against the console's 15,970 /
+39,023 / 2,048. Identical within noise, so the storage is intrinsic to the block
+and can be worked on standalone -- no console fit needed to evaluate a change,
+which matters when the console cannot place at all.
+
+Its named subtrees account for barely 1,400 of those registers
+(`zhao_raster_rcp24_v4` 1,045, `zhao_geom_depthquant_stream` 384), so **~37,700
+sit directly in `zhao_forge_assemble`'s own body.**
+
+One thing already known about it, and it cuts against a quick win: its flagged
+arrays (`dqf_slot_q`, `dqf_prof_q`, `dqf_w_q`) are *"read at MODULE SCOPE through
+a dynamic index `dqf_rp_q`"* -- a continuous assignment, which is combinational.
+That is a DIFFERENT blocker from the init-loop shape this note opened with, and
+a harder one: a combinational read through a dynamic index forces a per-bit mux
+the width of the array, and a memory cannot serve it without a registered read
+port. **So the repair is a pipeline change, not a declaration change**, and it
+needs the block's throughput contract read first.
+
+Note also that `dqf_slot_q` DID infer standalone -- the census shows
+`altsyncram:dqf_slot_q_rtl_0` holding 640 bits -- so part of the array is
+already memory and the flop count is the rest. Do not assume the whole 37,662 is
+addressable.
+
