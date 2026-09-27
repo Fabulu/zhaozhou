@@ -10165,6 +10165,38 @@ set_tests_properties(terrain_matjoin_directed PROPERTIES LABELS "fast;nightly" T
 # one in a fresh worktree verilates the whole suite, and both of this entry's
 # previous packets ended up quoting their directed tests as "not run" for
 # exactly that reason.
+# ---- THE WALKED MATSTATE'S HOLD (TAGPHASE, 2026-09-27) ---------------------
+# The DUT is the TOP here. Unlike TERRAIN.COMPOSED_MATERIAL's publisher this
+# block has FLAT PORTS ONLY -- no packed struct anywhere on its boundary -- so
+# there is nothing for a wrapper to unpack, and a wrapper would only add a
+# second place for a hand-counted bit offset to be wrong.
+#
+# There is also `tests/common/run_walk_meta_hold_directed.ps1`, which builds and
+# runs this WITHOUT a CMake tree, for the reason the matpub entry below gives:
+# configuring one in a fresh worktree verilates the whole suite, and four
+# packets on entry I34 in a row quoted their directed tests as "not run".
+add_executable(test_walk_meta_hold_directed common/walk_meta_hold_directed.cpp)
+target_link_libraries(test_walk_meta_hold_directed PRIVATE zhao_harness)
+target_include_directories(test_walk_meta_hold_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/common)
+verilate(test_walk_meta_hold_directed
+  PREFIX Vzhao_walk_meta_hold
+  TOP_MODULE zhao_walk_meta_hold
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_walk_meta_hold.sv)
+add_test(NAME walk_meta_hold_directed COMMAND test_walk_meta_hold_directed)
+set_tests_properties(walk_meta_hold_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# -Wall EXPLICITLY and with no waiver file, for the reason the matpub lint
+# below gives: `tests/shell/v3_closure_inherited.vlt` waives UNUSEDSIGNAL across
+# whole directories INCLUDING `fpga/rtl/common`, which is where this block
+# lives -- so a dead wire in it would raise nothing inside the console closure.
+# This lint is the one place it is held to the bare standard.
+add_test(NAME lint_walk_meta_hold
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_walk_meta_hold
+                 "${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_walk_meta_hold.sv")
+set_tests_properties(lint_walk_meta_hold PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_executable(test_terrain_matpub_directed terrain/terrain_matpub_directed.cpp)
 target_link_libraries(test_terrain_matpub_directed PRIVATE zhao_harness)
 target_include_directories(test_terrain_matpub_directed PRIVATE

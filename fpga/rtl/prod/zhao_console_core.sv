@@ -13767,6 +13767,19 @@ module zhao_console_core
   output logic [31:0] geom_tw_stall_o,
   output logic [31:0] geom_tw_overlap_o,
   output logic [31:0] geom_tw_door_o,
+  // ---- THE WALKED MATSTATE'S HOLD (TAGPHASE, 2026-09-27) -----------------
+  // `zhao_walk_meta_hold`'s two interlock counters, at the boundary for the
+  // same reason `geom_tw_door_o` is: a guard on a join that was MEASURED
+  // defective is worth reading, and a counter only a hierarchical bench probe
+  // can reach is a counter nobody will check again.
+  //
+  // Both are zero on a healthy sweep and BOTH ARE REACHABLE -- unlike
+  // `geom_tw_overlap_o` two lines above, whose guard ANDs `tstate_q != T_TAKE`
+  // with a `t_ready_o` that contains `tstate_q == T_TAKE` and therefore cannot
+  // fire at all. `walk_meta_hold_directed` cases 4 and 5 move these two with
+  // ordinary stimulus, no mutant required.
+  output logic [31:0] geom_wmh_job_unheld_o,
+  output logic [31:0] geom_wmh_overwrite_o,
   // ---- I55's PHASE INTERLOCK (PHASEFIX, 2026-09-27) ----------------------
   // `zhao_post_lease`'s WALK GATE, brought to the boundary for the same
   // reason `geom_tw_door_o` was: the door proved the walk's JOBS arrived, and
@@ -32844,6 +32857,71 @@ module zhao_console_core
       .overlap_o         (geom_tw_overlap_o)
   );
 
+  // =========================================================================
+  // THE WALKED TRIANGLE'S MATERIAL STATE, HELD (TAGPHASE, 2026-09-27)
+  // =========================================================================
+  // MEASURED, not argued. With the publisher armed, the plain console run read
+  // the matstate at 101 job accepts and found:
+  //
+  //   tagphase3 jobs=101 walk_bus_idle=60 ms_invalid=3 ms_zero_sample=5
+  //             ms_nonzero_tag=4
+  //   badjob ordinal=21 valid=0 sampcnt=0 tag=22 fragstate=04c00000 pw_t_valid=0
+  //   badjob ordinal=36 valid=0 sampcnt=0 tag=1d fragstate=04c00000 pw_t_valid=0
+  //
+  // SIXTY OF 101 JOB ACCEPTS HAPPENED WHILE GEOM.PARAMWALK WAS PRESENTING NO
+  // RECORD AT ALL, and the door read its bus anyway. The two `badjob` rows
+  // carry the exact tags (0x22, 0x1d) and the exact fragment state
+  // (0x04c00000) that reached the framebuffer, so the chain is closed end to
+  // end rather than inferred.
+  //
+  // WHY IT HAPPENS. `zhao_geom_bin_pipe_v2`'s `JOB_SRC == 1` door takes the
+  // job's whole 1,877-bit metadata from its own input ports. 2,037 of those
+  // bits are GEOM.SETUP's and GEOM.ATTRPACK's output and are HELD correctly:
+  // on the walk both back ends retire on `tw_be_out_ready_o`, asserted only on
+  // `job_valid_o && job_ready_i`. The remaining 378 -- the flat request, the
+  // continuation tail and the fragment state -- are combinational from
+  // `tri_matstate_c`, hence from `pw_t_matstate_w`, GEOM.PARAMWALK's LIVE
+  // OUTPUT BUS. And `zhao_geom_tilewalk` releases that record in `T_TAKE`,
+  // waits in `T_WAIT`, and only offers the job in `T_JOB`.
+  //
+  // So the door read A's corners, A's planes and B's material state. This
+  // repository's metadata-swap chapter, at this composer's own join.
+  //
+  // THE CAPTURE EDGE IS THE RELEASE EDGE, which is the whole point. The walker's
+  // take is `be_valid_o && be_ready_i`, and its `t_ready_o` is
+  // `(S_RUN) && (T_TAKE) && be_ready_i` -- the same two state terms -- so
+  // `tw_be_valid_w && st_tri_ready_w && ap_tri_ready_w` IS the clock on which
+  // the paramwalk's record is consumed. Capturing on any other edge would hold
+  // a record the walk had already moved past, which is the defect wearing a
+  // register.
+  //
+  // ONE ENTRY, because the walker's handshake is SERIAL: one record taken,
+  // handed over, and its job offered, before the next can be taken. If that
+  // ever stops being true, `geom_wmh_overwrite_o` says so -- from the
+  // CONSUMER's side, where no producer term can cancel it.
+  wire [ZHAO_TD_MATSTATE_W-1:0] wmh_matstate_w;
+  wire [17:0]                   wmh_arena_id_w;
+  wire                          wmh_valid_w;
+  wire unused_wmh_valid_c = &{1'b0, wmh_valid_w};
+
+  zhao_walk_meta_hold #(
+      .MSW(ZHAO_TD_MATSTATE_W),
+      .IDW(18)
+  ) u_walk_meta_hold (
+      .clk    (gpu_clk),
+      .rst_n  (rst_n),
+      .active_i(tw_active_w),
+      .cap_fire_i    (tw_be_valid_w && st_tri_ready_w && ap_tri_ready_w),
+      .cap_matstate_i(pw_t_matstate_w),
+      .cap_arena_id_i(pw_t_arena_id_w),
+      .job_fire_i    (tw_job_valid_w && shell_walk_job_ready_w),
+      .held_matstate_o(wmh_matstate_w),
+      .held_arena_id_o(wmh_arena_id_w),
+      .held_valid_o   (wmh_valid_w),
+      .err_job_unheld_o(geom_wmh_job_unheld_o),
+      .err_overwrite_o (geom_wmh_overwrite_o)
+  );
+
   // ---- MEASURE.SEALPLAN: the producer of the seal (entry I56) -------------
   // The frame generation counter that used to sit here is INSIDE this block
   // now, advancing on the same condition it always did (an accepted seal). It
@@ -34153,8 +34231,17 @@ module zhao_console_core
   // different condition from the record it belongs to is this repository's own
   // metadata-swap defect, and it is not one here.
   wire [ZHAO_TD_MATSTATE_W-1:0] tri_matstate_c =
-      tw_active_w ? pw_t_matstate_w : door_matstate_c;
-  wire [17:0] tri_arena_id_c = tw_active_w ? pw_t_arena_id_w : tidq_id_w;
+      tw_active_w ? wmh_matstate_w : door_matstate_c;
+  wire [17:0] tri_arena_id_c = tw_active_w ? wmh_arena_id_w : tidq_id_w;
+  // THE WALK ARM READS THE HELD RECORD, NOT THE BUS (TAGPHASE, 2026-09-27).
+  // It used to read `pw_t_matstate_w` / `pw_t_arena_id_w` directly, and that is
+  // the defect: GEOM.PARAMWALK's bus is released in the walker's `T_TAKE` and
+  // the job is not offered until `T_JOB`. `u_walk_meta_hold` above captures on
+  // the release edge and holds until the job, which is exactly the discipline
+  // GEOM.SETUP and GEOM.ATTRPACK already give the other 2,037 bits. The LIVE
+  // arm is untouched, and the round-trip assertions below are guarded by
+  // `!tw_active_w`, so they still describe the composition they were written
+  // for.
 
   wire [297:0] tri_flat_request_c      = zhao_ms_flat_request(tri_matstate_c);
   wire [ 31:0] tri_fragment_state_c    = zhao_ms_frag_state  (tri_matstate_c);

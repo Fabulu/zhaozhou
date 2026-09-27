@@ -3609,6 +3609,15 @@ targets:
       - fpga/rtl/compositor/zhao_post_fbread.sv
       - fpga/rtl/compositor/zhao_post_echo.sv
       - fpga/rtl/compositor/zhao_post_lease.sv
+      # THE WALKED MATSTATE'S HOLD (entry I34 clause 6, TAGPHASE 2026-09-27).
+      # `zhao_geom_bin_pipe_v2`'s JOB_SRC==1 door read the job's 378 bits of
+      # material state COMBINATIONALLY from GEOM.PARAMWALK's live output bus,
+      # while GEOM.SETUP and GEOM.ATTRPACK hold the other 2,037 until the job
+      # is taken. The walker releases the record in T_TAKE and offers the job
+      # in T_JOB, so the door could read A's corners with B's material state --
+      # measured at 60 of 101 job accepts with the bus presenting nothing at
+      # all. This block captures on the release edge and holds to the job.
+      - fpga/rtl/common/zhao_walk_meta_hold.sv
       - fpga/rtl/compositor/zhao_twod_plane.sv
       - fpga/rtl/compositor/zhao_twod_sprite.sv
       - fpga/rtl/compositor/zhao_twod_sampler.sv

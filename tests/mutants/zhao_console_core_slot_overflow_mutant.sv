@@ -1269,6 +1269,12 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0] geom_tw_stall_o,
   output logic [31:0] geom_tw_overlap_o,
   output logic [31:0] geom_tw_door_o,
+  // TAGPHASE, 2026-09-27: `zhao_walk_meta_hold`'s two interlock counters. This
+  // wrapper is a COPY of the core's port list, so a port added to production
+  // and not added here is a PINMISSING the next fit discovers -- the trap
+  // `tools/budget/mutant_copy_drift.py` exists for.
+  output logic [31:0] geom_wmh_job_unheld_o,
+  output logic [31:0] geom_wmh_overwrite_o,
   // PHASEFIX 2026-09-27: `zhao_post_lease`'s WALK GATE evidence. Declared
   // here because this wrapper binds production by `.*` (R220) and a port it
   // does not declare will not elaborate.
