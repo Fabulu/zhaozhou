@@ -21101,7 +21101,27 @@ module zhao_console_core
   // which holds `cl_o_ready` low and stops the console's geometry dead. Half
   // an arrangement is worse than either whole one, so there is one constant
   // and not two.
+  //
+  // ---- AND IT IS SELECTABLE WITHOUT EDITING THIS FILE (METASIDE) ---------
+  // SWAPCLOSE measured arrangement 1 by hand-editing the literal below and
+  // putting the numbers in its FINDINGS. That is CLAUDE.md's ground-contact
+  // rule exactly: "a probe written once and thrown away leaves unreproducible
+  // numbers." Nobody after it could re-run the arrangement its whole report is
+  // about without knowing to edit one line of a 33,000-line file.
+  //
+  // The SHIPPED value is still 0 and still a named editable constant -- the
+  // define only lets a committed control form select the other arrangement, in
+  // its own build directory, with its own tag. `tests/prod/run_console_core_smoke.ps1
+  // -WalkRaster` is that form. Defining nothing changes nothing.
+  //
+  // THE PARK IS NOT WEAKENED BY THIS. The park is a claim about what the
+  // console SHIPS, and the default below is what it ships. A parked
+  // arrangement nobody can build is not more parked, only less measurable.
+`ifdef ZHAO_CONSOLE_WALK_RASTER
+  localparam int unsigned GEOM_WALK_RASTER = 1;
+`else
   localparam int unsigned GEOM_WALK_RASTER = 0;
+`endif
 
   wire               pw_t_valid_w, pw_t_ready_w, pw_t_illegal_w, pw_t_untex_w;
   wire               pw_t_first_w, pw_t_last_w;

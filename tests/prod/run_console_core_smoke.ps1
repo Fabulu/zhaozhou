@@ -288,6 +288,26 @@ param(
   # Own build directory, own TAG.
   [switch]$NoTerrainMaterial,
   [switch]$GlowTag,
+
+  # ---------------------------------------------------------------------------
+  # -WalkRaster: THE OTHER ARRANGEMENT OF I55's SWAP, BUILDABLE (METASIDE)
+  # ---------------------------------------------------------------------------
+  # `zhao_console_core`'s `GEOM_WALK_RASTER` ships PARKED at 0: the binner's
+  # on-chip drain feeds the raster, which is the complete oracle owner
+  # directive section 7 asks to keep. At 1 the SDRAM walk feeds it, which is
+  # what entry I55 asks for.
+  #
+  # SWAPCLOSE measured arrangement 1 by HAND-EDITING the literal, and its whole
+  # FINDINGS is about numbers nobody else could reproduce without knowing that.
+  # This switch defines `ZHAO_CONSOLE_WALK_RASTER`, which selects 1, in its own
+  # build directory with its own tag.
+  #
+  # POLARITY IS NOT INVERTED AND THIS IS NOT A CONTROL. It is the second
+  # arrangement of a shipped, parked capability, and what it asserts is the
+  # invariant belonging to THAT arrangement -- the sweep runs and completes --
+  # against the plain run's invariant that it is a structural zero. Both are
+  # required before the park may be called honest.
+  [switch]$WalkRaster,
   # ---------------------------------------------------------------------------
   # -LintOnly: THE CHEAP HALF, AND IT BELONGS FIRST (owner ruling R71)
   # ---------------------------------------------------------------------------
@@ -399,6 +419,12 @@ if (-not $BuildIn) {
          # EVERY NEW SWITCH NEEDS A TAG HERE. This one is 2026-09-26's.
          elseif ($NoTerrainMaterial) { 'zhao_console_core_smoke_notermat' }
          elseif ($GlowTag) { 'zhao_console_core_smoke_glow' }
+         # EVERY NEW SWITCH NEEDS A TAG HERE. This one is METASIDE's,
+         # and it matters more than most: this form builds a DIFFERENT
+         # ARRANGEMENT of the console, so sharing the plain run's object
+         # directory would mean the plain gate could run a walk-arranged
+         # binary and report the parked console's numbers.
+         elseif ($WalkRaster) { 'zhao_console_core_smoke_walkras' }
          else { 'zhao_console_core_smoke' }
   # -LintOnly is the one switch that COMBINES with the others, so it appends
   # rather than joining the chain above. Without this it would fall through to
@@ -470,6 +496,10 @@ if ($BadVertex) {
 if ($NoEchoArm) {
   $defs += '+define+ZHAO_SMOKE_NO_ECHO_ARM'
   Write-Host 'NEGATIVE CONTROL: the SetPost leaves POST.ECHO DISARMED (R35); the bench asserts no capture happens'
+}
+if ($WalkRaster) {
+  $defs += '+define+ZHAO_CONSOLE_WALK_RASTER'
+  Write-Host 'I55 ARRANGEMENT 1 (METASIDE): zhao_console_core GEOM_WALK_RASTER = 1 -- the SDRAM walk feeds the raster instead of the binner on-chip drain. DIRECT polarity. This is the SECOND ARRANGEMENT of a shipped parked capability, not a mutant: the plain run asserts the parked structural zero, this one asserts the sweep runs and completes. The console still SHIPS at 0.'
 }
 if ($GlowTag) {
   $defs += '+define+ZHAO_SMOKE_GLOW_TAG'
