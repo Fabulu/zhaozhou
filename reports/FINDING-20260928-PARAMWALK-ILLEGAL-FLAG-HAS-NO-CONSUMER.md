@@ -72,9 +72,30 @@ appear.
 
 ## Related, from the same 27
 
-* **2 × `SIMILARNAME`**, e.g. `mat_base_rgb_c` at `zhao_console_core.sv:33803`
-  — a declaration overlapping another that differs only in case. A genuine
-  hazard rather than a style note, and cheap to check.
+* **2 × `SIMILARNAME` — CHECKED, and it is a real collision.** I wrote above
+  that this was "a genuine hazard rather than a style note, and cheap to
+  check". Checked. `zhao_console_core.sv` declares **both** of these, 78 lines
+  apart, and **both are live**:
+
+  ```systemverilog
+  :33725  localparam logic [23:0] MAT_BASE_RGB_C = 24'hFF_FF_FF;  // white
+  :33803  wire       [23:0] mat_base_rgb_c = zhao_ms_base_rgb(st_mat_token, st_domain);
+  ```
+
+  They differ only in case and they mean **opposite things**: the constant is
+  the unmodulated white PLACEHOLDER (still read at `:33789-33790`), and the
+  wire is the per-triangle value that **superseded** it. A case typo picks the
+  wrong one and compiles silently — the most confusable possible pairing.
+
+  The clash has a nameable cause: this tree uses `_c` for **combinational**, so
+  a `localparam` carrying `_C` breaks that convention *and* lands on the wire's
+  name. Renaming the **constant** (e.g. `MAT_BASE_RGB_WHITE`) fixes the
+  collision and the convention together — three code sites, though several
+  comments reference the old name and want the same pass.
+
+  **Not renamed here.** It is production RTL on the material path, a rename
+  wants the console smoke re-run behind it, and it is latent: no wrong value is
+  produced today.
 * **25 × `UNUSEDSIGNAL`** in total, including `pw_t_v0_w` and `pw_t_v1_w`
   alongside the flag above. Those two are plausibly benign — the walk arm takes
   its vertices through GEOM.FETCHARM rather than from these ports — but they
