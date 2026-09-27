@@ -985,6 +985,32 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_mj_token_refused_o;
   logic [31:0]             terr_mj_held_overrun_o;
 
+  // TERRAIN.COMPOSED_MATERIAL's publisher, composed 2026-09-27 (MATPUB).
+  // `zhao_console_core u_core (.*)` binds by NAME, so these exist because the
+  // core grew them; the ARM below is an input and IS driven.
+  logic                    cfg_terr_matpub_en_i;
+  logic [31:0]             terr_mp_cells_o;
+  logic [31:0]             terr_mp_commits_o;
+  logic [31:0]             terr_mp_published_o;
+  logic [31:0]             terr_mp_skipped_o;
+  logic [31:0]             terr_mp_stranger_o;
+  logic [31:0]             terr_mp_bursts_o;
+  logic [31:0]             terr_mp_denied_o;
+  logic [31:0]             terr_mp_cell_oob_o;
+  logic [31:0]             terr_mp_short_fill_o;
+  logic [31:0]             terr_mp_commit_busy_o;
+  logic                    terr_mp_busy_o;
+
+  // THE PUBLISHER IS ARMED IN EVERY FORM, INCLUDING THE PLAIN RUN, and that is
+  // a deliberate choice rather than a convenience. The console SHIPS with this
+  // client on the terrain build share, so a bench that armed it only in the
+  // field forms would be measuring a different machine from the one that
+  // ships -- and the plain run is this entry's clause-6 evidence, which is
+  // worth nothing if it describes a console with the publisher switched off.
+  // The cost of arming it is therefore visible in the plain run's own numbers,
+  // which is where a cost belongs.
+  assign cfg_terr_matpub_en_i = 1'b1;
+
   // (`terr_dm_*` LEFT THE CORE's EDGE 2026-09-21, core entry I27's first half:
   // `zhao_terrain_pageio` holds the slot, generation and epoch the patch was
   // served under and marks the directory itself.)
@@ -4063,6 +4089,86 @@ module tb_zhao_console_core_smoke
       end
     end
   end
+  // ==========================================================================
+  // MATPUB'S TAG PROBE -- WHICH PIXEL, WHICH TAG BYTE, AND WHERE IT SITS
+  // ==========================================================================
+  // The fragment-tag gate at the bottom of this file reports a DIFFERENCE
+  // ("2815 of 2816 were untagged") and nothing whatever about the offender.
+  // LASTGAP handed the pixel over as an explicit HYPOTHESIS and said plainly it
+  // had not proved it. A hypothesis about ONE pixel is cheap to settle and
+  // expensive to argue, so this records the OFFENDING BEATS THEMSELVES: the tag
+  // byte, the screen position, the tile-local address and the beat's ordinal.
+  //
+  // IT TAPS THE SAME NET THE COUNTER DOES, which is what makes it evidence
+  // about the fragment rather than a second opinion: `zhao_post_gather_tag`
+  // classifies on `f_tag_i[7:6]`, and the core drives that port from
+  // `gth_tag_w`. This probe reads `gth_tag_w`. The two cannot disagree about
+  // what arrived.
+  //
+  // `mpb_tag_nz_q` IS THE ONE THAT SEPARATES TWO STORIES, and it is the reason
+  // the probe counts more than it captures: a tag byte that is nonzero but
+  // whose top two bits are 0b00 is a GLOW tag, counted by the gate as
+  // below-knee or lit and not as an offence. Counting "nonzero at all" beside
+  // "reserved" says whether the stream carries one stray byte or a population
+  // of them of which one crossed a threshold. Those need different repairs and
+  // the difference counter alone cannot tell them apart.
+  localparam int MPB_TAGCAP_N = 8;
+  logic [7:0]         mpb_tag_q    [MPB_TAGCAP_N];
+  logic signed [11:0] mpb_tag_x_q  [MPB_TAGCAP_N];
+  logic signed [11:0] mpb_tag_y_q  [MPB_TAGCAP_N];
+  logic [7:0]         mpb_tag_ad_q [MPB_TAGCAP_N];
+  int unsigned        mpb_tag_ix_q [MPB_TAGCAP_N];
+  // THE FRAGMENT'S OWN COLOUR, captured beside its tag. It separates two
+  // stories the tag alone cannot: a pixel whose TAG is wrong while its colour
+  // is right is a tail/continuation fault, and a pixel whose colour is wrong
+  // too is a fragment that was never properly formed. The plain run carries
+  // ZERO tagged beats, so whatever these are, they arrive with the staging.
+  logic [15:0]        mpb_tag_rgb_q[MPB_TAGCAP_N];
+  int unsigned        mpb_tag_n_q;    // offending beats seen (may exceed capture)
+  int unsigned        mpb_gth_n_q;    // gather beats seen; the ordinal source
+  int unsigned        mpb_tag_nz_q;   // beats whose tag byte is nonzero AT ALL
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      mpb_tag_n_q  <= 0;
+      mpb_gth_n_q  <= 0;
+      mpb_tag_nz_q <= 0;
+    end else if (`PC_CORE.gth_valid_w) begin
+      mpb_gth_n_q <= mpb_gth_n_q + 1;
+      if (`PC_CORE.gth_tag_w[7:6] != 2'b00) mpb_tag_nz_q <= mpb_tag_nz_q + 1;
+      // CAPTURE ON *ANY* NONZERO TAG BYTE, NOT ON THE GATE'S PREDICATE.
+      // MATPUB, first probe pass: `-FieldActive` and `-FieldUncovered` BOTH
+      // report two beats with a nonzero tag byte, and they differ only in
+      // whether one of the two reaches a reserved CHANNEL. So the gate's
+      // predicate (`[7:6] != 0`) is NOT the population of interest -- capturing
+      // on it showed the one offender and hid the one that has been there all
+      // along. `mpb_tag_nz_q` now counts the gate's predicate and the CAPTURE
+      // takes the wider set, which is the way round that lets the two forms be
+      // differenced against each other and against the plain run.
+      if (`PC_CORE.gth_tag_w != 8'd0) begin
+        if (mpb_tag_n_q < MPB_TAGCAP_N) begin
+          mpb_tag_q   [mpb_tag_n_q] <= `PC_CORE.gth_tag_w;
+          mpb_tag_x_q [mpb_tag_n_q] <= `PC_CORE.gth_x_w;
+          mpb_tag_y_q [mpb_tag_n_q] <= `PC_CORE.gth_y_w;
+          mpb_tag_ad_q[mpb_tag_n_q] <= `PC_CORE.gth_addr_w;
+          mpb_tag_ix_q[mpb_tag_n_q] <= mpb_gth_n_q;
+          mpb_tag_rgb_q[mpb_tag_n_q] <= `PC_CORE.gth_rgb565_w;
+        end
+        mpb_tag_n_q <= mpb_tag_n_q + 1;
+      end
+    end
+  end
+
+  // MATPUB'S QUIESCENCE CONTROL, and it is a CONTROL rather than a cure.
+  // The sample law's `$fatal` asserts a DIAGNOSIS -- "the difference is a
+  // producer publishing sample_count = 0" -- and that is an interpretation of
+  // the difference, not the only mechanism that can produce one. A counter pair
+  // read while beats are still in flight produces the same shortfall with no
+  // defect behind it. These hold the two counts taken BEFORE an idle span so
+  // the same two can be printed after it; if they move, the bench was reading a
+  // machine that had not finished, and if they do not, the shortfall is real
+  // and the gate's prose is describing it correctly.
+  int unsigned mpb_q_frag_b, mpb_q_samp_b, mpb_q_gfrag_b, mpb_q_unt_b, mpb_q_res_b;
+
   // ---- THE MATERIAL RESOLVE, OBSERVED (entry I49, CLOSED 2026-09-20) -------
   // The bench no longer issues the request. `u_material_window` does, from the
   // triangle's own {material_set, material_id, semantic weight} -- the DRAW's
@@ -10239,6 +10345,115 @@ module tb_zhao_console_core_smoke
              gather_fragments_o, gather_frag_untagged_o, gather_frag_below_knee_o,
              gather_frag_lit_o, gather_reserved_channel_o);
 
+    // ---- MATPUB: WHICH PIXEL, AND IS EITHER SYMPTOM A QUIESCENCE ARTEFACT --
+    // Both displays sit ABOVE the fragment-tag gate and above the sample gate,
+    // which is where the run actually stops. That position is checked against
+    // the gate that FIRES rather than the one I had in mind -- LASTGAP paid a
+    // full console build to learn that distinction and wrote it down.
+    $display("SMOKE: early-diag tagprobe gather_beats=%0d reserved_beats=%0d tagged_beats=%0d",
+             mpb_gth_n_q, mpb_tag_nz_q, mpb_tag_n_q);
+    for (int t = 0; t < MPB_TAGCAP_N; t++)
+      if (t < int'(mpb_tag_n_q))
+        $display("SMOKE: early-diag tagprobe[%0d] tag=%02h ch=%0d strength=%0d x=%0d y=%0d tileaddr=%02h (row=%0d col=%0d) beat=%0d rgb565=%04h",
+                 t, mpb_tag_q[t], mpb_tag_q[t][7:6], mpb_tag_q[t][5:0],
+                 mpb_tag_x_q[t], mpb_tag_y_q[t], mpb_tag_ad_q[t],
+                 mpb_tag_ad_q[t][7:4], mpb_tag_ad_q[t][3:0], mpb_tag_ix_q[t],
+                 mpb_tag_rgb_q[t]);
+
+    // ---- TERRAIN.COMPOSED_MATERIAL's publisher, MATPUB 2026-09-27 ----------
+    // Hoisted here with the rest: this is ABOVE both the fragment-tag gate and
+    // the sample gate, so the publisher's census survives a run that stops on
+    // either of them. A publisher whose numbers only print in a passing run
+    // cannot be read in the run that needs reading.
+    $display("SMOKE: early-diag matpub cells=%0d commits=%0d published=%0d skipped=%0d stranger=%0d bursts=%0d denied=%0d oob=%0d short=%0d commit_busy=%0d busy=%0d",
+             terr_mp_cells_o, terr_mp_commits_o, terr_mp_published_o,
+             terr_mp_skipped_o, terr_mp_stranger_o, terr_mp_bursts_o,
+             terr_mp_denied_o, terr_mp_cell_oob_o, terr_mp_short_fill_o,
+             terr_mp_commit_busy_o, terr_mp_busy_o);
+
+    // ======================================================================
+    // I34 ACCEPTANCE CLAUSES 3 AND 4, AT THE CONSUMER -- HOISTED HERE SO THEY
+    // ACTUALLY EXECUTE (MATPUB, 2026-09-27).
+    // ======================================================================
+    // MATFIELD wrote these and they had never run. LASTGAP measured their
+    // numbers, printed them above the gate, and refused to claim they passed.
+    // This is where they execute: ABOVE the fragment-tag gate and ABOVE the
+    // sample gate, which are the two that stop the positive form.
+    //
+    // THE TWO-SIDED PROPERTY IS PRESERVED, and it is the thing that makes this
+    // evidence rather than two numbers. The SAME instrument -- the tile index
+    // recovered by subtraction from the ADDRESS the texture island issued on
+    // its fill requests -- is asserted in OPPOSITE directions: strictly ABOVE
+    // the authored range in the covered form, and at-or-below it in the
+    // uncovered form and in every no-field form. Either arm alone could pass
+    // for a reason that has nothing to do with the field.
+    //
+    // THE GUARDS ARE CARRIED WITH THE ARMS, not left behind. `palette_lookups
+    // != 0` is what means "a terrain fragment actually sampled CLUT" -- gating
+    // on `tsfill_lines_q > 0` bare fails `-TerrainFlatLattice` correctly, and
+    // gating on `mat_win_clut_owned_o` does not work either because the span is
+    // resolved at the door before the clip culls the triangles behind it. And
+    // `tile_max != 0` is the anti-vacuity half: an unwired mosaic reader
+    // displaces by ZERO, so every fill would land in tile 0.
+    if (render_texture_palette_lookups_o != 32'd0) begin
+      if (tsfill_tile_max_q == 32'd0)
+        $fatal(1, "SMOKE: every tileset fill landed in TILE 0 -- the mosaic pick is not reaching the binding resolver's displacement");
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+  `ifdef ZHAO_SMOKE_FIELD_UNCOVERED
+      // CLAUSE 5, AT THIS INSTRUMENT. The capsule installed, the microcode
+      // loaded, the hash committed, the record banked and resolved -- and the
+      // footprint contains no vertex, so every cell must still be AUTHORED.
+      if (tsfill_tile_max_q > 32'(TERR_AUTHORED_TILE_MAX_C))
+        $fatal(1, "SMOKE: -FieldUncovered fetched mosaic tile %0d and the AUTHORED layer-E plane can name at most %0d -- the field covers no vertex in this form, so no field material may reach the mosaic. A tile above the authored range here means coverage is not what gates the material write",
+               tsfill_tile_max_q, 32'(TERR_AUTHORED_TILE_MAX_C));
+      $display("SMOKE: fieldmat CLAUSE 5 EXECUTED tile_max=%0d (authored range tops out at %0d) field_composed=%0d token_refused=%0d",
+               tsfill_tile_max_q, TERR_AUTHORED_TILE_MAX_C,
+               terr_mj_field_composed_o, terr_mj_token_refused_o);
+  `else
+      // CLAUSE 3, POSITIVE. The tile the island fetched is one the authored
+      // plane CANNOT name. Not "differs from 6" -- strictly above the whole
+      // authored range, which is the statement the layouts support.
+      if (tsfill_tile_max_q <= 32'(TERR_AUTHORED_TILE_MAX_C))
+        $fatal(1, "SMOKE: -FieldActive fetched mosaic tile %0d, which is inside the AUTHORED layer-E range (max %0d). The field's material never displaced the pick: either TERRAIN.MATJOIN did not override the authored triple, or the override did not survive to the mosaic. field_composed=%0d token_refused=%0d",
+               tsfill_tile_max_q, TERR_AUTHORED_TILE_MAX_C,
+               terr_mj_field_composed_o, terr_mj_token_refused_o);
+      // CLAUSE 4. And it is not merely "not authored" -- it is EXACTLY one of
+      // the two candidate ids the staged program emits. A stuck bus, a
+      // truncated token or a displaced-by-garbage pick would land somewhere
+      // else and pass the test above.
+      if ((tsfill_tile_max_q != 32'(SFF_MAT_A)) && (tsfill_tile_max_q != 32'(SFF_MAT_B)))
+        $fatal(1, "SMOKE: -FieldActive fetched mosaic tile %0d and the staged field program can only name %0d or %0d -- the word reaching the mosaic is not this field's material",
+               tsfill_tile_max_q, SFF_MAT_A, SFF_MAT_B);
+      $display("SMOKE: fieldmat CLAUSE 3/4 EXECUTED tile_max=%0d tile_or=%0d (field names %0d/%0d, authored range tops out at %0d) field_composed=%0d token_refused=%0d",
+               tsfill_tile_max_q, tsfill_tile_or_q, SFF_MAT_A, SFF_MAT_B,
+               TERR_AUTHORED_TILE_MAX_C, terr_mj_field_composed_o, terr_mj_token_refused_o);
+  `endif
+`else
+      // CLAUSE 6, AT THIS INSTRUMENT. No field is issued in any other form, so
+      // every tile the mosaic fetches must be an authored one. This is the arm
+      // that makes the positive assertion above mean something: it says the
+      // console does not wander above the authored range on its own.
+      if (tsfill_tile_max_q > 32'(TERR_AUTHORED_TILE_MAX_C))
+        $fatal(1, "SMOKE: mosaic tile %0d exceeds the AUTHORED layer-E maximum %0d with NO field issued in this form -- the pick is reading something other than the authored plane",
+               tsfill_tile_max_q, 32'(TERR_AUTHORED_TILE_MAX_C));
+      $display("SMOKE: fieldmat CLAUSE 6 EXECUTED tile_max=%0d (authored range tops out at %0d)",
+               tsfill_tile_max_q, TERR_AUTHORED_TILE_MAX_C);
+`endif
+    end
+
+    mpb_q_frag_b  = render_texture_fragments_o;
+    mpb_q_samp_b  = render_texture_samples_o;
+    mpb_q_gfrag_b = gather_fragments_o;
+    mpb_q_unt_b   = gather_frag_untagged_o;
+    mpb_q_res_b   = gather_reserved_channel_o;
+    repeat (20000) @(posedge gpu_clk);
+    $display("SMOKE: early-diag quiesce after 20000 idle clocks: texture frags %0d -> %0d, samples %0d -> %0d | gather frags %0d -> %0d, untagged %0d -> %0d, reserved %0d -> %0d",
+             mpb_q_frag_b, render_texture_fragments_o,
+             mpb_q_samp_b, render_texture_samples_o,
+             mpb_q_gfrag_b, gather_fragments_o,
+             mpb_q_unt_b, gather_frag_untagged_o,
+             mpb_q_res_b, gather_reserved_channel_o);
+
 `ifdef ZHAO_SMOKE_GLOW_TAG
     // POSITIVE, AND THE EQUALITY IS NOT THE ONE IT LOOKS LIKE IT SHOULD BE.
     // The obvious assertion -- "the tag was on every triangle, so all
@@ -11128,44 +11343,34 @@ module tb_zhao_console_core_smoke
       // construction, and `compiler/tests/material_program.test.ts` fails if a
       // later edit to EITHER side destroys that -- so neither half of this law
       // is a literal somebody copied out of a passing run.
-`ifdef ZHAO_SMOKE_FIELD_ACTIVE
-  `ifdef ZHAO_SMOKE_FIELD_UNCOVERED
-      // CLAUSE 5, AT THIS INSTRUMENT. The capsule installed, the microcode
-      // loaded, the hash committed, the record banked and resolved -- and the
-      // footprint contains no vertex, so every cell must still be AUTHORED.
-      // This is the same number the plain run produces, and it is what makes
-      // the covered form's moved tile attributable to the field.
-      if (tsfill_tile_max_q > 32'(TERR_AUTHORED_TILE_MAX_C))
-        $fatal(1, "SMOKE: -FieldUncovered fetched mosaic tile %0d and the AUTHORED layer-E plane can name at most %0d -- the field covers no vertex in this form, so no field material may reach the mosaic. A tile above the authored range here means coverage is not what gates the material write",
-               tsfill_tile_max_q, 32'(TERR_AUTHORED_TILE_MAX_C));
-  `else
-      // CLAUSE 3, POSITIVE. The tile the island fetched is one the authored
-      // plane CANNOT name. Not "differs from 6" -- strictly above the whole
-      // authored range, which is the statement the layouts support.
-      if (tsfill_tile_max_q <= 32'(TERR_AUTHORED_TILE_MAX_C))
-        $fatal(1, "SMOKE: -FieldActive fetched mosaic tile %0d, which is inside the AUTHORED layer-E range (max %0d). The field's material never displaced the pick: either TERRAIN.MATJOIN did not override the authored triple, or the override did not survive to the mosaic. field_composed=%0d token_refused=%0d",
-               tsfill_tile_max_q, TERR_AUTHORED_TILE_MAX_C,
-               terr_mj_field_composed_o, terr_mj_token_refused_o);
-      // CLAUSE 4. And it is not merely "not authored" -- it is EXACTLY one of
-      // the two candidate ids the staged program emits. A stuck bus, a
-      // truncated token or a displaced-by-garbage pick would land somewhere
-      // else and pass the test above.
-      if ((tsfill_tile_max_q != 32'(SFF_MAT_A)) && (tsfill_tile_max_q != 32'(SFF_MAT_B)))
-        $fatal(1, "SMOKE: -FieldActive fetched mosaic tile %0d and the staged field program can only name %0d or %0d -- the word reaching the mosaic is not this field's material",
-               tsfill_tile_max_q, SFF_MAT_A, SFF_MAT_B);
-      $display("SMOKE: fieldmat CLAUSE 3/4 tile_max=%0d tile_or=%0d (field names %0d/%0d, authored range tops out at %0d) field_composed=%0d token_refused=%0d",
-               tsfill_tile_max_q, tsfill_tile_or_q, SFF_MAT_A, SFF_MAT_B,
-               TERR_AUTHORED_TILE_MAX_C, terr_mj_field_composed_o, terr_mj_token_refused_o);
-  `endif
-`else
-      // CLAUSE 6, AT THIS INSTRUMENT. No field is issued in any other form, so
-      // every tile the mosaic fetches must be an authored one. This is the arm
-      // that makes the positive assertion above mean something: it says the
-      // console does not wander above the authored range on its own.
-      if (tsfill_tile_max_q > 32'(TERR_AUTHORED_TILE_MAX_C))
-        $fatal(1, "SMOKE: mosaic tile %0d exceeds the AUTHORED layer-E maximum %0d with NO field issued in this form -- the pick is reading something other than the authored plane",
-               tsfill_tile_max_q, 32'(TERR_AUTHORED_TILE_MAX_C));
-`endif
+      // ================================================================
+      // THE THREE ARMS OF THAT LAW HAVE MOVED UP, AND THE MOVE IS THE WHOLE
+      // POINT (MATPUB, 2026-09-27).
+      // ================================================================
+      // They are now in the early-diag block, above the fragment-tag gate and
+      // above the sample gate. They are NOT duplicated here: a copied
+      // assertion is two things to keep in step, and this file already
+      // carries a chapter about copies going stale in the flattering
+      // direction.
+      //
+      // WHY THEY MOVED. MATFIELD committed the clause-3 and clause-4 arms and
+      // they had NEVER EXECUTED in any run, in either packet that owned them
+      // -- `-FieldActive` stopped ~780 lines above this point, so the two
+      // assertions that decide the owner's acceptance were dead text.
+      // LASTGAP measured the numbers they assert on, printed them, and
+      // explicitly REFUSED to claim they passed: "a number printed above a
+      // gate is not an assertion executed." That refusal was right, and the
+      // repair for it is to move the assertion, not to quote the number.
+      //
+      // MOVING AN ASSERTION IS ONLY HONEST IF ITS SUBJECT IS ALREADY FINAL,
+      // so that is the thing to check rather than the line number.
+      // `tsfill_tile_max_q`, `tsfill_tile_or_q` and
+      // `render_texture_palette_lookups_o` are all accumulated by the fill
+      // socket during the frame and are complete before ANY of these gates
+      // run -- the early-diag block already printed all three, which is how
+      // LASTGAP could read them there. Nothing between the two sites can
+      // change them. So this is the same assertion on the same values,
+      // executed earlier; it is not a weakened one.
     end else if (tsfill_lines_q != 32'd0) begin
       $fatal(1, "SMOKE: %0d cache fill(s) came out of the TILESET row with NO palette lookup -- a CLUT8 row was sampled without its palette",
              tsfill_lines_q);

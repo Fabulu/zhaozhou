@@ -2630,6 +2630,31 @@ module zhao_console_board
   output logic [31:0]             terr_mj_token_refused_o,
   output logic [31:0]             terr_mj_held_overrun_o,
 
+  // ---- TERRAIN.COMPOSED_MATERIAL's publisher (entry I34) -------------------
+  // The whole census leaves the core rather than a chosen two, and the reason
+  // is this campaign's own: a publisher is a thing that can be BUSY, REFUSED,
+  // SKIPPING or WRITING THE WRONG SLOT, and a single "patches published"
+  // number cannot distinguish any of those from working. `terr_mp_stranger_o`
+  // in particular is the arm that makes a slot's occupant change visible; it
+  // is exported because a counter nobody can read from outside the core is a
+  // counter that can only ever be argued about.
+  //
+  // `cfg_terr_matpub_en_i` IS THE ARM, and it is an INPUT beside them: the
+  // window in MEM.GUARD opens with the block, and this is how a console that
+  // does not want the traffic issues none.
+  input  var logic                cfg_terr_matpub_en_i,
+  output logic [31:0]             terr_mp_cells_o,
+  output logic [31:0]             terr_mp_commits_o,
+  output logic [31:0]             terr_mp_published_o,
+  output logic [31:0]             terr_mp_skipped_o,
+  output logic [31:0]             terr_mp_stranger_o,
+  output logic [31:0]             terr_mp_bursts_o,
+  output logic [31:0]             terr_mp_denied_o,
+  output logic [31:0]             terr_mp_cell_oob_o,
+  output logic [31:0]             terr_mp_short_fill_o,
+  output logic [31:0]             terr_mp_commit_busy_o,
+  output logic                    terr_mp_busy_o,
+
   // ---- TERRAIN PAGING evidence -------------------------------------------
   // Events, never cycles, except where the name says otherwise. These are the
   // instrument that says the spine carried a beat rather than merely
@@ -5575,6 +5600,18 @@ module zhao_console_board
       .terr_mj_field_composed_o           (terr_mj_field_composed_o),
       .terr_mj_token_refused_o            (terr_mj_token_refused_o),
       .terr_mj_held_overrun_o             (terr_mj_held_overrun_o),
+      .cfg_terr_matpub_en_i               (cfg_terr_matpub_en_i),
+      .terr_mp_cells_o                    (terr_mp_cells_o),
+      .terr_mp_commits_o                  (terr_mp_commits_o),
+      .terr_mp_published_o                (terr_mp_published_o),
+      .terr_mp_skipped_o                  (terr_mp_skipped_o),
+      .terr_mp_stranger_o                 (terr_mp_stranger_o),
+      .terr_mp_bursts_o                   (terr_mp_bursts_o),
+      .terr_mp_denied_o                   (terr_mp_denied_o),
+      .terr_mp_cell_oob_o                 (terr_mp_cell_oob_o),
+      .terr_mp_short_fill_o               (terr_mp_short_fill_o),
+      .terr_mp_commit_busy_o              (terr_mp_commit_busy_o),
+      .terr_mp_busy_o                     (terr_mp_busy_o),
       .terr_cmd_sets_accepted_o           (terr_cmd_sets_accepted_o),
       .terr_cmd_sets_refused_o            (terr_cmd_sets_refused_o),
       .terr_cmd_records_emitted_o         (terr_cmd_records_emitted_o),
