@@ -406,32 +406,63 @@ class Harness {
     return 0x00c7u;
   }
 
+// ---- ZHAO_PRETEX_OFFSETS ---------------------------------------------------
+// The absolute bit offsets of `stage_candidate_data_o`'s fields, which is the
+// 491-bit `zhao_raster_pretex_v2_t` record.  THESE WERE FOURTEEN BARE LITERALS
+// SCATTERED THROUGH `check_candidate` UNTIL 2026-09-27 (REDFIX), and that is the
+// whole reason the desync `ceba0bfe` introduced cost a week: the numbers lived
+// here, the layout lived in `fpga/rtl/common/zhao_render_texture_pkg.sv`, and
+// NOTHING RELATED THE TWO.  A literal in a test cannot go stale loudly.
+//
+// `tools/rtl/check_pretex_offsets.py` now reads this block and the package's own
+// `PRETEX_*` constants and fails if they disagree, so the pair has an instrument
+// and the next widening costs a red rather than a week.  Registered as the
+// `pretex_offset_agreement` ctest.  If you move a field, move it in the PACKAGE
+// and re-run that gate; do not edit one side.
+namespace pretex {
+constexpr int kBaseRgb           = 20;
+constexpr int kMaterialRecipe    = 277;
+constexpr int kBaseBinding       = 288;
+constexpr int kSampleCount       = 296;
+constexpr int kVOverW            = 298;
+constexpr int kUOverW            = 330;
+constexpr int kStencilReference  = 363;
+constexpr int kEffectTag         = 371;
+constexpr int kVertexAlpha       = 379;
+constexpr int kVertexRgb         = 387;
+constexpr int kSourceId          = 411;
+constexpr int kFragmentState     = 427;
+constexpr int kInvw24            = 459;
+constexpr int kInTileAddr        = 483;
+}  // namespace pretex
+// ---- end ZHAO_PRETEX_OFFSETS ----------------------------------------------
+
   void check_candidate() {
     require(!expected_candidates.empty(),
             "Packet-C admitted a candidate absent from the zref plane scoreboard");
     const ExpectedCandidate e = expected_candidates.front();
     expected_candidates.pop_front();
-    require(get_bits32(dut->stage_candidate_data_o, 482, 8) == e.addr,
+    require(get_bits32(dut->stage_candidate_data_o, pretex::kInTileAddr, 8) == e.addr,
             "candidate in-tile address differed from EDGEWALK order");
-    require(get_bits32(dut->stage_candidate_data_o, 458, 24) == e.depth,
+    require(get_bits32(dut->stage_candidate_data_o, pretex::kInvw24, 24) == e.depth,
             "candidate invw/depth differed from current-rast plane");
-    require(static_cast<int32_t>(get_bits32(dut->stage_candidate_data_o, 330, 32)) == e.u,
+    require(static_cast<int32_t>(get_bits32(dut->stage_candidate_data_o, pretex::kUOverW, 32)) == e.u,
             "candidate U/W differed from current-rast plane");
-    require(static_cast<int32_t>(get_bits32(dut->stage_candidate_data_o, 298, 32)) == e.v,
+    require(static_cast<int32_t>(get_bits32(dut->stage_candidate_data_o, pretex::kVOverW, 32)) == e.v,
             "candidate V/W differed from current-rast plane");
-    require(get_bits32(dut->stage_candidate_data_o, 426, 32) == e.state,
+    require(get_bits32(dut->stage_candidate_data_o, pretex::kFragmentState, 32) == e.state,
             "candidate fragment state changed across binner/Early-Z");
-    require(get_bits32(dut->stage_candidate_data_o, 410, 16) == e.source,
+    require(get_bits32(dut->stage_candidate_data_o, pretex::kSourceId, 16) == e.source,
             "candidate source identity changed across binner/Early-Z");
-    require(get_bits32(dut->stage_candidate_data_o, 386, 24) == e.mat.vertex_rgb &&
-                get_bits32(dut->stage_candidate_data_o, 378, 8) == e.mat.vertex_alpha &&
-                get_bits32(dut->stage_candidate_data_o, 370, 8) == e.mat.effect_tag &&
-                get_bits32(dut->stage_candidate_data_o, 362, 8) == e.mat.stencil,
+    require(get_bits32(dut->stage_candidate_data_o, pretex::kVertexRgb, 24) == e.mat.vertex_rgb &&
+                get_bits32(dut->stage_candidate_data_o, pretex::kVertexAlpha, 8) == e.mat.vertex_alpha &&
+                get_bits32(dut->stage_candidate_data_o, pretex::kEffectTag, 8) == e.mat.effect_tag &&
+                get_bits32(dut->stage_candidate_data_o, pretex::kStencilReference, 8) == e.mat.stencil,
             "candidate continuation tail changed across binner/Early-Z");
-    require(get_bits32(dut->stage_candidate_data_o, 296, 2) == e.mat.sample_count &&
-                get_bits32(dut->stage_candidate_data_o, 288, 8) == e.mat.binding &&
-                get_bits32(dut->stage_candidate_data_o, 277, 3) == e.mat.recipe &&
-                get_bits32(dut->stage_candidate_data_o, 20, 24) == e.mat.base_rgb,
+    require(get_bits32(dut->stage_candidate_data_o, pretex::kSampleCount, 2) == e.mat.sample_count &&
+                get_bits32(dut->stage_candidate_data_o, pretex::kBaseBinding, 8) == e.mat.binding &&
+                get_bits32(dut->stage_candidate_data_o, pretex::kMaterialRecipe, 3) == e.mat.recipe &&
+                get_bits32(dut->stage_candidate_data_o, pretex::kBaseRgb, 24) == e.mat.base_rgb,
             "candidate flat request fields changed across binner/Early-Z");
     expected_fragments.push_back(e);
   }
@@ -1769,44 +1800,28 @@ void run_door(bool door_shut) {
     // differed, those comparisons fail rather than a counter merely reading low.
     h->expected_tiles.push_back(build_tile_oracle({ja, jb}, 0, 0, 0, clear));
 
-    // ---- AND THE CANDIDATE/FRAGMENT PROBES ARE OFF, FOR AN INHERITED REASON --
+    // ---- AND THE CANDIDATE/FRAGMENT PROBES ARE BACK ON -----------------------
     //
-    // `check_candidate` reads `stage_candidate_data_o` at the offsets 410
-    // (source_id), 426 (fragment_state), 458 (invw24) and 482 (in-tile address).
-    // THOSE OFFSETS ARE STALE BY ONE BIT and have been since 2026-09-26.
+    // DOORCOST turned them off on 2026-09-27 for a sound reason, quoted so the
+    // decision is auditable rather than silently reversed: `check_candidate`
+    // read offsets that `ceba0bfe` (NORMALMAP, 2026-09-26) had made stale, and
+    // "asserting the stale ones would assert the bug; asserting the corrected
+    // ones would rest this door's evidence on an unreviewed repair."
     //
-    // Commit ceba0bfe (NORMALMAP) widened the Early-Z PAYLOAD by one bit and
-    // moved `PRETEX_EARLYZ_KEY_LO` 410 -> 411 and `_HI` 489 -> 490 in
-    // zhao_render_texture_pkg.sv. It did NOT move the four KEY field constants
-    // that sit inside that span, so they still describe the pre-NORMALMAP
-    // layout. The package is internally inconsistent in a way a packed struct
-    // cannot be: `PRETEX_EARLYZ_PAYLOAD_HI` is 409 and `PRETEX_EARLYZ_KEY_LO` is
-    // 411, so BIT 410 BELONGS TO NEITHER FIELD.
+    // THAT REASON IS NOW DISCHARGED, which is the only thing that licenses
+    // turning them back on.  REDFIX repaired the package -- NINE fields, not the
+    // four the handover names, because the continuation tail sits inside the
+    // payload above the request and moved with it, and `detail_required` had no
+    // PRETEX constant at all -- put every offset on a named constant above, and
+    // added two relational checks to the package that are SEEN TO FIRE 46 times
+    // in every run.  `tools/rtl/check_pretex_offsets.py` now holds the two sides
+    // together, so the numbers above cannot drift silently again.
     //
-    // MEASURED, not inferred: reading each field one bit higher returns exactly
-    // the expected value. depth@458 = 0xa00000 and depth@459 = 0x500000 = expected;
-    // src@410 = 0x1e02 and src@411 = 0x0f01 = expected. Two fields, one of which
-    // (`src_id`) is an IDENTITY and not an arithmetic quantity, both off by a
-    // single left shift -- which is a bit offset and cannot be a data error.
-    //
-    // IT IS NOT THIS PACKET'S AND IT IS NOT THIS DOOR'S. `ceba0bfe` is an
-    // ancestor of this branch's base, and `pd_full` -- the binner-sourced
-    // arrangement, JOB_SRC=0, on the pre-existing flat differential -- fails at
-    // its FIRST candidate with byte-identical diagnostic values. The whole
-    // `geom_bin_pipe_v2_directed` family has been red since that commit.
-    //
-    // The repair belongs to the raster/texture lane because it decides what every
-    // fragment field MEANS, and the arithmetic is unambiguous: the key is 80 bits
-    // (16 + 32 + 24 + 8) and at KEY_LO = 411 it lands exactly on KEY_HI = 490, so
-    // source_id 411..426, fragment_state 427..458, invw24 459..482, in-tile
-    // address 483..490, and PAYLOAD_HI 409 -> 410.
-    //
-    // SO THIS TEST DOES NOT COPY EITHER SET OF NUMBERS. Asserting the stale ones
-    // would assert the bug; asserting the corrected ones would make this door's
-    // evidence depend on a repair nobody has reviewed. The framebuffer oracle
-    // above needs neither, because it reads real ports.
-    h->validate_candidates = false;
-    h->validate_fragments = false;
+    // So the door gets its metadata evidence back: a job whose source identity,
+    // fragment state, depth or continuation tail changed across binner/Early-Z
+    // fails HERE, instead of only failing if it also disturbed a pixel.
+    h->validate_candidates = true;
+    h->validate_fragments = true;
   }
 
   h->begin_frame(1, 1, clear);

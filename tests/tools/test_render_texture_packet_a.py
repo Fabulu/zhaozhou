@@ -724,7 +724,7 @@ class RenderTextureLayoutTests(unittest.TestCase):
             normal = run_generated_model(executable)
             field_span_runs = [
                 run_generated_model(executable, "+FIELD_SPAN_CONTROL=%d" % control)
-                for control in range(1, 46)
+                for control in range(1, 47)
             ]
             roundtrip_runs = [
                 run_generated_model(executable, "+ROUNDTRIP_CONTROL=%d" % control)
@@ -744,7 +744,7 @@ class RenderTextureLayoutTests(unittest.TestCase):
 
         diagnostic = normal.stdout + normal.stderr
         self.assertEqual(normal.returncode, 0, diagnostic)
-        self.assertIn("ZHAO_RENDER_TEXTURE_LAYOUT_GUARD_OK field_spans=45", diagnostic)
+        self.assertIn("ZHAO_RENDER_TEXTURE_LAYOUT_GUARD_OK field_spans=46", diagnostic)
         self.assertIn("ZHAO_RENDER_TEXTURE_LAYOUT_ROUNDTRIP_OK controls=7 frag_spans=14", diagnostic)
 
         for control, ran in enumerate(field_span_runs, 1):
@@ -825,6 +825,12 @@ class RenderTextureLayoutTests(unittest.TestCase):
             # island's frozen interface manifest and had to stay byte-identical.
             # Its fatal therefore carries its own prefix.
             17: "ZHAO_FRAG_STATE_CONTRACT_FIRE[1]: FRAG_STATE_OFFSET_CONTRACT",
+            # The two relational PRETEX checks, added 2026-09-27 (REDFIX).
+            # 18 is not a boolean override: it runs the PRODUCTION tiling
+            # function against a layout with `source_id` displaced by one
+            # bit, which is the fault `ceba0bfe` actually created.
+            18: "ZHAO_RENDER_TEXTURE_CONTRACT_FIRE[17]: PRETEX_FIELDS_TILE",
+            19: "ZHAO_RENDER_TEXTURE_CONTRACT_FIRE[18]: PRETEX_CROSS_RECORD",
         }
         top = "zhao_render_texture_elab_control_top"
 
@@ -844,7 +850,7 @@ class RenderTextureLayoutTests(unittest.TestCase):
         baseline_diagnostic = baseline.stdout + baseline.stderr
         self.assertEqual(baseline.returncode, 0, baseline_diagnostic)
         self.assertIn(
-            "ZHAO_RENDER_TEXTURE_LAYOUT_GUARD_OK field_spans=45",
+            "ZHAO_RENDER_TEXTURE_LAYOUT_GUARD_OK field_spans=46",
             baseline_diagnostic,
         )
 

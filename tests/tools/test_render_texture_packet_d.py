@@ -297,7 +297,7 @@ def validate_cmake(text: str) -> None:
         "add_test(NAME geom_bin_pipe_v2_skip_cancel_mutant COMMAND pd_cancel)",
         "add_test(NAME packet_d_registration_static",
         "set(ZHAO_PACKET_D_REQUIRED_TESTS",
-        "Packet-D required CTest inventory must contain exactly 13 names",
+        "Packet-D required CTest inventory must contain exactly 15 names",
         "foreach(required_packet_d_test IN LISTS ZHAO_PACKET_D_REQUIRED_TESTS)",
         'if(NOT TEST "${required_packet_d_test}")',
     )
