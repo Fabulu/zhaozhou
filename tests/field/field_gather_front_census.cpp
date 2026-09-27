@@ -514,7 +514,18 @@ int main(int argc, char** argv) {
   budget("GATHERING FRONT + INIT_PROOF", fast.accept_interval);
   std::printf("\n    MEASURED HERE AT -GFAB_LANES=4 -GFRONT_PTS=4. The console composes\n");
   std::printf("    FAB_LANES=1 and does not compose this front. Four lanes are four\n");
-  std::printf("    datapath replicas and their AREA IS NOT MEASURED BY THIS FILE.\n");
+  std::printf("    datapath replicas, and THIS FILE STILL MEASURES NO AREA -- but the\n");
+  std::printf("    area is no longer unmeasured. Packet LANESCOST priced it on\n");
+  std::printf("    2026-09-27, four leaf -MapOnly rows on the shipping 5CSEBA6U23I7:\n");
+  std::printf("      composing this front costs +11,979 ALUTs (+14.3%% of the part),\n");
+  std::printf("      +9 DSP (+8.0%%), +10,472 registers, +75,648 memory bits.\n");
+  std::printf("      reports/synthesis/receipts/lanescost_field_host_v2_lanes_ladder.json\n");
+  std::printf("      reports/DECISION-20260927-I34-LANESCOST-PRICED-AND-REFUSED.md\n");
+  std::printf("    AND THE SURPRISE IS WHICH PARAMETER IS EXPENSIVE: FAB_LANES is only\n");
+  std::printf("    +5,070 of that (+11%%, not the +300%% a 4x replica implies), because\n");
+  std::printf("    the instruction stream and control are SHARED and the mulbank always\n");
+  std::printf("    computed four lanes with three tied off. FRONT_PTS (+3,975) and the\n");
+  std::printf("    FAB_GROUP_PTS tax (+2,934) together cost MORE than the lanes do.\n");
 
   zhao::exit_hard(zhao::report_and_exit("field_gather_front_census"));
 }

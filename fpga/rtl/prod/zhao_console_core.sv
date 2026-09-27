@@ -6098,6 +6098,195 @@
 //      composing the terrain compose engine (connected item 10).
 //
 //      =====================================================================
+//      READ THIS BLOCK FIRST -- BEFORE THE GATHERFRONT BLOCK BELOW, WHOSE ONE
+//      OPEN QUESTION IT ANSWERS. LANESCOST, 2026-09-27: THE GATHERING FRONT
+//      IS PRICED. COMPOSING IT COSTS +11,979 ALUTs -- 14.3% OF THE SHIPPING
+//      PART'S ENTIRE LOGIC BUDGET -- AND +9 DSP, AND AT THAT PRICE IT LANDS
+//      AT 3.21x THE 6,000-CLOCK CONTRACT RATHER THAN UNDER IT. NOT COMPOSED.
+//      Register 2 -> 2, bare. NOTHING COMPOSED: `u_field_host` keeps
+//      `.FAB_LANES(1)` and `FRONT_PTS` keeps its scalar default.
+//
+//      Full decision record, in the owner's format:
+//      `reports/DECISION-20260927-I34-LANESCOST-PRICED-AND-REFUSED.md`.
+//
+//      (L1) THE MEASUREMENT. Four leaf `-MapOnly` rows of `zhao_field_host_v2`
+//           on the SHIPPING part `5CSEBA6U23I7`, all `rtlCleanAtHead: true`,
+//           same 29-file closure, same `sourceDigest 92df1324cd4c`, all at
+//           THIS FILE'S OWN TWENTY PARAMETERS for `u_field_host` -- not the
+//           module defaults, which differ in five places and are the trap
+//           `zhao_field_host.sv:115` names.
+//
+//             label                            estALM    ALUT     REG  membits  DSP
+//             A L1G1F1  the console today       39,252  42,789  48,997   85,282   15
+//             C L1G4F1  + FAB_GROUP_PTS 1->4    41,267  45,723  52,045   85,282   15
+//             D L4G4F1  + FAB_LANES     1->4    44,225  50,793  56,013  160,930   24
+//             B L4G4F4  + FRONT_PTS     1->4    50,176  54,768  59,469  160,930   24
+//
+//           EACH ADJACENT PAIR DIFFERS IN EXACTLY ONE PARAMETER.
+//
+//             FAB_GROUP_PTS 1->4   ALUT  +2,934  REG  +3,048  mem       0  DSP +0
+//             FAB_LANES     1->4   ALUT  +5,070  REG  +3,968  mem +75,648  DSP +9
+//             FRONT_PTS     1->4   ALUT  +3,975  REG  +3,456  mem       0  DSP +0
+//             A -> B, THE BILL     ALUT +11,979  REG +10,472  mem +75,648  DSP +9
+//
+//           `reports/synthesis/receipts/lanescost_field_host_v2_lanes_ladder.json`
+//           carries the rows; `reports/synthesis/zhao_block_fit.json` carries
+//           each row's `topParameters` and digest. The closure is now a real
+//           fit target in `design/fit_targets.yml` -- THIS BLOCK HAD NONE, so
+//           "one leaf map" was a closure to construct, not a run to start.
+//
+//      (L2) THE FINDING THAT CUTS AGAINST THIS PACKET'S OWN CONCLUSION, AND IT
+//           GOES FIRST BECAUSE IT IS THE ONE MOST LIKELY TO OVERTURN IT.
+//           `FAB_LANES` IS NOT THE EXPENSIVE PARAMETER. (G4) below, and the
+//           brief, both frame the bill as "four lanes are FOUR ALU AND
+//           REGISTER-FILE REPLICAS" on a device over on ALMs -- which implies a
+//           ~4x blow-up of a 42,789-ALUT block. MEASURED, THE LANES STEP ALONE
+//           IS +5,070 ALUTs: +11%, NOT +300%.
+//
+//           The mechanism is in the RTL and both documents had already quoted
+//           the sentence that explains it. `zhao_field_v3_exec.sv:85`: the
+//           instruction stream, decode and control are SHARED and "only
+//           operands, results and products carry four values instead of one".
+//           And `:89`: `zhao_field_v3_mulbank` "has always computed FOUR lanes
+//           per grant and the engine tied three of them off" -- three quarters
+//           of the bank was already in the source with Quartus pruning it,
+//           which is why the DSP step is +9 AND NOT +45.
+//
+//           SO THE BILL NOBODY ITEMISED IS BIGGER THAN THE BILL EVERYBODY
+//           FEARED: `FRONT_PTS` (+3,975) plus the undocumented `FAB_GROUP_PTS`
+//           tax (+2,934) is +6,909, MORE THAN THE LANES THEMSELVES.
+//           A later packet with a real ALUT surplus should re-read THIS
+//           paragraph rather than the alarming one below it.
+//
+//      (L3) AND IT STILL DOES NOT REACH THE CONTRACT, WHICH IS WHAT DECIDES.
+//           `field_gather_front_census`, 31 checks, green at this commit:
+//
+//             scalar front, as composed today  248.00 clk/grp  74,507  12.42x
+//             THE COMPOSED GATHERING FRONT      62.00 clk/grp  19,265   3.21x
+//             + INIT_PROOF                      30.00 clk/grp   9,761   1.63x
+//             the ceiling                       17.30 clk/grp   6,000   1.00x
+//
+//           The /4 is real, exact and measured. IT IS ALSO NOT ENOUGH. And the
+//           1.63x line is CONTINGENT ON SOFTWARE THIS CONSOLE DOES NOT CONTAIN:
+//           kind 6's producer is SW.STREAM, outside the console, so INIT_PROOF
+//           is an authoring act on the image and not a state of this repo.
+//           The proposal is therefore: spend 14.3% of the part's logic and 8%
+//           of its DSP, AND STILL MISS THE BUDGET BY 1.63x TO 3.21x.
+//
+//      (L4) THE PRICE AGAINST THE CEILINGS THAT BIND. The console needs 293,352
+//           ALUTs against 83,820 (350%) and 375 DSP against 112 (335%), and
+//           must REMOVE 209,532 ALUTs (HANDOVER 15.32 -- and read its own
+//           DSPHUNT correction: those are sizing-part counts against shipping
+//           ceilings, indicative rather than exact; the device-exact number is
+//           the fitter's 293,352 against 227,120 present).
+//             * +11,979 ALUTs is 14.3% of the whole part, in the wrong
+//               direction. The largest single ALUT lever this campaign has ever
+//               landed is the flop-array move at -1,531. THIS WOULD NEED EIGHT
+//               OF THEM JUST TO STAND STILL.
+//             * +9 DSP. The handover's own sentence is that the campaign "has
+//               moved it by 6 in total". ONE PARAMETER CHANGE WOULD UNDO THE
+//               CAMPAIGN'S ENTIRE LIFETIME DSP PROGRESS, ONE AND A HALF TIMES
+//               OVER.
+//             * +75,648 memory bits is the CHEAP half -- 1.3% of the part's
+//               5,662,720, on the one axis measured at 62% with 2.1 Mbit free.
+//               That part of the bill IS the standing "trade ALMs for M10K"
+//               instruction and is not an objection.
+//
+//      (L5) AND THE AREA WOULD BE SPENT TWICE, WHICH IS (G6)'s OWN ARGUMENT ONE
+//           LEVEL UP. The term that closes the contract -- two runs outstanding
+//           -- needs a redesign of the run state machine AND a second resident
+//           program slot, because on this host a run's identity IS its program
+//           slot. A TWO-DEEP FRONT CHANGES THE FRONT'S OWN REGISTERS AGAIN, so
+//           area spent on today's shape is area spent on the thing the next
+//           change replaces.
+//
+//           The THIRD bill is still unpriced and this packet did not price it:
+//           `req_in_i`/`resp_out_o` widen by `FRONT_PTS`, so all four clients
+//           must present four points. EARTH wants to; STAMP, FLOW and WARP
+//           would replicate their single point and discard the surplus, paying
+//           the widening for nothing. Those adapters are OUTSIDE this closure,
+//           SO +3,975 ON THE FRONT_PTS STEP IS A FLOOR.
+//
+//      (L6) WHAT THIS PACKET REFUSED, ASKED AS DECISION-OR-BUILD.
+//           COMPOSING THE GATHERING FRONT. It is a BUILD, the decision is
+//           taken, and THIS IS NOT GATHERFRONT'S REFUSAL INHERITED: that one
+//           was "I have no number", this one is "here is the number and it
+//           decides". THE EVIDENCE QUESTION IS CLOSED FOREVER; what is refused
+//           is SPENDING THE AREA NOW.
+//
+//           THE CONDITION THAT FLIPS THIS TO COMPOSE, named so it is a test and
+//           not an argument: BUILD THE TWO-DEEP FRONT AND THE SECOND RESIDENT
+//           SLOT, THEN RUN `tools/field/measure_earth_budget.cpp` AT A REAL
+//           EARTH PROGRAM -- not the census's deliberate two-uop floor. IF THAT
+//           LANDS <= 6,000, the 11,979 ALUTs buy CONTRACT COMPLIANCE, the
+//           composition becomes one act spent ONCE on an arrangement known to
+//           meet its budget, and it is then a trade against the ALM liberation
+//           roadmap rather than a speculative spend. Nobody needs to re-price
+//           it: the ladder is committed and reproducible from
+//           `design/fit_targets.yml`.
+//
+//           NOT REFUSED and not to be re-inherited as open: the front itself,
+//           the field-major commission, `zhao_terrain_field_walk` and
+//           `zhao_terrain_patch_acc` as its front and back, and the eventual
+//           composition. ONLY THE SPEND IS DEFERRED.
+//
+//           ALSO CONSIDERED AND REFUSED: composing `FAB_LANES=4` with
+//           `FRONT_PTS=1` (row D) is STRICTLY WORSE THAN DOING NOTHING --
+//           +8,004 ALUTs and +9 DSP for ZERO clocks, because that is precisely
+//           today's waste. And a /2 gather at LANES=GROUP_PTS=FRONT_PTS=2 is
+//           LEGAL under the dispatcher's guard and NOBODY HAS NAMED IT -- the
+//           axis is continuous, not binary. ARITHMETIC, DECLARED AS SUCH AND
+//           NOT MEASURED: ~124 clk/group, ~37,700, ~6.3x. Half the bill, twice
+//           the miss. Recorded so the option is not lost.
+//
+//      (L7) THE BRIEF'S EVIDENCE BAR COULD NOT BE MET AS WRITTEN, AND THAT IS
+//           THIS PACKET'S FIRST FALSE CLAIM FOUND. "Two rows, same block, same
+//           device, differing in ONE parameter -- FAB_LANES 1 vs 4" IS NOT
+//           ELABORABLE. `zhao_field_v3_dispatch.sv:252` requires
+//           `LANES <= GROUP_PTS` AND `GROUP_PTS % LANES == 0`, so at this
+//           file's `FAB_GROUP_PTS(1)` the value 4 is ILLEGAL. The brief names
+//           that second parameter three paragraphs later and does not notice
+//           that it invalidates its own bar. The ladder meets the bar's INTENT.
+//
+//           AND A HAZARD THE NEXT PACKET MUST NOT WALK INTO: that guard is an
+//           `initial $fatal`, a SIMULATION construct. Verilator's elaboration
+//           honours it; NOTHING HERE DEMONSTRATES THAT `quartus_map` DOES. Do
+//           not assume an illegal pairing fails loudly in a fit -- it may map a
+//           wrong circuit quietly. Every row above is a LEGAL pairing for
+//           exactly that reason.
+//
+//      (L8) THE LEAF IS A FAITHFUL PROXY, CROSS-CHECKED RATHER THAN ASSUMED --
+//           which matters because CLAUDE.md records "889 virtual pins inflate
+//           the standalone rows" as an argument that was right in kind and
+//           wrong in magnitude. `reports/HANDOVER-20260919.md` attributes
+//           `zhao_field_host_v2:u_field_host` INSIDE THE COMPOSED CONSOLE at
+//           40,989 ALUT / 48,614 REG / 85,282 memory bits. Row A independently
+//           reads 42,789 / 48,997 / 85,282. THE MEMORY BITS AGREE TO THE DIGIT,
+//           registers to 0.8%, ALUTs to 4.4% -- and the console row was taken
+//           on the SIZING part, where ALUTs read HIGH, which is the direction
+//           that explains the residual. So the inflation is about 4%, not a
+//           factor, and THE DELTAS TRANSFER.
+//
+//      (L9) AN INSTRUMENT DEFECT, FOUND BY BEING BLOCKED BY IT.
+//           `tools/quartus/extract_map_receipt.py` refused all four valid
+//           reports: its self-check demanded a row naming M10K/MLAB/M20K/M9K/
+//           LUTRAM, and Analysis & Synthesis writes the literal `AUTO` there
+//           until the FITTER chooses. All 23 arrays in these reports read
+//           `AUTO`. So it refused the commonest output of THE ONLY RUN TYPE IT
+//           EXISTS TO READ. NOTE THE DIRECTION: the alarm was LOUD and cost
+//           work rather than manufacturing a false green -- what it got wrong
+//           was its EXPLANATION, "the anchor slipped", when the header regex
+//           was working perfectly. That is CLAUDE.md chapter 5, a wrong
+//           diagnosis attached to a right alarm. Repaired, with the guard's
+//           positive control kept SEPARATE and seen to fire:
+//           `extract_map_receipt_controls`, 6 checks.
+//
+//           AND I HIT THE `| tail` TRAP THE BRIEF WARNS ABOUT, IN MY OWN FIRST
+//           USE OF IT: the first receipt run printed `RC=0` and wrote no file,
+//           because that was TAIL's exit code. The real one was 1.
+//      =====================================================================
+//
+//      =====================================================================
 //      READ THIS BLOCK FIRST -- BEFORE THE EARTHMAJOR BLOCK BELOW, WHICH IT
 //      COMPLETES. GATHERFRONT, 2026-09-26: THE GATHERING FRONT IS BUILT AND
 //      MEASURED. A FOUR-POINT GROUP COSTS 62 CLOCKS INSTEAD OF 248, AND 30
