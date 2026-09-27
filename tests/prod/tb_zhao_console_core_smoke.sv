@@ -10228,15 +10228,46 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: the FLOW adapter answered %0d records with an acceleration computed from a DIFFERENT record -- the join is carrying A's field onto B's particle",
              part_fld_rec_changed_o);
 
-    // 5b. THE PROGRAM DOORBELL ANSWERS BOTH POSTS (entry I42, rulings R43/R20).
+    // 5b. THE PROGRAM DOORBELL ANSWERS EVERY POST (entry I42, rulings R43/R20).
+    //
+    // THE EXPECTED COUNT IS STAGING-AWARE, AND IT WAS NOT. Corrected 2026-09-27
+    // (NOPROG). These two assertions were written for the no-program form and
+    // hard-coded 2 -- the I42 probe pair -- with no `ifdef` guard. Under
+    // `-FieldActive` and `-FieldUncovered` the mode also stages a whole program
+    // through this same mailbox, so the true count is 48, and BOTH assertions
+    // were wrong in both new forms.
+    //
+    // NOTHING HAD EVER SEEN THEM, which is why they survived: the positive gate
+    // (`field_composed`) fatals ~2,000 lines earlier, so `-FieldActive` never
+    // reached this line, and `-FieldUncovered` had been built but never run to
+    // green. The first run that got this far was the one that found them.
+    //
+    // THE ARITHMETIC, SO IT CANNOT DRIFT: 2 probes + 1 INSTALL_CAPSULE +
+    // SFF_N_LOAD load words + 1 COMMIT + 1 RE-POSTED HEADER. Written against
+    // the generator's own `SFF_N_LOAD` rather than the literal 48, so changing
+    // the program moves the expectation with it.
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+    if (fld_db_posts_o != 32'(SFF_N_LOAD + 5))
+      $fatal(1, "SMOKE: the field doorbell consumed %0d posts against %0d offered (2 I42 probes + 1 install + %0d load words + 1 commit + 1 re-posted header)",
+             fld_db_posts_o, SFF_N_LOAD + 5, SFF_N_LOAD);
+`else
     if (fld_db_posts_o != 32'd2)
       $fatal(1, "SMOKE: the field doorbell consumed %0d posts against two offered", fld_db_posts_o);
+`endif
     if (fld_db_lookups_o != 32'd1)
       $fatal(1, "SMOKE: the field doorbell handed %0d lookups to the directory against one posted -- the lookup phase has no producer",
              fld_db_lookups_o);
+    // EVERY POST IS ANSWERED, which is the hang ruling R20 forbids leaving open.
+    // Same staging-aware count as above, and for the same reason.
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+    if (fld_ret_seen_q != 32'(SFF_N_LOAD + 5))
+      $fatal(1, "SMOKE: %0d returns came back for %0d answerable posts -- a post was consumed and never answered, which is the hang ruling R20 forbids",
+             fld_ret_seen_q, SFF_N_LOAD + 5);
+`else
     if (fld_ret_seen_q != 32'd2)
       $fatal(1, "SMOKE: %0d returns came back for two answerable posts -- a post was consumed and never answered, which is the hang ruling R20 forbids",
              fld_ret_seen_q);
+`endif
     if (fld_ret_lu_ok_q != 32'd1)
       $fatal(1, "SMOKE: the lookup's return did not say the directory answered");
     if (fld_ret_lu_hit_q != 32'd0)
