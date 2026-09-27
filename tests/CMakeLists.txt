@@ -11366,6 +11366,57 @@ set_tests_properties(geom_paramarena_directed
   PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
 # ---------------------------------------------------------------------------
+# SCHEMA v3's SUBSTITUTION CHECK AND ITS POSITIVE CONTROL (METASIDE, I55)
+#
+# Case 1c asserts that triangle N's material state is NOT triangle N-1's. That
+# is the only check that can see owner directive section 4's forbidden
+# shortcut -- "the span had one material, so reuse the last publication" --
+# because on a fixture where adjacent triangles share a state the right answer
+# and the wrong one are the same bits.
+#
+# A check like that is worth nothing until it has been SEEN TO FAIL, so the
+# mutant drives `t_matstate_o` from the previous triangle's decode and this
+# target's expectation is INVERTED: `ZHAO_PARAMWALK_HOLDSTATE_MUT` reaches BOTH
+# the RTL seam and the C++ expectation, so the driver cannot expect one block
+# and measure another. The plain `geom_paramarena_directed` above is the
+# negative control and must show every triangle carrying its own state.
+#
+# The mutant REPLACES production rather than joining it: `zhao_geom_paramwalk`
+# comes out of the list and the copy goes in, so two definitions of one walker
+# can never be elaborated together.
+# ---------------------------------------------------------------------------
+set(pw_hold_sources ${ZHAO_PARAMARENA_SOURCES})
+list(REMOVE_ITEM pw_hold_sources
+     ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_paramwalk.sv)
+list(FIND pw_hold_sources
+     "${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_paramwalk.sv" pw_leak)
+if(NOT pw_leak EQUAL -1)
+  message(FATAL_ERROR
+    "METASIDE: the holdstate mutant build still lists production "
+    "zhao_geom_paramwalk -- the mutant would not be the walker under test")
+endif()
+add_executable(test_geom_paramwalk_holdstate_fires
+               geometry/geom_paramarena_directed.cpp)
+target_link_libraries(test_geom_paramwalk_holdstate_fires PRIVATE zhao_harness)
+target_compile_definitions(test_geom_paramwalk_holdstate_fires
+                           PRIVATE ZHAO_PARAMWALK_HOLDSTATE_MUT)
+verilate(test_geom_paramwalk_holdstate_fires
+  PREFIX Vtb_zhao_geom_paramarena
+  TOP_MODULE tb_zhao_geom_paramarena
+  VERILATOR_ARGS -DZHAO_PARAMWALK_HOLDSTATE_MUT
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+  SOURCES ${pw_hold_sources}
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_paramarena.sv
+          ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_geom_paramwalk_holdstate_mutant.sv
+          ${CMAKE_SOURCE_DIR}/tests/geometry/tb_zhao_geom_paramarena.sv)
+add_test(NAME geom_paramwalk_holdstate_fires
+         COMMAND test_geom_paramwalk_holdstate_fires)
+set_tests_properties(geom_paramwalk_holdstate_fires
+  PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# ---------------------------------------------------------------------------
 # ENTRY I54 -- `geom_chunkser_directed` WAS HERE AND IS RETIRED.
 #
 # ARENACOMPOSE, 2026-09-26. It built the whole legacy chain -- binner, identity

@@ -256,6 +256,9 @@ module zhao_geom_parambuf
     output var logic signed [11:0] td_max_x_o,
     output var logic signed [11:0] td_min_y_o,
     output var logic signed [11:0] td_max_y_o,
+    // SCHEMA v3. Decoded by the SAME constants the encoder fills from,
+    // so the two are one layout and not two hand-maintained inverses.
+    output var logic [127:0]  td_matstate_o,
     // A MALFORMED DESCRIPTOR. Two terms since v2, and the port comment says
     // both because "a vertex id past the sealed count" alone would send the
     // next reader looking for an id when the reserve was what moved.
@@ -377,6 +380,32 @@ module zhao_geom_parambuf
   assign td_max_x_o = $signed(td_bytes_i[ZHAO_TD_MAXX_LO  +: ZHAO_TD_MAXX_W]);
   assign td_min_y_o = $signed(td_bytes_i[ZHAO_TD_MINY_LO  +: ZHAO_TD_MINY_W]);
   assign td_max_y_o = $signed(td_bytes_i[ZHAO_TD_MAXY_LO  +: ZHAO_TD_MAXY_W]);
+  // NOT sign-extended and not interpreted: the material state is an
+  // opaque 128-bit word to this block. Its FIELDS are unpacked in
+  // `zhao_console_core`, by the one function that also packs them, so
+  // that no second site can disagree about the layout.
+  assign td_matstate_o = td_bytes_i[ZHAO_TD_MATSTATE_LO +: ZHAO_TD_MATSTATE_W];
+  // ---- THE PORT WIDTH IS A LITERAL AND THE LAW IS THIS GUARD (METASIDE) ---
+  // `tools/quartus/gen_prod_top.py` resolves a packed port width by evaluating
+  // the expression against MODULE parameters only; a PACKAGE constant is not
+  // in that table, so `[ZHAO_TD_MATSTATE_W-1:0]` made it SKIP this block -- and
+  // a skipped block is silently absent from the generated production top,
+  // which is a regression no gate spells out. The tell is the instance COUNT
+  // moving: 89 -> 86, in a line nobody reads. So the port carries a literal and
+  // the package stays authoritative through the check below, which fails
+  // ELABORATION rather than letting the two drift.
+  //
+  // CLAUDE.md: `--lint-only` does NOT run `initial` blocks, so a clean lint is
+  // not evidence about this guard; elaboration in a Verilator test binary and
+  // quartus_map are. And Quartus 17.0 rejects a bare module-scope `if`, which
+  // is why it is inside `initial begin`.
+  // synthesis translate_off
+  initial begin : p_matstate_width
+    if (ZHAO_TD_MATSTATE_W != 128)
+      $fatal(1, "zhao_geom_parambuf: ZHAO_TD_MATSTATE_W moved; the literal port width did not");
+  end
+  // synthesis translate_on
+
 
   // A vertex id past the frame's sealed vertex count indexes memory that
   // belongs to no vertex. Refused rather than clamped: clamping would draw a
@@ -399,8 +428,16 @@ module zhao_geom_parambuf
   // model, so a bench can poke those four bytes between the write and the
   // walk, and `geom_paramarena_directed` does exactly that.
   wire td_rsvd_bad_c = (td_bytes_i[ZHAO_TD_RSVD_LO +: ZHAO_TD_RSVD_W] != 32'd0);
+  // SCHEMA v3's SECOND reserve, and it is a second rule about a second
+  // reserve rather than a widening of the first. The record reserves 32
+  // bits at 224; the material state reserves 13 of its own 128 at
+  // `ZHAO_MS_RSVD_LO`. A record whose state word has bits set outside the
+  // declared fields was written by something that does not know this
+  // layout, which is exactly what the first reserve's detector is for.
+  wire td_ms_rsvd_bad_c =
+      (td_bytes_i[ZHAO_TD_MATSTATE_LO + ZHAO_MS_RSVD_LO +: ZHAO_MS_RSVD_W] != 13'd0);
 
-  assign td_illegal_o = td_valid_i && (td_id_bad_c || td_rsvd_bad_c);
+  assign td_illegal_o = td_valid_i && (td_id_bad_c || td_rsvd_bad_c || td_ms_rsvd_bad_c);
 
   // ---- tile-reference chunk -----------------------------------------------
   logic [31:0] next_c;

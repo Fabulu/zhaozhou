@@ -172,6 +172,10 @@ module tb_zhao_geom_paramarena
     input  var logic signed [11:0] td_max_x_i,
     input  var logic signed [11:0] td_min_y_i,
     input  var logic signed [11:0] td_max_y_i,
+    // SCHEMA v3's material state. Driven straight at the encoder and read
+    // back off the walker, so the round trip is through the REAL guard,
+    // arbiter, controller and SDRAM and not through a bench shortcut.
+    input  var logic [127:0] td_matstate_i,
 
     input  var logic        ck_valid_i,
     output var logic        ck_ready_o,
@@ -265,6 +269,9 @@ module tb_zhao_geom_paramarena
     output var logic signed [11:0] t_max_x_o,
     output var logic signed [11:0] t_min_y_o,
     output var logic signed [11:0] t_max_y_o,
+    output var logic [127:0] t_matstate_o,
+    output var logic [17:0]  t_arena_id_o,
+    output var logic [31:0]  tri_id_wide_o,
 
     // ---- the three ProjectedVertices the descriptor names --------------------
     // MUXBUILD, 2026-09-27. The walker's vertex arm, exposed so the directed
@@ -648,6 +655,7 @@ module tb_zhao_geom_paramarena
       .td_max_x_i   (td_max_x_i),
       .td_min_y_i   (td_min_y_i),
       .td_max_y_i   (td_max_y_i),
+      .td_matstate_i (td_matstate_i),
 
       // ONE PRODUCER AT A TIME. `ab_enable_i` hands the intake to
       // GEOM.ARENABIN; low, it is the hand-driven pair the arena's own
@@ -742,7 +750,20 @@ module tb_zhao_geom_paramarena
   // names for `ARENA_CHUNKS`: if they ever disagreed the walker would read
   // between two vertices and decode a plausible record, and nothing would say
   // which default had moved.
+`ifdef ZHAO_PARAMWALK_HOLDSTATE_MUT
+  // THE FOURTH COMMITTED POSITIVE CONTROL (METASIDE, 2026-09-27), and
+  // the only one whose subject is a RULE rather than a counter.
+  // `tests/mutants/zhao_geom_paramwalk_holdstate_mutant.sv` drives
+  // `t_matstate_o` from the PREVIOUS triangle's decode -- directive
+  // section 4's forbidden "reuse the last publication" -- and case 1c's
+  // substitution check must FAIL against it. Selected by a plain `-D`
+  // against a plain `ifdef`: CLAUDE.md records that a `-D` cannot
+  // override a FUNCTION-LIKE define and says nothing when it fails to,
+  // so the selector is this shape and not that one.
+  zhao_geom_paramwalk_holdstate_mutant #(
+`else
   zhao_geom_paramwalk #(
+`endif
       .MAX_WALK     (WALK_MAX),
       .CHUNK_IDS    (CHUNK_IDS),
       .ARENA_CHUNKS (MAX_CHUNKS),
@@ -787,6 +808,9 @@ module tb_zhao_geom_paramarena
       .t_max_x_o   (t_max_x_o),
       .t_min_y_o   (t_min_y_o),
       .t_max_y_o   (t_max_y_o),
+      .t_matstate_o (t_matstate_o),
+      .t_arena_id_o (t_arena_id_o),
+      .tri_id_wide_o (tri_id_wide_o),
       // The tile list's brackets. Not compared here -- this bench has no
       // tile grid and no raster -- but EXPLICIT rather than omitted,
       // because an omitted pin is a PINMISSING and cannot be told apart

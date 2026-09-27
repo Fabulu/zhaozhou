@@ -1,3 +1,58 @@
+// zhao_geom_paramwalk_holdstate_mutant.sv -- A COMMITTED POSITIVE CONTROL.
+// METASIDE, 2026-09-27.  NOT PRODUCTION.  NOT IN ANY SOURCE LIST.
+//
+// ---------------------------------------------------------------------------
+// WHAT THIS IS FOR
+// ---------------------------------------------------------------------------
+// `reports/OWNER_VACATION_DIRECTIVE_2026-09-23.txt` section 4 forbids
+// "silently overload[ing] an existing field, truncat[ing] a full handle, or
+// replac[ing] a missing attribute with a convenient zero", and the convenient
+// zero for I55's 378 bits of material metadata has a specific disguise:
+//
+//     "the span had one material, so reuse the last publication"
+//
+// It is TRUE in the console smoke fixture and FALSE in general, and -- this is
+// the whole reason this file exists -- it would pass every gate this
+// repository owns.  A round-trip check on a fixture where consecutive
+// triangles share a material cannot tell the right answer from the wrong one,
+// because they are the same bits.  That is CLAUDE.md's "a gate that cannot
+// reach the state is not evidence about the state", and the state in question
+// is "two adjacent triangles whose material state differs".
+//
+// So the refusal is not a sentence in a comment.  It is this file.
+//
+// ---------------------------------------------------------------------------
+// WHAT WAS CHANGED, AND THE POLARITY
+// ---------------------------------------------------------------------------
+// ONE substantive line.  `t_matstate_o` is driven from a register holding the
+// PREVIOUS emitted triangle's decoded state instead of this one's.  Everything
+// else is `fpga/rtl/geometry/zhao_geom_paramwalk.sv` verbatim.
+//
+// POLARITY IS INVERTED.  Built with `ZHAO_PARAMWALK_HOLDSTATE_MUT`, the driver
+// passes when `geom_paramarena_directed` case 1c's SUBSTITUTION check FAILS --
+// when triangle N is handed triangle N-1's state.  The negative control is the
+// plain run, which must show every triangle carrying its own.  Both halves are
+// required before case 1c's green may be quoted as evidence that the shortcut
+// is refused rather than merely absent from this fixture.
+//
+// NOTE WHICH CHECK IT FIRES, because the two are deliberately different
+// claims.  Case 1c's EQUALITY check ("the bytes survived SDRAM") is satisfied
+// by this mutant on any fixture whose triangles share a state.  Only the
+// INEQUALITY check ("triangle N's is not triangle N-1's") can see it.  That is
+// why case 1c is written as an inequality and why its fixture gives every
+// triangle a distinct state.
+//
+// ---------------------------------------------------------------------------
+// THIS IS A COPY, AND A COPY GOES STALE IN THE FLATTERING DIRECTION
+// ---------------------------------------------------------------------------
+// REGENERATE IT if `zhao_geom_paramwalk.sv` changes shape.  CLAUDE.md's
+// chapter is explicit: thirteen combiner copies stayed GREEN for two weeks
+// while the body around their mutation aged, because the MUTATIONS were intact
+// and the module they described no longer existed.
+// `tools/budget/mutant_copy_drift.py` detects it by PROVENANCE -- if
+// production has been committed since this file was, this file cannot contain
+// what production gained.
+//
 // zhao_geom_paramwalk.sv -- GEOM.PARAMBUF's RECORD READER and chunk walker.
 //
 // ---------------------------------------------------------------------------
@@ -93,7 +148,7 @@
 // ---------------------------------------------------------------------------
 `default_nettype none
 
-module zhao_geom_paramwalk
+module zhao_geom_paramwalk_holdstate_mutant
   import zhao_pkg::*;
 #(
     parameter logic [31:0] SCRATCH_BASE = ZHAO_PARAMBUF_SCRATCH_BASE,
@@ -749,7 +804,18 @@ module zhao_geom_paramwalk
   assign t_max_x_o    = td_max_x_c;
   assign t_min_y_o    = td_min_y_c;
   assign t_max_y_o    = td_max_y_c;
-  assign t_matstate_o = td_matstate_c;
+  // THE MUTATION, AND IT IS THE ONE SUBSTANTIVE LINE IN THIS FILE.
+  // Production is `assign t_matstate_o = td_matstate_c;` -- the state
+  // decoded from THIS descriptor. Here it is the state of the PREVIOUS
+  // triangle, held in a register: owner directive section 4's forbidden
+  // shortcut -- "the span had one material, so reuse the last
+  // publication" -- implemented exactly.
+  logic [127:0] held_matstate_q;
+  always_ff @(posedge clk) begin
+    if (!rst_n) held_matstate_q <= '0;
+    else if (wstate_q == W_TD_EMIT) held_matstate_q <= td_matstate_c;
+  end
+  assign t_matstate_o = held_matstate_q;
   // The id the CURRENT descriptor was fetched with, latched beside the
   // address that used it -- the same enable, which is the whole of why it
   // cannot be one behind. `u_geom_tidq` was one behind and mis-attributed
@@ -1288,6 +1354,6 @@ module zhao_geom_paramwalk
     end
   end
 
-endmodule : zhao_geom_paramwalk
+endmodule : zhao_geom_paramwalk_holdstate_mutant
 
 `default_nettype wire

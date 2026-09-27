@@ -7346,6 +7346,80 @@ module tb_zhao_console_core_smoke
              `PC_SHELL.u_render_bin.early_z_rejects_o,
              `PC_SHELL.u_render_bin.fragment_covered_o,
              `PC_SHELL.u_render_bin.blended_fragments_o);
+    // ======================================================================
+    // THE WEDGE PROBE (METASIDE, 2026-09-27) -- WHICH TERM OF
+    // `ordinary_pipe_empty_w` IS LOW, NAMED RATHER THAN GUESSED
+    // ======================================================================
+    // SWAPCLOSE measured `frags[covered/blended]=[149 0]` at
+    // GEOM_WALK_RASTER=1 and read the ZERO as the fault: "fragments are
+    // generated and none ever blend, so `ordinary_pipe_empty_w` never goes
+    // true". BOTH HALVES OF THAT ARE WRONG, and the refutation was already on
+    // disk in this repository:
+    //
+    //   reports/synthesis/arenabin/smoke_plain_arenainfer.log:75 --
+    //   a HEALTHY frame, 2,816 pixels, 11 tiles resolved, reads
+    //   `frags[covered/blended]=[1216 0]`.
+    //
+    // `blended_fragments_o` counts fragments whose write was NOT BL_REPLACE
+    // (`zhao_raster_fragment.sv:671`). Every span in this fixture is REPLACE,
+    // so the counter reads ZERO when the console is working perfectly. It is a
+    // COUNTER, not a term of any gate, and nothing in `ordinary_pipe_empty_w`
+    // reads it. CLAUDE.md: "a number that is exactly zero is a broken
+    // instrument until proven otherwise" -- here the zero was sound and the
+    // READING of it was not, which is the same law from the other side.
+    //
+    // So the wedge needs a probe that names its own cause. These are the
+    // eight terms of `ordinary_pipe_empty_w` and the four of `producer_quiet_w`
+    // inside it, read where they are computed. Read-only, through the
+    // hierarchy; nothing is connected and no port is added.
+    $display("SMOKE: walkwedge rs_state=%0d last=%0d job_ready=%0d | empty=%0d <- ew_done=%0d prodquiet=%0d ezcand=%0d skid=%0d stgcand=%0d texquiet=%0d stgfrag=%0d fragidle=%0d",
+             `PC_SHELL.u_render_bin.u_tile.rs_state_q,
+             `PC_SHELL.u_render_bin.u_tile.last_q,
+             `PC_SHELL.u_render_bin.u_tile.job_ready_o,
+             `PC_SHELL.u_render_bin.u_tile.ordinary_pipe_empty_w,
+             `PC_SHELL.u_render_bin.u_tile.ew_done_q,
+             `PC_SHELL.u_render_bin.u_tile.producer_quiet_w,
+             `PC_SHELL.u_render_bin.u_tile.earlyz_cand_valid_w,
+             `PC_SHELL.u_render_bin.u_tile.skid_level_o,
+             `PC_SHELL.u_render_bin.u_tile.stage_candidate_valid_o,
+             `PC_SHELL.u_render_bin.u_tile.texture_quiet_o,
+             `PC_SHELL.u_render_bin.u_tile.stage_fragment_valid_o,
+             `PC_SHELL.u_render_bin.u_tile.fragment_idle_o);
+    $display("SMOKE: walkquiet ew_job_ready=%0d rowhold=%0d attr_idle=%0d attr_qv=%0d attr_bundle=%0d | abort=%0d seqabort=%0d seqmis=%0d",
+             `PC_SHELL.u_render_bin.u_tile.ew_job_ready_w,
+             `PC_SHELL.u_render_bin.u_tile.row_hold_valid_q,
+             `PC_SHELL.u_render_bin.u_tile.attr_idle_w,
+             `PC_SHELL.u_render_bin.u_tile.attr_q_valid_w,
+             `PC_SHELL.u_render_bin.u_tile.attr_bundle_valid_w,
+             `PC_SHELL.u_render_bin.u_tile.abort_now_w,
+             `PC_SHELL.u_render_bin.u_tile.sequence_abort_o,
+             `PC_SHELL.u_render_bin.u_tile.sequence_mismatch_o);
+    // ---- AND THE LEVEL BELOW, BECAUSE THE FIRST ONE ANSWERED (METASIDE) ---
+    // `walkwedge` read `rs_state=3` -- RS_SWAP -- with `empty=1` and every one
+    // of the eight terms of `ordinary_pipe_empty_w` satisfied. So the pipe DID
+    // empty, the tile DID reach the swap, and the wedge is in the handshake
+    // that resolves it:
+    //
+    //     assign resolve_start_w = (rs_state_q == RS_SWAP) && !abort_now_w;
+    //     assign ts_swap_w       = resolve_start_w && resolve_ready_w;
+    //     ... if (ts_swap_w && ts_swap_ready_w) rs_state_q <= RS_IDLE;
+    //
+    // Three candidates and no way to choose between them from outside:
+    // `resolve_ready_w` low (RASTER.RESOLVE busy), `ts_swap_ready_w` low (the
+    // tile store busy), or the resolve started and stalled writing out --
+    // `fb_valid_o` high against `fb_ready_i` low, which is what a walk running
+    // AFTER the frame's pixel sink has closed would look like, and is the same
+    // family as TERRAINVISIBLE's stimulus-ORDER fault.
+    $display("SMOKE: walkswap resolve_ready=%0d ts_swap=%0d ts_swap_ready=%0d | fb_valid=%0d fb_ready=%0d fb_last=%0d tr_valid=%0d tr_ready=%0d tr_data_valid=%0d",
+             `PC_SHELL.u_render_bin.u_tile.resolve_ready_w,
+             `PC_SHELL.u_render_bin.u_tile.ts_swap_w,
+             `PC_SHELL.u_render_bin.u_tile.ts_swap_ready_w,
+             `PC_SHELL.u_render_bin.u_tile.fb_valid_o,
+             `PC_SHELL.u_render_bin.u_tile.fb_ready_i,
+             `PC_SHELL.u_render_bin.u_tile.fb_last_o,
+             `PC_SHELL.u_render_bin.u_tile.tr_valid_w,
+             `PC_SHELL.u_render_bin.u_tile.tr_ready_w,
+             `PC_SHELL.u_render_bin.u_tile.tr_data_valid_w);
     $display("SMOKE: renderlease leases_granted=%0d refused=%0d clears=%0d frames_admitted=%0d",
              v2_leases_granted_o, v2_leases_refused_o,
              v2_clear_handshakes_o, v2_frames_admitted_o);

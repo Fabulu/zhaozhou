@@ -193,7 +193,7 @@ package zhao_pkg;
   // -- and a reader sizing a record against this line would have been told the
   // vertex record had eight bytes of room that PVSCHEMA had already spent.
   localparam int unsigned ZHAO_PARAMBUF_PV_BYTES = 32;   // SCHEMA v2 -- was 24
-  localparam int unsigned ZHAO_PARAMBUF_TD_BYTES = 32;   // SCHEMA v2 -- was 16
+  localparam int unsigned ZHAO_PARAMBUF_TD_BYTES = 48;   // SCHEMA v3 -- was 32, was 16
   localparam int unsigned ZHAO_PARAMBUF_CK_BYTES = 64;
 
   // =====================================================================
@@ -378,7 +378,7 @@ package zhao_pkg;
   // `pv_status_o = {4'd0, shareable_q, untex_q, dom_q}` -- which the walk
   // decodes already and publishes as `t_untex_o`. A second storage site for
   // one fact is how two copies come to disagree about it.
-  localparam int unsigned ZHAO_PARAMBUF_TD_SCHEMA = 2;
+  localparam int unsigned ZHAO_PARAMBUF_TD_SCHEMA = 3;
 
   //   offset  width  field        signed  note
   //   ------  -----  -----------  ------  --------------------------------
@@ -437,9 +437,100 @@ package zhao_pkg;
   localparam int unsigned ZHAO_TD_MAXY_W      = 12;
   localparam int unsigned ZHAO_TD_RSVD_LO     = 224;
   localparam int unsigned ZHAO_TD_RSVD_W      = 32;
+
+  // =====================================================================
+  // SCHEMA v3 -- THE THIRD SIXTEEN BYTES CARRY THE MATERIAL STATE
+  // (METASIDE, 2026-09-27, owner directive section 4)
+  // =====================================================================
+  // WHAT WAS MISSING AND WHY NO BACK END COULD SUPPLY IT.
+  // `zhao_geom_bin_pipe_v2` assembles `job_meta_w` from its own `tri_*`
+  // ports.  `META_FIXED_W` is 298 + 48 + 32 + 47 + 12 = 437 bits, and the
+  // last two of those five -- `area2` and `min_x` -- are GEOM.SETUP's.
+  // THE FIRST THREE ARE NOT.  `tri_flat_request_i` (298),
+  // `tri_continuation_tail_i` (48) and `tri_fragment_state_i` (32) arrive at
+  // the binner on CONSOLE WIRES from `zhao_material_window`, and
+  // `zhao_geom_setup` mentions all three ZERO times.  So the "second setup
+  // and attrpack back end" entry I55 demanded for seven packets could have
+  // been built perfectly and those 378 bits would still have had no
+  // producer on the walk side.  (HANDOVER section 15.35 is the chapter.)
+  //
+  // WHY 128 BITS AND NOT 378.  The 378 are a COMPOSITION, and most of it is
+  // structurally constant in this console: `aux_required` is `1'b0`,
+  // `aux_surface_ctx` is `224'd0`, the LOD byte and the base alpha are named
+  // localparams, and five bits of the tail are a named unused constant.
+  // What actually VARIES per triangle is 115 bits, and they are listed
+  // below.  This is NOT "store the variable part and hope": the console
+  // composes the LIVE path through the SAME unpack function the walk uses,
+  // so a field that is not in this layout cannot reach the binner on EITHER
+  // path.  There is one road, and a future field that forgets this record
+  // fails to render rather than rendering wrong.  That is stronger than a
+  // checker, because a checker can be blind and a missing road cannot.
+  //
+  // THE ARENA ID IS DELIBERATELY NOT A FIELD HERE.  The continuation tail
+  // carries I54's 18-bit arena index at [41:24], and that index is the
+  // record's own ADDRESS -- the walk fetched this descriptor at
+  // `tri_base + id * TD_B`.  Storing it inside would be a second copy of one
+  // fact, which is exactly the reasoning SCHEMA v2 used to keep `untex` out.
+  // It is supplied alongside the state, from the address on the walk side
+  // and from `u_geom_tidq` on the live side.
+  localparam int unsigned ZHAO_TD_MATSTATE_LO = 256;
+  localparam int unsigned ZHAO_TD_MATSTATE_W  = 128;
   // The end of the last field, so a block can assert the layout FILLS the
   // record exactly rather than trusting the table above.
-  localparam int unsigned ZHAO_TD_END_BIT     = ZHAO_TD_RSVD_LO + ZHAO_TD_RSVD_W; // 256
+  localparam int unsigned ZHAO_TD_END_BIT     = ZHAO_TD_MATSTATE_LO + ZHAO_TD_MATSTATE_W; // 384
+
+  // ---------------------------------------------------------------------
+  // THE MATERIAL STATE'S OWN LAYOUT, DECLARED ONCE
+  // ---------------------------------------------------------------------
+  // Every field below is stored at its PRODUCER'S full width and several are
+  // stored ALREADY COMPOSED -- `vertex_alpha`, `effect_tag`,
+  // `stencil_reference`, `fragment_state`, `recipe_weight` and `base_rgb`
+  // are each the result of a SELECTION in `zhao_console_core` (the
+  // material's value or a named profile default; the mosaic's per-cell
+  // triple or the span's).  Storing the RESULT rather than the operands is
+  // deliberate: re-running the selection on the walk side would be a second
+  // EXPRESSION of a ratified rule, which is the objection that chose the
+  // time multiplex over a second back end in the first place.
+  //
+  // `valid` is `zhao_material_window`'s `pub_valid` AT THIS TRIANGLE'S BEAT.
+  // It is a real field and not a convenience: before anything is published
+  // the flat request is all-zero, which is the legal "this surface takes no
+  // texture sample" profile, and a walked triangle from before the first
+  // publication must reproduce that and not the last span's material.
+  localparam int unsigned ZHAO_MS_VALID_LO    = 0;
+  localparam int unsigned ZHAO_MS_VALID_W     = 1;
+  localparam int unsigned ZHAO_MS_DETAIL_LO   = 1;
+  localparam int unsigned ZHAO_MS_DETAIL_W    = 1;
+  localparam int unsigned ZHAO_MS_VTXALPHA_LO = 2;
+  localparam int unsigned ZHAO_MS_VTXALPHA_W  = 8;
+  localparam int unsigned ZHAO_MS_EFFTAG_LO   = 10;
+  localparam int unsigned ZHAO_MS_EFFTAG_W    = 8;
+  localparam int unsigned ZHAO_MS_STENREF_LO  = 18;
+  localparam int unsigned ZHAO_MS_STENREF_W   = 8;
+  localparam int unsigned ZHAO_MS_FRAGST_LO   = 26;
+  localparam int unsigned ZHAO_MS_FRAGST_W    = 32;
+  localparam int unsigned ZHAO_MS_SAMPCNT_LO  = 58;
+  localparam int unsigned ZHAO_MS_SAMPCNT_W   = 2;
+  localparam int unsigned ZHAO_MS_BASEBIND_LO = 60;
+  localparam int unsigned ZHAO_MS_BASEBIND_W  = 8;
+  localparam int unsigned ZHAO_MS_RECIPE_LO   = 68;
+  localparam int unsigned ZHAO_MS_RECIPE_W    = 3;
+  localparam int unsigned ZHAO_MS_WEIGHT_LO   = 71;
+  localparam int unsigned ZHAO_MS_WEIGHT_W    = 8;
+  localparam int unsigned ZHAO_MS_BASERGB_LO  = 79;
+  localparam int unsigned ZHAO_MS_BASERGB_W   = 24;
+  localparam int unsigned ZHAO_MS_RESPCLS_LO  = 103;
+  localparam int unsigned ZHAO_MS_RESPCLS_W   = 2;
+  localparam int unsigned ZHAO_MS_PALSLOT_LO  = 105;
+  localparam int unsigned ZHAO_MS_PALSLOT_W   = 2;
+  localparam int unsigned ZHAO_MS_PALGEN_LO   = 107;
+  localparam int unsigned ZHAO_MS_PALGEN_W    = 8;
+  // WRITTEN ZERO; NONZERO IS MALFORMED, and it has a detector of its own in
+  // `zhao_geom_parambuf` beside the descriptor's 32-bit reserve.  Two
+  // reserves, two detectors: the record's and the state's.
+  localparam int unsigned ZHAO_MS_RSVD_LO     = 115;
+  localparam int unsigned ZHAO_MS_RSVD_W      = 13;
+  localparam int unsigned ZHAO_MS_END_BIT     = ZHAO_MS_RSVD_LO + ZHAO_MS_RSVD_W; // 128
 
   // ---------------------------------------------------------------------
   // RENDER asset pool -- the Phase-3/Packet-E shared ENGINE1 region

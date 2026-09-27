@@ -406,6 +406,10 @@ module zhao_geom_paramarena
     input  var logic signed [11:0] td_max_x_i,
     input  var logic signed [11:0] td_min_y_i,
     input  var logic signed [11:0] td_max_y_i,
+    // SCHEMA v3's third sixteen bytes -- the material state neither
+    // GEOM.SETUP nor GEOM.ATTRPACK can compute. See
+    // `reports/DECISION-20260927-TRIANGLEDESCRIPTOR-V3.md`.
+    input  var logic [127:0] td_matstate_i,
 
     input  var logic        ck_valid_i,
     output var logic        ck_ready_o,
@@ -618,7 +622,7 @@ module zhao_geom_paramarena
   // import -- so nothing went red. Flattering direction: a reader looking for
   // room in the record was told there were eight spare bytes that are spent.
   localparam int unsigned PV_B = ZHAO_PARAMBUF_PV_BYTES;   // w=32 bytes
-  localparam int unsigned TD_B = ZHAO_PARAMBUF_TD_BYTES;   // w=32 bytes
+  localparam int unsigned TD_B = ZHAO_PARAMBUF_TD_BYTES;   // w=48 bytes
   localparam int unsigned CK_B = ZHAO_PARAMBUF_CK_BYTES;   // w=64 bytes
 
   // The three sub-regions inside a view, laid out in allocation order. Bases
@@ -668,7 +672,7 @@ module zhao_geom_paramarena
   // rather than guessing at it. Its number below is therefore verified by the
   // acceptance bench, which reads memory AT that offset, and not by the gate.
   localparam int unsigned TRI_OFF_B = ((VERT_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,097,152
-  localparam int unsigned TRI_CAP_B   = MAX_TRIS   * TD_B;         // 524,288
+  localparam int unsigned TRI_CAP_B   = MAX_TRIS   * TD_B;         // 786,432
   // 2,621,440 SINCE TriangleDescriptor SCHEMA v2 (SWAPCLOSE, 2026-09-27).
   // 2,097,152 + 524,288 is 2,621,440, and `VIEW_USED_B` on the line below but
   // one is that plus the chunk region. It read 2,359,296 while `TD_B` was 16,
@@ -679,13 +683,34 @@ module zhao_geom_paramarena
   // number below is therefore verified by the acceptance bench ... and not by
   // the gate" -- and the bench verifies the ADDRESS it reads at, never the
   // comment. Treat every number on these three lines as unguarded prose.
-  localparam int unsigned CHUNK_OFF_B = ((TRI_OFF_B + TRI_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,621,440
+  localparam int unsigned CHUNK_OFF_B = ((TRI_OFF_B + TRI_CAP_B + LAYOUT_ALIGN_B - 1) / LAYOUT_ALIGN_B) * LAYOUT_ALIGN_B; // 2,883,584
   localparam int unsigned CHUNK_CAP_B = MAX_CHUNKS * CK_B;         // 1,048,576
-  localparam int unsigned VIEW_USED_B = CHUNK_OFF_B + CHUNK_CAP_B; // 3,670,016
+  localparam int unsigned VIEW_USED_B = CHUNK_OFF_B + CHUNK_CAP_B; // 3,932,160
 
   // The low bits an aligned address must have clear. `BURST_ALIGN_B` is
   // guarded to be a power of two at elaboration, so this is the whole test.
   localparam int unsigned ALIGN_LSB = $clog2(BURST_ALIGN_B);       // w=4 bits
+  // ---- THE PORT WIDTH IS A LITERAL AND THE LAW IS THIS GUARD (METASIDE) ---
+  // `tools/quartus/gen_prod_top.py` resolves a packed port width by evaluating
+  // the expression against MODULE parameters only; a PACKAGE constant is not
+  // in that table, so `[ZHAO_TD_MATSTATE_W-1:0]` made it SKIP this block -- and
+  // a skipped block is silently absent from the generated production top,
+  // which is a regression no gate spells out. The tell is the instance COUNT
+  // moving: 89 -> 86, in a line nobody reads. So the port carries a literal and
+  // the package stays authoritative through the check below, which fails
+  // ELABORATION rather than letting the two drift.
+  //
+  // CLAUDE.md: `--lint-only` does NOT run `initial` blocks, so a clean lint is
+  // not evidence about this guard; elaboration in a Verilator test binary and
+  // quartus_map are. And Quartus 17.0 rejects a bare module-scope `if`, which
+  // is why it is inside `initial begin`.
+  // synthesis translate_off
+  initial begin : p_matstate_width
+    if (ZHAO_TD_MATSTATE_W != 128)
+      $fatal(1, "zhao_geom_paramarena: ZHAO_TD_MATSTATE_W moved; the literal port width did not");
+  end
+  // synthesis translate_on
+
 
   // The directory lives at the scratch base. One record, chunk-sized, so the
   // walker's read is the same shape as a chunk read and needs no second
@@ -761,7 +786,7 @@ module zhao_geom_paramarena
     // these two lines are what makes that derivation checkable.
     if (ZHAO_TD_END_BIT != TD_B * 8)
       $fatal(1, "zhao_geom_paramarena: the TriangleDescriptor field table does not fill the record");
-    if (ZHAO_PARAMBUF_TD_SCHEMA != 2)
+    if (ZHAO_PARAMBUF_TD_SCHEMA != 3)
       $fatal(1, "zhao_geom_paramarena: this block encodes TriangleDescriptor SCHEMA v2");
     if ((PV_STRIDE_B % BURST_ALIGN_B) != 0)
       $fatal(1, "zhao_geom_paramarena: PV_STRIDE_B is not burst-aligned");
@@ -973,6 +998,7 @@ module zhao_geom_paramarena
     td_bytes_c[ZHAO_TD_MAXX_LO     +: ZHAO_TD_MAXX_W]     = td_max_x_i;
     td_bytes_c[ZHAO_TD_MINY_LO     +: ZHAO_TD_MINY_W]     = td_min_y_i;
     td_bytes_c[ZHAO_TD_MAXY_LO     +: ZHAO_TD_MAXY_W]     = td_max_y_i;
+    td_bytes_c[ZHAO_TD_MATSTATE_LO +: ZHAO_TD_MATSTATE_W] = td_matstate_i;
   end
 
   // THE GENERATION IS STAMPED HERE AND NOT SUPPLIED BY THE CALLER. A producer
