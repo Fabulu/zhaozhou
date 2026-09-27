@@ -2534,16 +2534,58 @@ module tb_zhao_console_core_smoke
   //      here too. HEADER IS LAST because the header is what marks the slot
   //      runnable; the generator emits it last and this FSM does not reorder.
   //
-  //   COMMIT (op 1)                   -> the directory takes the hash.
+  //   COMMIT (op 1)                   -> the directory takes the hash AND
+  //      ALLOCATES THE SLOT. It comes BEFORE the load words, and that ordering
+  //      is the whole of NOPROG's repair -- see the block immediately below.
   //
   // `fld_stage_done_q` then releases the frame. Without that gate the packet
   // could reach CMD.EXEC's TerrainField arm while the program was still being
   // fetched, and the record would resolve `noprog` -- which would look exactly
   // like a routing defect and be nothing but a race in the bench.
+  //
+  // =========================================================================
+  // THE COMMIT PRECEDES THE LOAD WORDS. REPAIRED 2026-09-27 (NOPROG). THE
+  // ORDER USED TO BE THE OTHER WAY ROUND, AND THAT IS WHY THE FIRST FIELD THIS
+  // CONSOLE EVER INSTALLED ANSWERED `noprog` 1,089 TIMES.
+  // =========================================================================
+  // `zhao_field_progcache`'s header states the two-phase law: "Phase B,
+  // COMMIT: only after a miss ... insert into the first free slot, else evict
+  // the least-recently-used entry", answering INSERTED **with a slot**. THE
+  // COMMIT IS THE ALLOCATOR. So `zhao_field_host_v2:1448` does this, by design
+  // and with its reason written beside it -- "an insert invalidates the slot's
+  // program AND its init proof ... the directory has promised the slot to a
+  // new hash":
+  //
+  //     if (pc_cm_valid_i && pc_cm_ready_o && pc_cm_ok_i) begin
+  //       hdr_loaded[pc_cm_slot_c] <= 1'b0;
+  //
+  // The previous order here was INSTALL -> LOAD words (header last) -> COMMIT.
+  // The header set `hdr_loaded[0]`; the commit that followed CLEARED it. Every
+  // request then met `gnoprog_c = req_noprog_i[pick_id] || !hdr_loaded[gslot_c]`
+  // (`zhao_field_host_v2:1306`) and came back 0xF0.
+  //
+  // WHY IT READ AS A DEFECT IN PRODUCTION RTL AND IS NOT ONE. That 0xF0 is the
+  // ONLY symptom, and the counter reporting it -- `fld_earth_noprog_o` --
+  // increments in the adapter's `E_WAIT` on the ENGINE's reply, not on the
+  // adapter's own binding flag. `gnoprog_c` is an OR of two independent causes,
+  // so NEITHER `fldearth noprog` NOR `fldhost noprog` can say which one fired.
+  // The fingerprint (1,089 = 33x33) matches the intake-versus-replay race that
+  // `zhao_field_earth_adapter.sv`'s own header documents verbatim, so that is
+  // what it was read as. IT WAS NOT THAT. `fldlist open_at_patch=0` says no
+  // patch job was ever taken while the list was open -- the ordering that race
+  // requires never happened -- and `fldlist entries_replayed=1` says the replay
+  // did reach the adapter. The adapter's binding was correct throughout.
+  //
+  // THIS COMMENT BLOCK USED TO CARRY ITS OWN REFUTATION. A few lines above it
+  // still says "HEADER IS LAST because the header is what marks the slot
+  // runnable" -- and then sequenced the commit after it. Both sentences were
+  // written in the same commit. That is HANDOVER-20260919 15.35's shape: a
+  // document holding the claim and its refutation within a few lines, with
+  // nobody differencing the two.
   localparam int unsigned FLD_STEP_INSTALL_C = 0;
-  localparam int unsigned FLD_STEP_LOAD0_C   = 1;
-  localparam int unsigned FLD_STEP_COMMIT_C  = FLD_STEP_LOAD0_C + SFF_N_LOAD;
-  localparam int unsigned FLD_STEP_DONE_C    = FLD_STEP_COMMIT_C + 1;
+  localparam int unsigned FLD_STEP_COMMIT_C  = 1;
+  localparam int unsigned FLD_STEP_LOAD0_C   = 2;
+  localparam int unsigned FLD_STEP_DONE_C    = FLD_STEP_LOAD0_C + SFF_N_LOAD;
 
   localparam logic [31:0] FLD_TICKET_IN = 32'hFD10_0010;
   localparam logic [31:0] FLD_TICKET_LD = 32'hFD10_0020;
@@ -2553,6 +2595,8 @@ module tb_zhao_console_core_smoke
   logic        fld_stage_done_q;
   logic [31:0] fld_install_ok_q;
   logic [31:0] fld_commit_ok_q;
+  logic [ 2:0] fld_commit_slot_q;
+  logic [31:0] fld_commit_inserted_q;
 
   // THE EPOCH AGREEMENT, CHECKED AT ELABORATION.
   //
@@ -2595,6 +2639,8 @@ module tb_zhao_console_core_smoke
       fld_stage_done_q     <= 1'b0;
       fld_install_ok_q     <= 32'd0;
       fld_commit_ok_q      <= 32'd0;
+      fld_commit_slot_q    <= 3'd7;   // NOT SFF_SLOT, so "never latched" cannot read as a pass
+      fld_commit_inserted_q <= 32'd0;
 `endif
     end else begin
 `ifdef ZHAO_SMOKE_FIELD_ACTIVE
@@ -2625,11 +2671,28 @@ module tb_zhao_console_core_smoke
           fld_db_post_hash_i   <= SFF_BODY_CRC;
           fld_db_post_ok_i     <= 1'b0;
           fld_db_post_ticket_i <= FLD_TICKET_IN;
-        end else if (fld_stage_step_q < FLD_STEP_COMMIT_C) begin
+        end else if (fld_stage_step_q == FLD_STEP_COMMIT_C) begin
+          // THE COMMIT, AND IT IS THE ALLOCATOR RATHER THAN A RECEIPT. It runs
+          // BEFORE the load words, because a successful insert clears
+          // `hdr_loaded` for the slot it hands back; posting it afterwards
+          // un-loads the header the loads just wrote. The slot it returns is
+          // ASSERTED against `SFF_SLOT` below rather than assumed -- on an
+          // empty directory the first free slot is 0, which is what the
+          // generator emits, but "it is 0" is a measurement, not a promise.
+          fld_db_post_op_i     <= 2'd1;                  // COMMIT, slot allocated
+          fld_db_post_kind_i   <= 3'd0;
+          fld_db_post_slot_i   <= 3'(SFF_SLOT);
+          fld_db_post_addr_i   <= 8'd0;
+          fld_db_post_data_i   <= 96'd0;
+          fld_db_post_hash_i   <= SFF_HASH;
+          fld_db_post_ok_i     <= 1'b1;
+          fld_db_post_ticket_i <= FLD_TICKET_C2;
+        end else begin
           // A LOAD WORD, verbatim from the generator. The bench chooses NONE of
           // these fields -- kind, address and the 96-bit payload are all the
           // lowered HostPlan's, which is what keeps 13.7's "may not hand the
-          // patch ... an untracked association" satisfied.
+          // patch ... an untracked association" satisfied. THE HEADER IS LAST
+          // among these, and the commit no longer follows it.
           fld_db_post_op_i     <= 2'd0;                  // LOAD WORD
           fld_db_post_kind_i   <= SFF_LD_KIND[fld_stage_step_q - FLD_STEP_LOAD0_C];
           fld_db_post_slot_i   <= 3'(SFF_SLOT);
@@ -2638,14 +2701,6 @@ module tb_zhao_console_core_smoke
           fld_db_post_hash_i   <= 32'd0;
           fld_db_post_ok_i     <= 1'b0;
           fld_db_post_ticket_i <= FLD_TICKET_LD;
-        end else begin
-          fld_db_post_op_i     <= 2'd1;                  // COMMIT, header written
-          fld_db_post_kind_i   <= 3'd0;
-          fld_db_post_slot_i   <= 3'(SFF_SLOT);
-          fld_db_post_addr_i   <= 8'd0;
-          fld_db_post_hash_i   <= SFF_HASH;
-          fld_db_post_ok_i     <= 1'b1;
-          fld_db_post_ticket_i <= FLD_TICKET_C2;
         end
       end else if (fld_db_post_valid_i && fld_db_post_ready_o) begin
         fld_db_post_valid_i <= 1'b0;
@@ -2709,8 +2764,19 @@ module tb_zhao_console_core_smoke
         // ticket is the field that cannot be right by accident.
         if ((fld_db_ret_ticket_o == FLD_TICKET_IN) && fld_db_ret_ok_o)
           fld_install_ok_q <= fld_install_ok_q + 32'd1;
-        if ((fld_db_ret_ticket_o == FLD_TICKET_C2) && fld_db_ret_ok_o)
+        if ((fld_db_ret_ticket_o == FLD_TICKET_C2) && fld_db_ret_ok_o) begin
           fld_commit_ok_q <= fld_commit_ok_q + 32'd1;
+          // THE SLOT THE DIRECTORY ACTUALLY ALLOCATED, LATCHED RATHER THAN
+          // ASSUMED. `zhao_field_progcache` inserts into "the first free slot,
+          // else evict the least-recently-used entry" and answers with that
+          // slot. The generator emits its load words against `SFF_SLOT`, so if
+          // the directory ever hands back a different slot the microcode would
+          // be written somewhere the request never looks -- and the only
+          // symptom would be 0xF0 again, which is the symptom this packet has
+          // already spent a run chasing. Asserted below.
+          fld_commit_slot_q     <= fld_db_ret_slot_o;
+          fld_commit_inserted_q <= fld_commit_inserted_q + 32'(fld_db_ret_inserted_o);
+        end
 `endif
       end
     end
@@ -3566,8 +3632,22 @@ module tb_zhao_console_core_smoke
       // program is actually resident. Gating on it is not the bench faking a
       // handshake: a real HPS would not submit a frame naming a program whose
       // install it had not seen succeed.
+      //
+      // AND THE SAME LAW APPLIES TO THE LOAD WORDS, WHICH THE REORDER MADE
+      // LOAD-BEARING. ADDED 2026-09-27 (NOPROG). The commit now runs BEFORE
+      // the microcode, so `fld_commit_ok_q` no longer implies the program is
+      // loaded -- it implies only that the slot is allocated. Gating on it
+      // alone would release the frame with the load words still sitting in the
+      // doorbell's queue, which is the identical "ACCEPTED IS NOT COMPLETED"
+      // defect the paragraph above records, one door along.
+      //
+      // `fld_db_load_words_o` is the HOST's own count of load words it has
+      // CONSUMED, not posts the mailbox has accepted, so it is the signal that
+      // means the microcode is in. `SFF_N_LOAD` is the generator's word count,
+      // so the two cannot drift: change the program and both move together.
       if (pkt_armed_q && reset_released_q && (fld_install_ok_q != 32'd0) &&
-          (fld_commit_ok_q != 32'd0) && (ring_writes_q == 0)) begin
+          (fld_commit_ok_q != 32'd0) && fld_stage_done_q &&
+          (fld_db_load_words_o >= 32'(SFF_N_LOAD)) && (ring_writes_q == 0)) begin
 `else
       if (pkt_armed_q && reset_released_q && (ring_writes_q == 0)) begin
 `endif
@@ -7850,6 +7930,8 @@ module tb_zhao_console_core_smoke
     // assertion below and printed NOT ONE of the numbers that say WHY. A
     // diagnostic that only prints after the thing it diagnoses has already
     // stopped the run is a diagnostic nobody ever reads.
+    $display("SMOKE: fldstageB commit_slot=%0d commit_inserted=%0d (SFF_SLOT=%0d SFF_N_LOAD=%0d)",
+             fld_commit_slot_q, fld_commit_inserted_q, SFF_SLOT, SFF_N_LOAD);
     $display("SMOKE: fldstage install_ok=%0d commit_ok=%0d ldr_installs_ok=%0d ldr_installs_failed=%0d ldr_bad_crc=%0d ldr_bad_envelope=%0d ldr_bad_range=%0d ldr_bad_section=%0d ldr_bad_meta=%0d ldr_bridge_errs=%0d ldr_load_bytes=%0d ldr_binds_ok=%0d ldr_bad_operation=%0d",
              fld_install_ok_q, fld_commit_ok_q,
              fld_ldr_installs_ok_o, fld_ldr_installs_failed_o,
@@ -7877,9 +7959,28 @@ module tb_zhao_console_core_smoke
     // separates "the record never arrived" from "the record arrived and the
     // program was not resident yet", and those two look identical from
     // `fld_earth_noprog_o` alone.
-    $display("SMOKE: fldlist  records=%0d sealed=%0d unresolved=%0d tail_rejected=%0d",
+    // THE REPLAY SIDE, AND IT COST NO PORT. `replays_o`, `entries_replayed_o`
+    // and `open_at_patch_o` have been core ports and bench wires since the
+    // fieldlist was composed and NOTHING HAS EVER READ THEM -- the brief that
+    // sent this packet said "the adapter exports no evidence for the replay
+    // side", which is true of the ADAPTER and false of the LIST next to it.
+    //
+    // They are the three numbers that separate the noprog candidates:
+    //   * `entries_replayed_o` is the count of `add_fire` events the list
+    //     ISSUED. The adapter watches that same handshake, so a nonzero here
+    //     beside a noprog adapter says the add fired and the adapter's bank
+    //     did not keep it -- not that the replay never ran.
+    //   * `replays_o` is patch LISTS filled, so `entries_replayed/replays`
+    //     says whether a second job replayed over the first one's binding.
+    //   * `open_at_patch_o` counts a patch job taken while the list was still
+    //     OPEN -- which is precisely the composed-console ordering ("a job
+    //     pending FIRST") that no leaf bench reproduces. A nonzero here is the
+    //     ordering, MEASURED, rather than inherited from a brief.
+    $display("SMOKE: fldlist  records=%0d sealed=%0d unresolved=%0d tail_rejected=%0d replays=%0d entries_replayed=%0d open_at_patch=%0d idle=%0b",
              terr_fl_records_o, terr_fl_records_sealed_o, terr_fl_unresolved_o,
-             terr_fl_tail_rejected_o);
+             terr_fl_tail_rejected_o, terr_fl_replays_o,
+             terr_fl_entries_replayed_o, terr_fl_open_at_patch_o,
+             terr_fl_idle_o);
     $display("SMOKE: fldpatch tp_add_accept=%0b tp_add_reject=%0b tp_covers=%0b",
              terr_pt_fld_add_accept_o, terr_pt_fld_add_reject_o,
              terr_pt_fld_covers_o);
@@ -10742,8 +10843,19 @@ module tb_zhao_console_core_smoke
     if (fld_install_ok_q != 32'd1)
       $fatal(1, "SMOKE: the INSTALL_CAPSULE post was not answered ok (ok returns=%0d) -- R20 says every refusal is answered, so a missing return is the doorbell's return path and not a refusal",
              fld_install_ok_q);
+    // THE COMMIT, AND THE SLOT IT ALLOCATED. The message below used to say the
+    // commit follows the header; it does not any more, and saying so was how
+    // the noprog run got its order. The commit is phase B of
+    // `zhao_field_progcache`'s two-phase law and it ALLOCATES the slot the
+    // microcode is then loaded into.
+    if (fld_commit_inserted_q != 32'd1)
+      $fatal(1, "SMOKE: the program COMMIT did not INSERT (inserted returns=%0d, ok returns=%0d) -- `zhao_field_progcache` answers INSERTED with a slot on `cm_ok_i`, and without an insert there is no allocated slot for the load words to target",
+             fld_commit_inserted_q, fld_commit_ok_q);
+    if (fld_commit_slot_q != 3'(SFF_SLOT))
+      $fatal(1, "SMOKE: the directory allocated slot %0d, the generator's load words target SFF_SLOT=%0d -- the microcode would be written where no request looks, and the only symptom would be status 0xF0, which is indistinguishable from every other noprog cause on this console",
+             fld_commit_slot_q, SFF_SLOT);
     if (fld_commit_ok_q != 32'd1)
-      $fatal(1, "SMOKE: the program COMMIT was not answered ok (ok returns=%0d) -- the HEADER load word is emitted LAST by the generator, so a refusal here means the order law saw an unwritten header",
+      $fatal(1, "SMOKE: the program COMMIT was not answered ok (ok returns=%0d) -- the commit ALLOCATES the slot and is posted BEFORE the load words, so a refusal here is the directory refusing the hash and not an ordering fault",
              fld_commit_ok_q);
     // Every load word the generator emitted reached the host. Counted, not
     // assumed: a mailbox that silently dropped posts would still let the

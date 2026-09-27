@@ -172,6 +172,36 @@ bool load_initproof(Dut& d, uint8_t slot, bool ok) {
   return load_word(d, kLdInitProof, slot, 0, ok ? 1ull : 0ull);
 }
 
+// PHASE B OF `zhao_field_progcache`'s TWO-PHASE LAW: the COMMIT.
+// `ok` is the caller's decode verdict "and nothing more". On ok it INSERTS the
+// hash and answers with THE SLOT THE DIRECTORY CHOSE -- the commit is the
+// allocator, which is the fact FT029 below exists to pin.
+bool commit_hash(Dut& d, uint32_t hash, bool ok, uint32_t* slot_out, uint32_t* inserted_out) {
+  d.pc_cm_valid_i = 1;
+  d.pc_cm_hash_i = hash;
+  d.pc_cm_ok_i = ok ? 1 : 0;
+  bool taken = false;
+  for (int guard = 0; guard < 40000 && !taken; ++guard) {
+    d.eval();
+    if (d.pc_cm_ready_o) taken = true;
+    step(d);
+  }
+  d.pc_cm_valid_i = 0;
+  if (!taken) return false;
+  d.pc_cm_resp_ready_i = 1;
+  for (int guard = 0; guard < 40000; ++guard) {
+    d.eval();
+    if (d.pc_cm_resp_valid_o) {
+      if (slot_out) *slot_out = d.pc_cm_slot_o;
+      if (inserted_out) *inserted_out = d.pc_cm_inserted_o;
+      step(d);
+      return true;
+    }
+    step(d);
+  }
+  return false;
+}
+
 // A prepared scalar. `addr` is the prepared slot.
 //   [31:0] value   [32] VALID   [47:40] generation
 //
@@ -742,6 +772,98 @@ int main(int argc, char** argv) {
     check(r.got, "FT028 completes", 1, r.got ? 1 : 0);
     check(dut.runs_o == runs_before + 1, "FT028 exactly ONE terminal event for one point",
           runs_before + 1, dut.runs_o);
+  }
+
+  // =======================================================================
+  // FT029. THE COMMIT IS THE ALLOCATOR, SO IT RUNS BEFORE THE MICROCODE.
+  // A SUCCESSFUL INSERT UN-LOADS THE SLOT'S HEADER -- BY DESIGN.
+  // =======================================================================
+  // ADDED 2026-09-27 (NOPROG). This is the law the composed console's first
+  // live field broke, and NO LEAF BENCH HELD IT: the whole of `tests/field/`
+  // loads programs and never commits, so nothing in the tree stated the
+  // ordering between the two doors.
+  //
+  // THE LAW, from `zhao_field_progcache`'s own header: "Phase B, COMMIT: only
+  // after a miss ... insert into the first free slot, else evict the least-
+  // recently-used entry", answering INSERTED *with a slot*. The directory
+  // CHOOSES where a program lives. `zhao_field_host_v2:1448` therefore clears
+  // `hdr_loaded` and `hdr_ipok` for that slot on every successful insert, with
+  // its reason beside it -- "the directory has promised the slot to a new
+  // hash", and a proof written for the displaced program is not a proof about
+  // the new one.
+  //
+  // THE CASE THAT DISCRIMINATES. A host that treated the commit as a receipt
+  // rather than an allocation would leave `hdr_loaded` alone and step (3)
+  // would return OK. That host would look correct in every existing case in
+  // this file -- because none of them commits at all -- and would be wrong the
+  // first time a real HPS staged a program the way the console does.
+  //
+  // IT ASSERTS THE CORRECT BEHAVIOUR, NOT THE BUG. Step (3) pins the designed
+  // invalidation; step (4) pins the RECOVERY, which is what the repaired
+  // console smoke does -- the header is written AFTER the commit and the slot
+  // is runnable again. A test that asserted only (3) would pass while the
+  // ordering was unusable.
+  //
+  // THE DIRECTORY IS EMPTY WHEN THIS RUNS -- no earlier case in this file
+  // drives `pc_cm_valid_i` -- so "the first free slot" is 0. That is ASSERTED
+  // rather than assumed: if it ever stops being true the microcode below would
+  // be loaded where no request looks, and the only symptom would be status
+  // 0xF0, which on this console is indistinguishable from four other causes
+  // (`zhao_field_host_v2:1306` ORs the client's own no-program bit with
+  // `!hdr_loaded`, so neither counter can attribute it).
+  {
+    const uint8_t slot = 0, ob = 2;
+    const uint32_t kHash = 0x8BDCEB63u;  // the smoke fixture's own program hash
+
+    // (1) A COMPLETE PROGRAM, HEADER LAST -- the order the generator emits,
+    //     which is correct in isolation.
+    check(load_word(dut, kLdUop, slot, 0, instr(kOpAdd, ob, 0, 1, 0, 0)), "FT029 uop 0", 1, 1);
+    check(load_word(dut, kLdUop, slot, 1, instr(kOpEnd, 0, 0, 0, 0, 0)), "FT029 end", 1, 1);
+    check(load_outmap(dut, slot, 0, kSrcVectorReg, ob), "FT029 outmap ordinal 0", 1, 1);
+    check(load_assoc(dut, slot, 1), "FT029 assoc", 1, 1);
+    check(load_word(dut, kLdHeader, slot, 0, header_word(2, ob, 0x01, 0x01, 1, kFormCanonical)),
+          "FT029 header", 1, 1);
+
+    // (2) THE SLOT IS RUNNABLE. Without this the rest measures nothing: a
+    //     program that never ran cannot demonstrate being un-loaded.
+    set_req_slot(dut, 0, slot);
+    set_req_in(dut, 0, 0, 7);
+    set_req_in(dut, 0, 1, 13);
+    Resp r1 = run_once(dut, 0);
+    check(r1.got, "FT029 (2) completes", 1, r1.got ? 1 : 0);
+    check(r1.status == kStOk, "FT029 (2) header-last makes the slot RUNNABLE", 0x00, r1.status);
+    check(r1.out[0] == 20, "FT029 (2) the program computes R0+R1", 20,
+          static_cast<uint64_t>(r1.out[0]));
+
+    // (3) A SUCCESSFUL COMMIT ALLOCATES THIS SLOT AND UN-LOADS IT.
+    uint32_t cm_slot = 0xFFFFFFFFu, cm_ins = 0xFFFFFFFFu;
+    check(commit_hash(dut, kHash, true, &cm_slot, &cm_ins), "FT029 (3) commit answered", 1, 1);
+    check(cm_ins == 1, "FT029 (3) an ok commit INSERTS", 1, cm_ins);
+    check(cm_slot == slot, "FT029 (3) the first free slot is 0, so the insert lands here", slot,
+          cm_slot);
+
+    const uint32_t noprog_before = dut.noprog_o;
+    Resp r2 = run_once(dut, 0);
+    check(r2.got, "FT029 (3) completes", 1, r2.got ? 1 : 0);
+    check(r2.status == kStNoProgram,
+          "FT029 (3) the insert cleared hdr_loaded, so the SAME request is now 0xF0", 0xF0,
+          r2.status);
+    check(dut.noprog_o == noprog_before + 1, "FT029 (3) noprog_o counted exactly one refusal",
+          noprog_before + 1, dut.noprog_o);
+
+    // (4) THE RECOVERY, AND IT IS THE ORDER THE CONSOLE NOW STAGES IN. The
+    //     microcode, the output map and the association all SURVIVED the
+    //     commit -- only the runnable mark was cleared -- so re-writing the
+    //     HEADER alone restores the slot. That is the precise statement: the
+    //     commit invalidates a MARK, it does not destroy a PROGRAM.
+    check(load_word(dut, kLdHeader, slot, 0, header_word(2, ob, 0x01, 0x01, 1, kFormCanonical)),
+          "FT029 (4) header after the commit", 1, 1);
+    Resp r3 = run_once(dut, 0);
+    check(r3.got, "FT029 (4) completes", 1, r3.got ? 1 : 0);
+    check(r3.status == kStOk, "FT029 (4) header AFTER the commit is runnable again", 0x00,
+          r3.status);
+    check(r3.out[0] == 20, "FT029 (4) the microcode survived the commit untouched", 20,
+          static_cast<uint64_t>(r3.out[0]));
   }
 
   // =======================================================================
