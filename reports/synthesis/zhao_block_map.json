@@ -1,14 +1,14 @@
 {
     "schemaVersion":  1,
     "characterization":  "map-only-per-block",
-    "newestRunCommit":  "8e1ab9f6f6340a34f1c02ebed81dfffe36b80372",
+    "newestRunCommit":  "993f8452f8d040220062ef9af8d7410e2c2378a8",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
              },
     "device":  "5CSEBA6U23I7",
-    "sourceListHash":  "0c5bf2923044f9f9",
+    "sourceListHash":  "788e8276243661ab",
     "blocks":  [
                    {
                        "module":  "zhao_audio_fifo",
@@ -4902,6 +4902,35 @@
                        "pins":  0,
                        "estimatedAlms":  807,
                        "combAluts":  822,
+                       "mlabMemoryBits":  null,
+                       "inferredMemories":  [
+
+                                            ],
+                       "inferredMemoryCount":  0,
+                       "inferredDesignMemoryCount":  0,
+                       "ramConversionWarnings":  0,
+                       "errors":  0,
+                       "critical":  1
+                   },
+                   {
+                       "module":  "zhao_walk_meta_holdtagphase-walkmetahold",
+                       "status":  "ok",
+                       "sourceCommit":  "993f8452f8d040220062ef9af8d7410e2c2378a8",
+                       "rtlCleanAtHead":  true,
+                       "sourceListHash":  "788e8276243661ab",
+                       "sourceFileCount":  405,
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "stage":  "map-only",
+                       "variantOf":  "zhao_walk_meta_hold",
+                       "seconds":  34.5,
+                       "dspBlocks":  0,
+                       "registers":  211,
+                       "blockMemoryBits":  0,
+                       "virtualPins":  362,
+                       "pins":  0,
+                       "estimatedAlms":  301,
+                       "combAluts":  81,
                        "mlabMemoryBits":  null,
                        "inferredMemories":  [
 
