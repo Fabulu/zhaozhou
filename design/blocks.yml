@@ -3510,6 +3510,68 @@ blocks:
           against negative controls on identical stimulus, and the test itself
           fire-tested: a planted failure returns rc 1 and prints
           "1/51 checks FAILED".
+  - id: TERRAIN.MATPUB
+    name: Composed material publisher
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: >-
+      Publish the COMPOSED layer-E plane -- authored material with the Earth
+      field's material lane composed in -- to TERRAIN.COMPOSED_MATERIAL,
+      [0x058B_0000, 0x05AB_0000), 256 slots of 8 KiB, one 4,096 B plane per
+      patch as 64 sixty-four-byte writes. Commissioned by the owner ruling of
+      2026-09-27 over entry I34, which declined a COMPOSEPUB-shaped refusal on
+      the grounds that NAV was replaced rather than removed and no equivalent
+      supersession exists for this channel. The tap is TERRAIN.MATJOIN's
+      composed write face -- the only place the composed triple exists as a
+      UNIT, since upstream it is an authored plane plus a separate field lane
+      and downstream it is already a per-fragment mosaic pick.
+    contract: design/contracts/TERRAIN.MATJOIN.md
+    phase: 7
+    owner_issue: ZH-039
+    inputs: [composed_material]
+    outputs: [published_material_plane]
+    upstream: [TERRAIN.MATJOIN, TERRAIN.COMPCACHE]
+    downstream: [MEM.GUARD]
+    backpressure: none
+    latency: 64 bursts per published patch
+    target_throughput: 1 published patch per compose fill
+    tests:
+      directed: tests/terrain/terrain_matpub_directed.cpp
+    counters:
+      [terrain_matpub_cells_captured, terrain_matpub_commits,
+       terrain_matpub_patches_published, terrain_matpub_skipped_clean,
+       terrain_matpub_stranger_pub, terrain_matpub_bursts_written,
+       terrain_matpub_guard_denied, terrain_matpub_cell_oob,
+       terrain_matpub_short_fill, terrain_matpub_commit_busy]
+    counter_ports:
+      terrain_matpub_cells_captured: cells_captured_o
+      terrain_matpub_commits: commits_o
+      terrain_matpub_patches_published: patches_published_o
+      terrain_matpub_skipped_clean: skipped_clean_o
+      terrain_matpub_stranger_pub: stranger_pub_o
+      terrain_matpub_bursts_written: bursts_written_o
+      terrain_matpub_guard_denied: guard_denied_o
+      terrain_matpub_cell_oob: cell_oob_o
+      terrain_matpub_short_fill: short_fill_o
+      terrain_matpub_commit_busy: commit_busy_o
+    budget_group: geometry_mantle
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: UNIT_VERIFIED
+        date: "2026-09-27"
+        note: >-
+          terrain_matpub_directed, 46 checks 0 failures. The plane is read back
+          out of the bench's memory window and differenced CELL BY CELL against
+          what was driven in, with the cell values three different odd functions
+          of the cell index -- so a swapped mat_a/mat_b, a rotated word, a
+          transposed plane or an off-by-one in the burst walk each show, where a
+          plane of equal cells would pass under all four. All ten counters are
+          SEEN TO FIRE by stimulus rather than asserted zero. The case that
+          matters most is the stranger arm: a BIT-IDENTICAL plane committed into
+          the same slot under a different patch id, which a change-only publish
+          gate would silently SKIP, leaving the region describing the previous
+          occupant under the new occupant's address with every counter balanced.
   - id: TERRAIN.BAKE
     name: Persistent scar bake
     kind: rtl

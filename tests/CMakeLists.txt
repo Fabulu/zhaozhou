@@ -10150,6 +10150,53 @@ verilate(test_terrain_matjoin_directed
 add_test(NAME terrain_matjoin_directed COMMAND test_terrain_matjoin_directed)
 set_tests_properties(terrain_matjoin_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
 
+# ---------------------------------------------------------------------------
+# TERRAIN.COMPOSED_MATERIAL's publisher (entry I34, MATPUB 2026-09-27).
+#
+# The bench is a WRAPPER rather than the block itself, and the reason is worth
+# a line: `zhao_terrain_matpub` talks to MEM.GUARD through packed structs, which
+# Verilator flattens into a wide word -- so a C++ driver would have to slice a
+# 103-bit request by hand-counted bit offsets, and an offset wrong by one gives
+# a test that drives a plausible address and checks nothing. `tb_terrain_matpub`
+# breaks the fields out where the struct's own member names do the slicing.
+#
+# There is also `tests/terrain/run_terrain_matpub_directed.ps1`, which builds
+# and runs this same pair WITHOUT a CMake tree. It exists because configuring
+# one in a fresh worktree verilates the whole suite, and both of this entry's
+# previous packets ended up quoting their directed tests as "not run" for
+# exactly that reason.
+add_executable(test_terrain_matpub_directed terrain/terrain_matpub_directed.cpp)
+target_link_libraries(test_terrain_matpub_directed PRIVATE zhao_harness)
+target_include_directories(test_terrain_matpub_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain)
+verilate(test_terrain_matpub_directed
+  PREFIX Vtb_terrain_matpub
+  TOP_MODULE tb_terrain_matpub
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_dc_sdp_ram.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_matpub.sv
+          ${CMAKE_SOURCE_DIR}/tests/terrain/tb_terrain_matpub.sv)
+add_test(NAME terrain_matpub_directed COMMAND test_terrain_matpub_directed)
+set_tests_properties(terrain_matpub_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
+# -Wall EXPLICITLY and with no waiver file, for the reason the matjoin lint
+# above gives: `tests/shell/v3_closure_inherited.vlt` waives UNUSEDSIGNAL across
+# whole directories including `fpga/rtl/common`, so a dead wire in the publisher
+# would raise nothing inside the console closure. This lint is the one place it
+# is held to the bare standard, and it is the lint that caught this file's first
+# defect -- a comment whose first word was the linter's own name, parsed as a
+# pragma.
+add_test(NAME lint_terrain_matpub
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_matpub
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_dc_sdp_ram.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_matpub.sv)
+set_tests_properties(lint_terrain_matpub PROPERTIES
+  LABELS "lint;fast")
+
 # -Wall EXPLICITLY, and with no waiver file. `tests/shell/v3_closure_inherited.vlt`
 # waives UNUSEDSIGNAL across whole directories including `fpga/rtl/common`, so a
 # dead wire in either of these two files would raise nothing inside the console

@@ -14794,6 +14794,31 @@ module zhao_console_core
   output logic [31:0]             terr_mj_token_refused_o,
   output logic [31:0]             terr_mj_held_overrun_o,
 
+  // ---- TERRAIN.COMPOSED_MATERIAL's publisher (entry I34) -------------------
+  // The whole census leaves the core rather than a chosen two, and the reason
+  // is this campaign's own: a publisher is a thing that can be BUSY, REFUSED,
+  // SKIPPING or WRITING THE WRONG SLOT, and a single "patches published"
+  // number cannot distinguish any of those from working. `terr_mp_stranger_o`
+  // in particular is the arm that makes a slot's occupant change visible; it
+  // is exported because a counter nobody can read from outside the core is a
+  // counter that can only ever be argued about.
+  //
+  // `cfg_terr_matpub_en_i` IS THE ARM, and it is an INPUT beside them: the
+  // window in MEM.GUARD opens with the block, and this is how a console that
+  // does not want the traffic issues none.
+  input  var logic                cfg_terr_matpub_en_i,
+  output logic [31:0]             terr_mp_cells_o,
+  output logic [31:0]             terr_mp_commits_o,
+  output logic [31:0]             terr_mp_published_o,
+  output logic [31:0]             terr_mp_skipped_o,
+  output logic [31:0]             terr_mp_stranger_o,
+  output logic [31:0]             terr_mp_bursts_o,
+  output logic [31:0]             terr_mp_denied_o,
+  output logic [31:0]             terr_mp_cell_oob_o,
+  output logic [31:0]             terr_mp_short_fill_o,
+  output logic [31:0]             terr_mp_commit_busy_o,
+  output logic                    terr_mp_busy_o,
+
   // ---- TERRAIN PAGING evidence -------------------------------------------
   // Events, never cycles, except where the name says otherwise. These are the
   // instrument that says the spine carried a beat rather than merely
@@ -25393,25 +25418,55 @@ module zhao_console_core
   logic                    tds_g_beat_valid, tds_g_beat_last;
   logic [63:0]             tds_g_beat_data;
 
-  zhao_guard_req_t [4:0]       bs_req;
-  zhao_guard_rsp_t [4:0]       bs_rsp;
+  // TERRAIN.COMPOSED_MATERIAL's publisher, requester 5 on this share.  Owner
+  // ruling `reports/OWNER-DECISION-20260927-I34-COMPOSED-MATERIAL.md`.
+  //
+  // WHY THIS SHARE AND NOT A NEW CLIENT.  Ruling T3 keeps client id 5 unspent
+  // "for a measured split if board evidence proves ENGINE1 arbitration is the
+  // limiter", and the owner's ruling here authorised a REGION, not an ABI act
+  // -- exactly as R242 did for DEVSTORE.  So this is a sixth requester behind
+  // the existing TERRAIN.BUILD client, not a seventh client.
+  //
+  // IT IS WRITE-ONLY AND IT NEVER READS, so it takes no beat demux: its
+  // `bs_beat_valid[5]` is one of the unused bits the `lint_off` below already
+  // covers, for the same reason requesters 0 and 1 are.
+  //
+  // THE PRIORITY RESIDUAL, SAID OUT LOUD as the DEVSTORE note above says its
+  // own.  This requester is NOT frame-critical in either direction: nothing in
+  // the console blocks on the published plane, because as of this commit the
+  // region has no consumer inside the console.  So the cost of losing the
+  // rotation to a page load is a patch published LATE, never a patch drawn
+  // wrong, and `matpub_commit_busy` inside the block is where a commit that
+  // arrived while the previous plane was still streaming becomes a number.
+  //
+  // WIDENING THE SHARE 5 -> 6 MOVES THE ROTATION BOUND from N-1 = 4 to 5, and
+  // that is a real cost borne by every other requester on it -- including
+  // DEVSTORE's frame-critical read, whose own note above names that bound.
+  // It is declared here rather than left to be discovered in a trace.
+  zhao_guard_req_t         tmp_g_req;
+  zhao_guard_rsp_t         tmp_g_rsp;
+  logic [63:0]             tmp_g_wdata;
+  logic                    tmp_g_wvalid, tmp_g_wlast, tmp_g_wready;
+
+  zhao_guard_req_t [5:0]       bs_req;
+  zhao_guard_rsp_t [5:0]       bs_rsp;
   logic            [63:0]      bs_beat_data;
-  logic            [4:0][63:0] bs_wdata;
-  logic            [4:0]       bs_wvalid, bs_wlast;
+  logic            [5:0][63:0] bs_wdata;
+  logic            [5:0]       bs_wvalid, bs_wlast;
   /* verilator lint_off UNUSEDSIGNAL */
   // Beats for requesters 0 and 1 (the two writers never read, so the share
   // never routes them one), requester 2's write ready (the read share never
   // writes), and the two retirement streams nobody consumes -- see below.
-  logic            [4:0]       bs_beat_valid, bs_beat_last;
-  logic            [4:0]       bs_wready;
-  logic            [4:0][7:0]  bs_retire;
+  logic            [5:0]       bs_beat_valid, bs_beat_last;
+  logic            [5:0]       bs_wready;
+  logic            [5:0][7:0]  bs_retire;
   // Per-requester job counts, the share's own denial/short/long/unowned and
   // ledger counters, and the retirement streams of the two requesters that do
   // not consume one: TERRAIN.PAGELOADER publishes on its last beat's
   // acceptance (the pool is read back through the SAME client, so the
   // arbiter's per-slot order already puts its reads after its writes), and a
   // read's retirement means nothing to a reader. All sunk here, named.
-  logic            [4:0][31:0] bs_jobs;
+  logic            [5:0][31:0] bs_jobs;
   logic [31:0]                 bs_denied, bs_short, bs_long, bs_unowned, bs_ledger_full;
   /* verilator lint_on UNUSEDSIGNAL */
 
@@ -25420,18 +25475,21 @@ module zhao_console_core
   assign bs_req[2]      = trs_m_req;
   assign bs_req[3]      = pio_g_req;
   assign bs_req[4]      = tds_g_req;
+  assign bs_req[5]      = tmp_g_req;
   assign upl_guard_rsp  = bs_rsp[0];
   assign tpl_g_rsp      = bs_rsp[1];
   assign trs_m_rsp      = bs_rsp[2];
   assign pio_g_rsp      = bs_rsp[3];
   assign tds_g_rsp      = bs_rsp[4];
-  assign bs_wdata       = {tds_g_wdata, pio_g_wdata, 64'd0, tpl_g_wdata, upl_wdata};
-  assign bs_wvalid      = {tds_g_wvalid, pio_g_wvalid, 1'b0, tpl_g_wvalid, upl_wvalid};
-  assign bs_wlast       = {tds_g_wlast, pio_g_wlast, 1'b0, tpl_g_wlast, upl_wlast};
+  assign tmp_g_rsp      = bs_rsp[5];
+  assign bs_wdata       = {tmp_g_wdata, tds_g_wdata, pio_g_wdata, 64'd0, tpl_g_wdata, upl_wdata};
+  assign bs_wvalid      = {tmp_g_wvalid, tds_g_wvalid, pio_g_wvalid, 1'b0, tpl_g_wvalid, upl_wvalid};
+  assign bs_wlast       = {tmp_g_wlast, tds_g_wlast, pio_g_wlast, 1'b0, tpl_g_wlast, upl_wlast};
   assign upl_wready     = bs_wready[0];
   assign tpl_g_wready   = bs_wready[1];
   assign pio_g_wready   = bs_wready[3];
   assign tds_g_wready   = bs_wready[4];
+  assign tmp_g_wready   = bs_wready[5];
   assign upl_retire_words = bs_retire[0];
   assign trs_m_beat_valid = bs_beat_valid[2];
   assign trs_m_beat_last  = bs_beat_last[2];
@@ -25451,7 +25509,7 @@ module zhao_console_core
   assign tds_g_beat_data  = bs_beat_data;
 
   zhao_mem_share_wr #(
-    .N         (5),
+    .N         (6),        // 5 -> 6: TERRAIN.COMPOSED_MATERIAL's publisher
     .CLIENT_ID (6),        // ZHAO_CLIENT_TERRAIN_BUILD -- see zhao_pkg
     .RQ        (4)
   ) u_build_share (
@@ -30342,6 +30400,89 @@ module zhao_console_core
     .lane_no_cell_o  (),
     .held_overrun_o  (terr_mj_held_overrun_o),
     .idle_o          ()
+  );
+
+  // ---- TERRAIN.COMPOSED_MATERIAL's PUBLISHER (entry I34) -------------------
+  // Owner ruling `reports/OWNER-DECISION-20260927-I34-COMPOSED-MATERIAL.md`,
+  // shape fixed by `reports/DECISION-20260927-I34-COMPOSED-MATERIAL-PUBLISHER.md`.
+  //
+  // IT TAPS THE JOIN'S WRITE FACE, THE SAME SIX NETS THE COMPOSE CACHE TAKES.
+  // Not a copy of the composition and not a second decision about it: whatever
+  // `u_terrain_compcache` stores as layer E is exactly what is published, by
+  // construction, because both read `tmj_*`. That is the whole reason this tap
+  // was chosen over the compose cache's SERVE side, which answers per fragment
+  // and would publish the same cell many times.
+  //
+  // THE PUBLISHER NEVER STALLS THE JOIN. `o_we_o` has no ready and must not
+  // grow one -- a publisher that could backpressure the composer would put a
+  // memory client on the compose path. The block captures unconditionally.
+  //
+  // THE COMMIT IS AN EDGE, NOT THE LEVEL. `fill_done_o` is
+  // `fill_active_q && at_capacity_c` (`zhao_terrain_compcache_front.sv:476`) --
+  // a LEVEL, whose width is a property of when the fill clears rather than a
+  // one-cycle contract. Feeding it straight in would commit the same plane on
+  // every cycle it stays high. The edge detector below produces exactly one
+  // commit per completed fill whatever that width turns out to be, which is the
+  // way round that cannot break if the level's shape changes.
+  //
+  // THE IDENTITY IS THE PATCH'S OWN SOURCE ID, AND THE SLOT IS DERIVED FROM IT.
+  // This is the honest description rather than the flattering one: it is NOT a
+  // residency slot. `zhao_terrain_devstore`'s header is emphatic that the right
+  // key is the residency page slot, and this console exports none at the
+  // compose seam, so the slot here is the identity's low byte. Two patches
+  // whose ids collide in eight bits therefore share a slot -- and that is
+  // exactly the case `stranger_pub_o` exists for: the publisher republishes on
+  // an occupant change instead of trusting the plane's signature, so a
+  // collision costs a WRITE and never a wrong record. The day a residency slot
+  // is exported it becomes `slot_i` and nothing else in this block moves.
+  logic tmp_fill_done_q;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) tmp_fill_done_q <= 1'b0;
+    else        tmp_fill_done_q <= terr_cc_fill_done_o;
+  end
+  wire tmp_commit_c = terr_cc_fill_done_o && !tmp_fill_done_q;
+
+  zhao_terrain_matpub u_terrain_matpub (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    // ARMED BY THE SAME CONFIGURATION THAT ARMS THE TERRAIN BUILD CLIENT.
+    // A guard window opens with its block; the block is also switchable, so a
+    // console that has not been told to publish issues no request at all and
+    // the window admits nothing.
+    .cfg_enable_i     (cfg_terr_matpub_en_i),
+    .cfg_vram_client_i(ZHAO_CLIENT_TERRAIN_BUILD),
+
+    .c_we_i    (tmj_we),
+    .c_ci_i    (tmj_ci),
+    .c_cj_i    (tmj_cj),
+    .c_mat_a_i (tmj_mat_a),
+    .c_mat_b_i (tmj_mat_b),
+    .c_weight_i(tmj_weight),
+
+    .fill_start_i(tcc_fill_start),
+    .commit_i    (tmp_commit_c),
+    .patch_id_i  (tpt_st_src_id),
+    .slot_i      (tpt_st_src_id[7:0]),
+
+    .guard_req_o   (tmp_g_req),
+    .guard_rsp_i   (tmp_g_rsp),
+    .guard_wdata_o (tmp_g_wdata),
+    .guard_wvalid_o(tmp_g_wvalid),
+    .guard_wready_i(tmp_g_wready),
+    .guard_wlast_o (tmp_g_wlast),
+
+    .cells_captured_o   (terr_mp_cells_o),
+    .commits_o          (terr_mp_commits_o),
+    .patches_published_o(terr_mp_published_o),
+    .skipped_clean_o    (terr_mp_skipped_o),
+    .stranger_pub_o     (terr_mp_stranger_o),
+    .bursts_written_o   (terr_mp_bursts_o),
+    .guard_denied_o     (terr_mp_denied_o),
+    .cell_oob_o         (terr_mp_cell_oob_o),
+    .short_fill_o       (terr_mp_short_fill_o),
+    .commit_busy_o      (terr_mp_commit_busy_o),
+    .busy_o             (terr_mp_busy_o)
   );
 
   // ---- TERRAIN.COMPCACHE (the front) --------------------------------------

@@ -24,6 +24,14 @@
 //                       and the patch's history row) and READ (the LOD
 //                       pass's per-frame fetch) -- ONE window, TWO arms,
 //                       TWO theorems (ruling R242, §5b)
+//   TERRAIN.COMPOSED_MATERIAL
+//                     : [0x058B_0000, 0x05AB_0000)  2 MiB as 256 x 8 KiB,
+//                       TERRAIN.BUILD, WRITE ONLY -- the composed layer-E
+//                       plane published per patch by zhao_terrain_matpub.
+//                       ONE window, ONE arm: the region has one producer and
+//                       no consumer inside the console, so a read arm would
+//                       be permission nothing has asked for (owner decision
+//                       2026-09-27, entry I34, §5b)
 //   GEOM.PARAMBUF     : [0x0600_0000, 0x0640_0000) view 0, 4 MiB
 //                       [0x0640_0000, 0x0680_0000) view 1, 4 MiB
 //                       [0x0680_0000, 0x06A0_0000) shared scratch, 2 MiB
@@ -421,6 +429,35 @@ module zhao_mem_guard
                         && (end32  <= ZHAO_TERRAIN_DEVSTORE_BASE
                                       + ZHAO_TERRAIN_DEVSTORE_SPAN);
 
+  // TERRAIN.COMPOSED_MATERIAL: the composed layer-E plane, published per patch
+  // by `zhao_terrain_matpub`.  Owner ruling
+  // `reports/OWNER-DECISION-20260927-I34-COMPOSED-MATERIAL.md`.
+  //
+  // THE WINDOW OPENS WITH ITS BLOCK AND NOT BEFORE.  That is
+  // TERRAIN.DEVSTORE's precedent and it is also COMPOSEPUB's stated reason for
+  // leaving the two SIBLING windows (COMPOSED_HEIGHT, COMPOSED_VELOCITY) shut:
+  // a guard window with no writer behind it is standing permission that nothing
+  // is exercising, and the next reader cannot tell it from a live one.  This
+  // arm lands in the same commit as the publisher.
+  //
+  // WRITE ONLY, AND THAT IS A DELIBERATE ASYMMETRY WITH DEVSTORE.  DEVSTORE
+  // has both arms because it is a STORE -- it deposits records at page load and
+  // reads them back per frame.  This region has exactly one producer and, as of
+  // this commit, NO consumer inside the console; granting a read arm would be
+  // permission nothing has asked for, and an unexercised arm is the thing the
+  // paragraph above refuses.  When a reader is built it gets its own arm, in
+  // its own commit, on the same terms.
+  //
+  // The bound is the same shape as DEVSTORE's and refuses a straddle for the
+  // same reason: `addr >= BASE` and `end <= BASE + SPAN` are BOTH required, so
+  // a burst that starts inside and runs out of the top fails the second term.
+  // Lying in the union of two permitted regions is not permission.
+  logic matpub_wr_ok;
+  assign matpub_wr_ok = req.write
+                      && (addr32 >= ZHAO_TERRAIN_COMPOSED_MATERIAL_BASE)
+                      && (end32  <= ZHAO_TERRAIN_COMPOSED_MATERIAL_BASE
+                                    + ZHAO_TERRAIN_COMPOSED_MATERIAL_SPAN);
+
   // GEOM.PARAMBUF: the external geometry arena, owner completion ruling
   // ITEM 4 (2026-09-22) over spec/memory_rules.md 5c and ruling R7. The
   // EIGHTH window by the running count in this block's header, and the first
@@ -610,7 +647,8 @@ module zhao_mem_guard
       ZHAO_CLIENT_TERRAIN_BUILD: pass_ok = shape_ok && (terrain_ok || terrain_rd_ok
                                                         || resource_wr_ok
                                                         || devstore_wr_ok
-                                                        || devstore_rd_ok);
+                                                        || devstore_rd_ok
+                                                        || matpub_wr_ok);
       default: pass_ok = 1'b0;      // DEBUG still owns nothing, and neither
                                     // does the unspent client 5
     endcase

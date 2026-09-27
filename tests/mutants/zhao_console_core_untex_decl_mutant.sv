@@ -2224,6 +2224,24 @@ module zhao_console_core_untex_decl_mutant
   output logic [31:0]             terr_mj_token_refused_o,
   output logic [31:0]             terr_mj_held_overrun_o,
 
+  // ---- TERRAIN.COMPOSED_MATERIAL's publisher (entry I34, MATPUB 2026-09-27) -
+  // Added here because `.*` binds every production port to a wrapper net of
+  // the same name: a port added to `zhao_console_core` and NOT added here is
+  // an elaboration failure in this file, which is how this wrapper is designed
+  // to fail loudly rather than go stale silently.
+  input  var logic                cfg_terr_matpub_en_i,
+  output logic [31:0]             terr_mp_cells_o,
+  output logic [31:0]             terr_mp_commits_o,
+  output logic [31:0]             terr_mp_published_o,
+  output logic [31:0]             terr_mp_skipped_o,
+  output logic [31:0]             terr_mp_stranger_o,
+  output logic [31:0]             terr_mp_bursts_o,
+  output logic [31:0]             terr_mp_denied_o,
+  output logic [31:0]             terr_mp_cell_oob_o,
+  output logic [31:0]             terr_mp_short_fill_o,
+  output logic [31:0]             terr_mp_commit_busy_o,
+  output logic                    terr_mp_busy_o,
+
   // ---- TERRAIN PAGING evidence -------------------------------------------
   // Events, never cycles, except where the name says otherwise. These are the
   // instrument that says the spine carried a beat rather than merely

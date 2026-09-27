@@ -303,7 +303,8 @@ ruled rather than proposed.
 | `0x0578_0000` .. `0x057F_FFFF` | `TERRAIN.WRITEBACK_STAGING` / journal | 64 × 8 KiB |
 | `0x0580_0000` .. `0x0585_FFFF` | `TERRAIN.COMPOSED_MIP_POOL` | 256 × 1,536 B |
 | `0x0586_0000` .. `0x058A_FFFF` | `TERRAIN.DEVSTORE` | 1,024 × 320 B (ruling R242) |
-| `0x058B_0000` .. `0x05FF_FFFF` | reserved / unmapped | until traces justify |
+| `0x058B_0000` .. `0x05AA_FFFF` | `TERRAIN.COMPOSED_MATERIAL` | 256 x 8 KiB (owner decision 2026-09-27, I34) |
+| `0x05AB_0000` .. `0x05FF_FFFF` | reserved / unmapped | until traces justify |
 
 > **TERRAIN.DEVSTORE — owner ruling R242, 2026-09-22.**
 > **Fabian: *"Move deviation store to SDRAM, ignore stale info."***
@@ -365,6 +366,46 @@ packet that needed it — a window opened WITH its block, never ahead of it.
 | Range | Region | Owner | Access |
 |---|---|---|---|
 | `0x0586_0000` .. `0x058B_0000` | `TERRAIN.DEVSTORE` | `TERRAIN_BUILD` (client 6) | **read + write** |
+| `0x058B_0000` .. `0x05AB_0000` | `TERRAIN.COMPOSED_MATERIAL` | `TERRAIN_BUILD` (client 6) | **write only** |
+
+> **TERRAIN.COMPOSED_MATERIAL - owner ruling 2026-09-27, entry I34.**
+>
+> **The owner COMMISSIONED this region and explicitly declined a refusal of it.**
+> The reasoning is in `reports/OWNER-DECISION-20260927-I34-COMPOSED-MATERIAL.md`
+> and it is a distinction rather than a preference: *"NAV is not the precedent
+> for silently removing this. NAV received an explicit owner architecture
+> decision AND a real replacement production capability. No equivalent
+> supersession exists for COMPOSED_MATERIAL."*
+>
+> **IT IS NOT COVERED BY COMPOSEPUB'S REFUSAL OF THE TWO SIBLING REGIONS**, and
+> that is measured rather than argued by symmetry. COMPOSEPUB refused
+> `COMPOSED_HEIGHT` and `COMPOSED_VELOCITY` on two independent grounds:
+>
+> * **"no consumer"** - *"a DMA into unused memory is not a consumer."* For
+>   material the fabric consumer is proven live end to end: `field_composed=1024
+>   token_refused=0`, every composed cell reaching `zhao_terrain_matjoin` and
+>   displacing the authored layer-E triple into the mosaic, observed at the
+>   texture island as `tile[max/or]=[212 222]` against an authored plane whose
+>   own tiles top out at 6.
+> * **"bandwidth"** - 124% of the frame for the siblings' write alone. Material
+>   measures **64 fabric requests per published patch**, break-even at **129
+>   published patches per frame**, against **one** published patch on this
+>   console's real scene.
+>
+> **WRITE ONLY, AND DELIBERATELY SO.** The region has exactly one producer
+> (`zhao_terrain_matpub`) and, as of its commit, no consumer inside the console.
+> A read arm would be permission nothing has asked for, and this section's own
+> law - *a window opened WITH its block, never ahead of it* - refuses that as
+> firmly as it refused the two sibling windows.
+>
+> **THE PUBLISH GATE IS DIRTY-GATED PLUS AN OCCUPANT CHECK, and the second half
+> is not decoration.** A gate keyed only on "did the plane change" is blind when
+> a slot changes occupant and the new plane happens to hash equal to the old
+> one's: it SKIPS, and the region then describes a stranger under this patch's
+> address, with every counter balancing. `TERRAIN.DEVSTORE` already paid for
+> this lesson - *"a compose slot is reused by a DIFFERENT PATCH from one frame
+> to the next"* - so the publisher republishes on an occupant change and counts
+> it on `stranger_pub_o`.
 
 `zhao_pkg` carries it as `ZHAO_TERRAIN_DEVSTORE_BASE` / `_SPAN`
 (`0x0586_0000` / `0x0005_0000`); 1,024 × 320 = 327,680 = `0x0005_0000`, so the

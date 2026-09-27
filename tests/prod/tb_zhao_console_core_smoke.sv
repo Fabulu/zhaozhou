@@ -985,6 +985,32 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_mj_token_refused_o;
   logic [31:0]             terr_mj_held_overrun_o;
 
+  // TERRAIN.COMPOSED_MATERIAL's publisher, composed 2026-09-27 (MATPUB).
+  // `zhao_console_core u_core (.*)` binds by NAME, so these exist because the
+  // core grew them; the ARM below is an input and IS driven.
+  logic                    cfg_terr_matpub_en_i;
+  logic [31:0]             terr_mp_cells_o;
+  logic [31:0]             terr_mp_commits_o;
+  logic [31:0]             terr_mp_published_o;
+  logic [31:0]             terr_mp_skipped_o;
+  logic [31:0]             terr_mp_stranger_o;
+  logic [31:0]             terr_mp_bursts_o;
+  logic [31:0]             terr_mp_denied_o;
+  logic [31:0]             terr_mp_cell_oob_o;
+  logic [31:0]             terr_mp_short_fill_o;
+  logic [31:0]             terr_mp_commit_busy_o;
+  logic                    terr_mp_busy_o;
+
+  // THE PUBLISHER IS ARMED IN EVERY FORM, INCLUDING THE PLAIN RUN, and that is
+  // a deliberate choice rather than a convenience. The console SHIPS with this
+  // client on the terrain build share, so a bench that armed it only in the
+  // field forms would be measuring a different machine from the one that
+  // ships -- and the plain run is this entry's clause-6 evidence, which is
+  // worth nothing if it describes a console with the publisher switched off.
+  // The cost of arming it is therefore visible in the plain run's own numbers,
+  // which is where a cost belongs.
+  assign cfg_terr_matpub_en_i = 1'b1;
+
   // (`terr_dm_*` LEFT THE CORE's EDGE 2026-09-21, core entry I27's first half:
   // `zhao_terrain_pageio` holds the slot, generation and epoch the patch was
   // served under and marks the directory itself.)
@@ -4092,6 +4118,12 @@ module tb_zhao_console_core_smoke
   logic signed [11:0] mpb_tag_y_q  [MPB_TAGCAP_N];
   logic [7:0]         mpb_tag_ad_q [MPB_TAGCAP_N];
   int unsigned        mpb_tag_ix_q [MPB_TAGCAP_N];
+  // THE FRAGMENT'S OWN COLOUR, captured beside its tag. It separates two
+  // stories the tag alone cannot: a pixel whose TAG is wrong while its colour
+  // is right is a tail/continuation fault, and a pixel whose colour is wrong
+  // too is a fragment that was never properly formed. The plain run carries
+  // ZERO tagged beats, so whatever these are, they arrive with the staging.
+  logic [15:0]        mpb_tag_rgb_q[MPB_TAGCAP_N];
   int unsigned        mpb_tag_n_q;    // offending beats seen (may exceed capture)
   int unsigned        mpb_gth_n_q;    // gather beats seen; the ordinal source
   int unsigned        mpb_tag_nz_q;   // beats whose tag byte is nonzero AT ALL
@@ -4119,6 +4151,7 @@ module tb_zhao_console_core_smoke
           mpb_tag_y_q [mpb_tag_n_q] <= `PC_CORE.gth_y_w;
           mpb_tag_ad_q[mpb_tag_n_q] <= `PC_CORE.gth_addr_w;
           mpb_tag_ix_q[mpb_tag_n_q] <= mpb_gth_n_q;
+          mpb_tag_rgb_q[mpb_tag_n_q] <= `PC_CORE.gth_rgb565_w;
         end
         mpb_tag_n_q <= mpb_tag_n_q + 1;
       end
@@ -10321,10 +10354,22 @@ module tb_zhao_console_core_smoke
              mpb_gth_n_q, mpb_tag_nz_q, mpb_tag_n_q);
     for (int t = 0; t < MPB_TAGCAP_N; t++)
       if (t < int'(mpb_tag_n_q))
-        $display("SMOKE: early-diag tagprobe[%0d] tag=%02h ch=%0d strength=%0d x=%0d y=%0d tileaddr=%02h (row=%0d col=%0d) beat=%0d",
+        $display("SMOKE: early-diag tagprobe[%0d] tag=%02h ch=%0d strength=%0d x=%0d y=%0d tileaddr=%02h (row=%0d col=%0d) beat=%0d rgb565=%04h",
                  t, mpb_tag_q[t], mpb_tag_q[t][7:6], mpb_tag_q[t][5:0],
                  mpb_tag_x_q[t], mpb_tag_y_q[t], mpb_tag_ad_q[t],
-                 mpb_tag_ad_q[t][7:4], mpb_tag_ad_q[t][3:0], mpb_tag_ix_q[t]);
+                 mpb_tag_ad_q[t][7:4], mpb_tag_ad_q[t][3:0], mpb_tag_ix_q[t],
+                 mpb_tag_rgb_q[t]);
+
+    // ---- TERRAIN.COMPOSED_MATERIAL's publisher, MATPUB 2026-09-27 ----------
+    // Hoisted here with the rest: this is ABOVE both the fragment-tag gate and
+    // the sample gate, so the publisher's census survives a run that stops on
+    // either of them. A publisher whose numbers only print in a passing run
+    // cannot be read in the run that needs reading.
+    $display("SMOKE: early-diag matpub cells=%0d commits=%0d published=%0d skipped=%0d stranger=%0d bursts=%0d denied=%0d oob=%0d short=%0d commit_busy=%0d busy=%0d",
+             terr_mp_cells_o, terr_mp_commits_o, terr_mp_published_o,
+             terr_mp_skipped_o, terr_mp_stranger_o, terr_mp_bursts_o,
+             terr_mp_denied_o, terr_mp_cell_oob_o, terr_mp_short_fill_o,
+             terr_mp_commit_busy_o, terr_mp_busy_o);
 
     mpb_q_frag_b  = render_texture_fragments_o;
     mpb_q_samp_b  = render_texture_samples_o;

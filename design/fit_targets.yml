@@ -3594,6 +3594,12 @@ targets:
       # a package is exactly the file people forget.
       - fpga/rtl/common/zhao_material_token_pkg.sv
       - fpga/rtl/terrain/zhao_terrain_matjoin.sv
+      # TERRAIN.COMPOSED_MATERIAL's publisher (entry I34, MATPUB 2026-09-27).
+      # It taps the join's composed write face -- the SAME six nets the compose
+      # cache takes -- and publishes the plane per patch into
+      # [0x058B_0000, 0x05AB_0000) through the terrain build share's sixth
+      # requester and MEM.GUARD's new write-only window.
+      - fpga/rtl/terrain/zhao_terrain_matpub.sv
       - fpga/rtl/terrain/zhao_terrain_compcache_front.sv
       # TERRAIN.HEIGHTTAP, 2026-09-19 (item 14): the pass-through tap in front
       # of the compose cache's read ports. Its normaliser is FIELD's
