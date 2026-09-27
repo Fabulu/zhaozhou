@@ -5194,3 +5194,78 @@ deletions**, so every previously committed number stands.
 delta answers the one question the committed table cannot: **did closing the
 register cost area, and how much.** That is the honest hand-off into the owner's
 phase 3.
+
+### 2026-09-28 - THE CONSOLE MAPPED AT HEAD. PHASE 2 IS ANSWERED.
+
+**`quartus_map` on `zhao_console_core`, SHIPPING PART, 0 ERRORS.** 39:29 elapsed,
+**4:05:38 total CPU**, peak 10,277 MB. Row recorded `ok`, `rtlCleanAtHead: true`,
+`sourceCommit 83c63661` -- the I34 closure commit, so the measurement describes a
+clean tree with the register at zero.
+
+```
+Implemented 542,381 device resources after synthesis
+  526,752 logic cells   15,501 RAM segments   128 DSP elements
+```
+
+| | NOW (09-28) | `@post-palram` (09-26) | delta |
+|---|---:|---:|---:|
+| estimated ALMs | **222,666 (531%)** | -- | -- |
+| combinational ALUTs | 293,886 (351%) | 301,446 (360%) | **-7,560** |
+| registers | 279,210 (**167%**) | 312,114 (186%) | **-32,904** |
+| block memory bits | 3,387,975 (60%) | 3,207,741 (57%) | +180,234 |
+| DSP blocks | 128 (114%) | 128 (114%) | 0 |
+
+**222,666 estimated ALMs against 41,910 -- 5.31x the part.** That is a SYNTHESIS
+ESTIMATE and must never be quoted as a placed number: this design has never
+placed, so there is no real ALM count and no Fmax.
+
+### TWO THINGS THIS MEASUREMENT SETTLES
+
+**CLOSING THE REGISTER COST NO AREA.** I55's walk, `zhao_walk_meta_hold`,
+`TERRAIN.COMPOSED_MATERIAL` and the publisher all landed between these two maps.
+ALUTs went **DOWN**, DSP did not move, registers fell hard. **The campaign did
+not buy its zero with silicon** -- which is the question a reviewer would ask
+first and which nothing before this could answer.
+
+**THE M10K TRADE IS WORKING AND IS MEASURED, NOT ARGUED.** Registers 186% ->
+167% while memory rose 57% -> 60%. Most of it is FLOPARRAY's **-43,548
+registers / -28,527 estimated ALMs from two arrays at zero added clocks.**
+
+### THE PLACED FIT STILL CANNOT RUN, AND THAT IS THE ANSWER
+
+The 2026-09-25 fit failed in `quartus_fit`: *"Design contains 336023 blocks of
+type combinational node. However, the device contains only 227120 blocks"* --
+and 227,120 is the **SIZING** part. At 293,886 ALUTs we are nowhere near
+changing that. **There is no ALM or Fmax figure to be had until the design
+shrinks substantially**; the synthesis estimate is the ceiling on what can be
+known today, and asking for a placed number is asking for a measurement the
+silicon cannot produce.
+
+### THE CURRENT TARGET LIST (registers OWNED, not aggregated)
+
+```
+zhao_field_v3_exec         24,795  14.8%   mem 25,344
+zhao_cmd_exec              12,840   7.7%   mem 18,472
+zhao_project_core           6,561   3.9%   mem 3,532
+zhao_geom_ladderbank        5,951   3.5%   mem 0
+zhao_material_resolve       5,207   3.1%   mem 896
+zhao_field_host_v2          5,115   3.1%   mem 85,282
+zhao_shell_top_v2           5,065   3.0%   mem 407,750
+zhao_light_stream           4,712   2.8%   mem 5,016
+zhao_vertex_arena           4,491   2.7%   mem 187,308
+zhao_terrain_devstore       4,418   2.6%   mem 0
+zhao_texture_island_v3_top  4,220   2.5%   mem 240,910
+zhao_field_v3_dispatch      4,108   2.5%   mem 0
+```
+
+Twelve modules own **87,483 registers, 52% of the part's sites** -- still
+CONCENTRATED, which is the best news in the measurement.
+
+**`zhao_forge_assemble` AND `zhao_geom_lodstate` ARE GONE FROM THIS LIST.** They
+led the previous one at 37,662 and 10,009 owned registers. FLOPARRAY converted
+both, and this map is the confirmation **as data rather than as an argument** --
+which is exactly what my stale-baseline correction predicted would happen.
+
+The three remaining ZERO-MEMORY holders are `geom_ladderbank` (5,951),
+`terrain_devstore` (4,418) and `field_v3_dispatch` (4,108): **14,477 registers in
+blocks with no block memory at all**, and the next place the same trade points.

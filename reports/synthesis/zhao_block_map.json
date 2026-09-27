@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "map-only-per-block",
-    "newestRunCommit":  "993f8452f8d040220062ef9af8d7410e2c2378a8",
+    "newestRunCommit":  "83c63661a31a746a59ced4feffa3df6a4bfc293e",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -135,6 +135,1699 @@
                        "ramConversionWarnings":  0,
                        "errors":  0,
                        "critical":  1
+                   },
+                   {
+                       "module":  "zhao_console_coreconsole-full-20260927",
+                       "status":  "ok",
+                       "sourceCommit":  "83c63661a31a746a59ced4feffa3df6a4bfc293e",
+                       "rtlCleanAtHead":  true,
+                       "sourceListHash":  "788e8276243661ab",
+                       "sourceFileCount":  405,
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "stage":  "map-only",
+                       "variantOf":  "zhao_console_core",
+                       "seconds":  2373.1,
+                       "dspBlocks":  128,
+                       "registers":  279210,
+                       "blockMemoryBits":  3387975,
+                       "virtualPins":  43486,
+                       "pins":  0,
+                       "estimatedAlms":  222666,
+                       "combAluts":  293886,
+                       "mlabMemoryBits":  31456,
+                       "inferredMemories":  [
+                                                {
+                                                    "name":  "zhao_cmd_exec:u_cmd_exec|altsyncram:dq_rtl_0|altsyncram_93n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  158,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_cmd_exec:u_cmd_exec|altsyncram:fq_rtl_0|altsyncram_52k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  113,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_cmd_exec:u_cmd_exec|altsyncram:gq_rtl_0|altsyncram_g3q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  128,
+                                                    "width":  80,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_cmd_exec:u_cmd_exec|altsyncram:pq_rtl_0|altsyncram_2ji1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  232,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_cmd_exec:u_cmd_exec|altsyncram:sq_rtl_0|altsyncram_r2n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  200,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_cmd_exec:u_cmd_exec|altsyncram:tq_rtl_0|altsyncram_33k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  497,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_cmd_exec:u_cmd_exec|altsyncram:uq_rtl_0|altsyncram_q2n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  232,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_cmd_exec:u_cmd_exec|altsyncram:wq_rtl_0|altsyncram_b3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  456,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_debug_trace:u_debug_trace|altsyncram:ring_rtl_0|altsyncram_k3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_field_host_v2:u_field_host|zhao_field_v3_engine:u_fabric|zhao_field_v3_core:u_engine|zhao_field_v3_exec:u_exec|altsyncram:lq_imm_r_rtl_0|altsyncram_5vj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_field_host_v2:u_field_host|zhao_field_v3_engine:u_fabric|zhao_field_v3_core:u_engine|zhao_field_v3_exec:u_exec|altsyncram:lq_s0_r_rtl_0|altsyncram_5vj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_field_host_v2:u_field_host|zhao_field_v3_engine:u_fabric|zhao_field_v3_core:u_engine|zhao_field_v3_exec:u_exec|altsyncram:lq_s1_r_rtl_0|altsyncram_5vj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_field_host_v2:u_field_host|zhao_field_v3_engine:u_fabric|zhao_field_v3_core:u_engine|zhao_field_v3_exec:u_exec|altsyncram:lq_s2_r_rtl_0|altsyncram_5vj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_field_host_v2:u_field_host|zhao_field_v3_engine:u_fabric|zhao_field_v3_core:u_engine|zhao_field_v3_exec:u_exec|altsyncram:lq_s3_r_rtl_0|altsyncram_5vj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_field_host_v2:u_field_host|zhao_field_v3_engine:u_fabric|zhao_field_v3_core:u_engine|zhao_field_v3_exec:u_exec|altsyncram:lq_s4_r_rtl_0|altsyncram_5vj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_field_host_v2:u_field_host|zhao_field_v3_engine:u_fabric|zhao_field_v3_svcpath:u_svc|zhao_field_v3_curve:u_curve|altsyncram:tbl_ram_rtl_0|altsyncram_87n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  96,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_field_host_v2:u_field_host|zhao_field_v3_engine:u_fabric|zhao_field_v3_svcpath:u_svc|zhao_field_v3_curve:u_curve|altsyncram:tbl_ram_rtl_1|altsyncram_87n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  96,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_field_host_v2:u_field_host|zhao_field_v3_engine:u_fabric|zhao_field_v3_svcpath:u_svc|zhao_field_v3_sbank:u_sbank|altsyncram:mem_rtl_0|altsyncram_a3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_forge_assemble:u_forge_assemble|altsyncram:dqf_slot_q_rtl_0|altsyncram_k2k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  10,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_forge_assemble:u_forge_assemble|altsyncram:inv_q_rtl_0|altsyncram_s8n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  520,
+                                                    "width":  24,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_forge_assemble:u_forge_assemble|altsyncram:pos_q_rtl_0|altsyncram_u8n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  520,
+                                                    "width":  43,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_forge_assemble:u_forge_assemble|zhao_raster_rcp24_v4:u_rcp|altsyncram:p_m_q_rtl_0|altsyncram_vsp1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  24,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_forge_assemble:u_forge_assemble|zhao_raster_rcp24_v4:u_rcp|altsyncram:p_x0_q_rtl_0|altsyncram_7fo1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_forge_assemble:u_forge_assemble|zhao_raster_rcp24_v4:u_rcp|altsyncram:p_x0_q_rtl_1|altsyncram_7fo1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_forge_assemble:u_forge_assemble|zhao_raster_rcp24_v4:u_rcp|altsyncram:res_q_rtl_0|altsyncram_agi1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  24,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_forge_assemble:u_forge_assemble|zhao_raster_rcp24_v4:u_rcp|altsyncram:s_w_q_rtl_0|altsyncram_ssp1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_forge_assemble:u_forge_assemble|zhao_raster_rcp24_v4:u_rcp|altsyncram:s_x_q_rtl_0|altsyncram_7fo1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_forge_cliff_ram:u_forge_cliff|altsyncram:edge_key_r_rtl_0|altsyncram_esi1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2048,
+                                                    "width":  12,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_forge_cliff_ram:u_forge_cliff|altsyncram:edge_span_r_rtl_0|altsyncram_kpi1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2048,
+                                                    "width":  6,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_forge_cliff_ram:u_forge_cliff|altsyncram:run_mem_r_rtl_0|altsyncram_8si1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  1024,
+                                                    "width":  17,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_forge_cliff_ram:u_forge_cliff|altsyncram:win_mem_rtl_0|altsyncram_40q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  34,
+                                                    "width":  34,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_forge_prim_eval:u_forge_prim_eval|zhao_forge_jitter_rom:u_jtab|altsyncram:tbl_rtl_0|altsyncram_7j02:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "True Dual Port",
+                                                    "depth":  256,
+                                                    "width":  18,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_forge_ring_eval:u_forge_ring_eval|zhao_field_sin:u_sin|zhao_field_sin_rom:u_tbl|altsyncram:tbl_rtl_0|altsyncram_7a02:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "True Dual Port",
+                                                    "depth":  257,
+                                                    "width":  17,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_arenabin:u_geom_arenabin|altsyncram:fill_ram_rtl_0|altsyncram_43k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  576,
+                                                    "width":  4,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_arenabin:u_geom_arenabin|altsyncram:head_ram_rtl_0|altsyncram_o9n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  576,
+                                                    "width":  18,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_arenabin:u_geom_arenabin|altsyncram:hv_ram_rtl_0|altsyncram_86n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  576,
+                                                    "width":  1,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_arenabin:u_geom_arenabin|altsyncram:hv_ram_rtl_1|altsyncram_u2k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  576,
+                                                    "width":  1,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_arenabin:u_geom_arenabin|altsyncram:nch_ram_rtl_0|altsyncram_a6k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  576,
+                                                    "width":  16,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_arenabin:u_geom_arenabin|altsyncram:tail_ram_rtl_0|altsyncram_e6k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  576,
+                                                    "width":  18,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_arenabin:u_geom_arenabin|zhao_dc_sdp_ram:g_stage[0].u_bank|altsyncram:mem_rtl_0|altsyncram_u8q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  1024,
+                                                    "width":  18,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_arenabin:u_geom_arenabin|zhao_dc_sdp_ram:g_stage[10].u_bank|altsyncram:mem_rtl_0|altsyncram_u8q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  1024,
+                                                    "width":  18,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_arenabin:u_geom_arenabin|zhao_dc_sdp_ram:g_stage[11].u_bank|altsyncram:mem_rtl_0|altsyncram_u8q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  1024,
+                                                    "width":  18,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_arenabin:u_geom_arenabin|zhao_dc_sdp_ram:g_stage[12].u_bank|altsyncram:mem_rtl_0|altsyncram_u8q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  1024,
+                                                    "width":  18,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_arenabin:u_geom_arenabin|zhao_dc_sdp_ram:g_stage[13].u_bank|altsyncram:mem_rtl_0|altsyncram_u8q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  1024,
+                                                    "width":  18,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_arenabin:u_geom_arenabin|zhao_dc_sdp_ram:g_stage[1].u_bank|altsyncram:mem_rtl_0|altsyncram_u8q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  1024,
+                                                    "width":  18,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_arenabin:u_geom_arenabin|zhao_dc_sdp_ram:g_stage[2].u_bank|altsyncram:mem_rtl_0|altsyncram_u8q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  1024,
+                                                    "width":  18,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_arenabin:u_geom_arenabin|zhao_dc_sdp_ram:g_stage[3].u_bank|altsyncram:mem_rtl_0|altsyncram_u8q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  1024,
+                                                    "width":  18,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_arenabin:u_geom_arenabin|zhao_dc_sdp_ram:g_stage[4].u_bank|altsyncram:mem_rtl_0|altsyncram_u8q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  1024,
+                                                    "width":  18,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_arenabin:u_geom_arenabin|zhao_dc_sdp_ram:g_stage[5].u_bank|altsyncram:mem_rtl_0|altsyncram_u8q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  1024,
+                                                    "width":  18,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_arenabin:u_geom_arenabin|zhao_dc_sdp_ram:g_stage[6].u_bank|altsyncram:mem_rtl_0|altsyncram_u8q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  1024,
+                                                    "width":  18,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_arenabin:u_geom_arenabin|zhao_dc_sdp_ram:g_stage[7].u_bank|altsyncram:mem_rtl_0|altsyncram_u8q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  1024,
+                                                    "width":  18,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_arenabin:u_geom_arenabin|zhao_dc_sdp_ram:g_stage[8].u_bank|altsyncram:mem_rtl_0|altsyncram_u8q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  1024,
+                                                    "width":  18,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_arenabin:u_geom_arenabin|zhao_dc_sdp_ram:g_stage[9].u_bank|altsyncram:mem_rtl_0|altsyncram_u8q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  1024,
+                                                    "width":  18,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_assetfetch:u_geom_assetfetch|altsyncram:ix_ram_a_rtl_0|altsyncram_k3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_assetfetch:u_geom_assetfetch|altsyncram:ix_ram_b_rtl_0|altsyncram_k3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_assetfetch:u_geom_assetfetch|altsyncram:vx_ram_rtl_0|altsyncram_u6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_bonesrc:u_geom_bonesrc|altsyncram:g_sync.body_mem_rtl_0|altsyncram_s6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  128,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_bonesrc:u_geom_bonesrc|altsyncram:g_sync.quat_mem_rtl_0|altsyncram_83n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  32,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_clip:u_geom_clip|altshift_taps:s1_v_rtl_0|shift_taps_3001:auto_generated|altsyncram_vic1:altsyncram4|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  3,
+                                                    "width":  545,
+                                                    "autoShift":  true
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_drawjob:u_geom_drawjob|altsyncram:pal_q_rtl_0|altsyncram_47q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  384,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_lodstate:u_geom_lodstate|altsyncram:st_q_rtl_0|altsyncram_k6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  512,
+                                                    "width":  18,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_loom:u_geom_loom|altsyncram:order_q_rtl_0|altsyncram_ibn1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  1024,
+                                                    "width":  10,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_loom:u_geom_loom|altsyncram:store_q_rtl_0|altsyncram_kfn1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  1024,
+                                                    "width":  396,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_loom:u_geom_loom|zhao_field_sin:u_sin|zhao_field_sin_rom:u_tbl|altsyncram:tbl_rtl_0|altsyncram_7a02:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "True Dual Port",
+                                                    "depth":  257,
+                                                    "width":  17,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_pose_decode:u_geom_pose_decode|altsyncram:a_mem_rtl_0|altsyncram_t6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  384,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_proj_lane:u_geom_proj_lane|zhao_geom_wcache:u_wcache|zhao_vertex_arena:u_arena|altsyncram:mem_rtl_0|altsyncram_qcn1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4356,
+                                                    "width":  43,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_replay:u_geom_replay|altsyncram:triq_q_rtl_0|altsyncram_tlo1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  24,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_setup:u_geom_setup|altshift_taps:s1_v_rtl_0|shift_taps_juv:auto_generated|altsyncram_vfc1:altsyncram4|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  3,
+                                                    "width":  68,
+                                                    "autoShift":  true
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_vattr:u_geom_vattr|altsyncram:cl_mem_rtl_0|altsyncram_27n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  51,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_vattr:u_geom_vattr|altsyncram:pv_mem_rtl_0|altsyncram_a7n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  88,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_vattr:u_geom_vattr|altsyncram:uv_mem_rtl_0|altsyncram_a3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_vattr:u_geom_vattr|zhao_raster_rcp24_v4:u_rcp|altshift_taps:s2_v_q_rtl_0|shift_taps_ibv:auto_generated|altsyncram_pcc1:altsyncram4|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  5,
+                                                    "autoShift":  true
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_vattr:u_geom_vattr|zhao_raster_rcp24_v4:u_rcp|altsyncram:p_k_q_rtl_0|altsyncram_bgi1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  6,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_vattr:u_geom_vattr|zhao_raster_rcp24_v4:u_rcp|altsyncram:p_m_q_rtl_0|altsyncram_uvp1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  24,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_vattr:u_geom_vattr|zhao_raster_rcp24_v4:u_rcp|altsyncram:p_tok_q_rtl_0|altsyncram_6gi1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  4,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_vattr:u_geom_vattr|zhao_raster_rcp24_v4:u_rcp|altsyncram:p_x0_q_rtl_0|altsyncram_7io1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_vattr:u_geom_vattr|zhao_raster_rcp24_v4:u_rcp|altsyncram:p_x0_q_rtl_1|altsyncram_7io1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_vattr:u_geom_vattr|zhao_raster_rcp24_v4:u_rcp|altsyncram:res_q_rtl_0|altsyncram_aji1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  24,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_vattr:u_geom_vattr|zhao_raster_rcp24_v4:u_rcp|altsyncram:s_w_q_rtl_0|altsyncram_svp1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_vattr:u_geom_vattr|zhao_raster_rcp24_v4:u_rcp|altsyncram:s_x_q_rtl_0|altsyncram_7io1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_vattr:u_geom_vattr|zhao_raster_rcp24_v4:u_rcp|zhao_raster_rcp24_mul:u_mul|altshift_taps:h_low_q_rtl_0|shift_taps_thv:auto_generated|altsyncram_pu91:altsyncram4|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  3,
+                                                    "width":  109,
+                                                    "autoShift":  true
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_vattr:u_geom_vattr|zhao_raster_rcp24_v4:u_rcp|zhao_raster_rcp24_mul:u_mul|altshift_taps:o_corr_q_rtl_0|shift_taps_rhv:auto_generated|altsyncram_nu91:altsyncram5|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  5,
+                                                    "width":  150,
+                                                    "autoShift":  true
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_vattr:u_geom_vattr|zhao_raster_rcp24_v4:u_rcp|zhao_raster_rcp24_mul:u_mul|altshift_taps:o_tag_q_rtl_0|shift_taps_egv:auto_generated|altsyncram_tr91:altsyncram5|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  6,
+                                                    "width":  17,
+                                                    "autoShift":  true
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_vattr:u_geom_vattr|zhao_raster_rcp24_v4:u_rcp|zhao_raster_rcp24_mul:u_mul|altshift_taps:o_tag_q_rtl_1|shift_taps_dgv:auto_generated|altsyncram_rr91:altsyncram5|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  7,
+                                                    "width":  15,
+                                                    "autoShift":  true
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_vertid:u_geom_vertid|altsyncram:map_ram_rtl_0|altsyncram_p6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  34,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_light_env:u_light_env|zhao_field_sin:u_sin|zhao_field_sin_rom:u_tbl|altsyncram:tbl_rtl_0|altsyncram_7a02:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "True Dual Port",
+                                                    "depth":  257,
+                                                    "width":  17,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_light_stream:u_light_stream|altsyncram:a_nl_q_rtl_0|altsyncram_dvj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  4,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_light_stream:u_light_stream|altsyncram:a_nl_q_rtl_1|altsyncram_5fo1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  4,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_light_stream:u_light_stream|altsyncram:a_nx_q_rtl_0|altsyncram_f2k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_light_stream:u_light_stream|altsyncram:a_nx_q_rtl_1|altsyncram_f2k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_light_stream:u_light_stream|altsyncram:a_ny_q_rtl_0|altsyncram_f2k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_light_stream:u_light_stream|altsyncram:a_ny_q_rtl_1|altsyncram_f2k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_light_stream:u_light_stream|altsyncram:a_nz_q_rtl_0|altsyncram_f2k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_light_stream:u_light_stream|altsyncram:a_nz_q_rtl_1|altsyncram_f2k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_light_stream:u_light_stream|altsyncram:a_src_q_rtl_0|altsyncram_bio1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  16,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_light_stream:u_light_stream|altsyncram:oq_b_q_rtl_0|altsyncram_lvj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  17,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_light_stream:u_light_stream|altsyncram:oq_g_q_rtl_0|altsyncram_lvj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  17,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_light_stream:u_light_stream|altsyncram:oq_r_q_rtl_0|altsyncram_lvj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  17,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_light_stream:u_light_stream|altsyncram:oq_s_q_rtl_0|altsyncram_jvj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  16,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_light_stream:u_light_stream|altsyncram:pfa_rec_q_rtl_0|altsyncram_l2k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  128,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_light_stream:u_light_stream|altsyncram:sd_tag_q_rtl_0|altsyncram_9io1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  10,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_material_resolve:u_material_resolve|altsyncram:ln_gen_q_rtl_0|altsyncram_j2k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  16,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_material_resolve:u_material_resolve|altsyncram:ln_id_q_rtl_0|altsyncram_j2k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  16,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_material_resolve:u_material_resolve|altsyncram:ln_index_q_rtl_0|altsyncram_h2k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  24,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_measure_histogram:u_measure_histogram|zhao_dc_sdp_ram:u_bins|altsyncram:mem_rtl_0|altsyncram_l6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  128,
+                                                    "width":  25,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_mem_upload:u_mem_upload|altsyncram:bbuf_q_rtl_0|altsyncram_igi1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_part_clipfeed:u_part_clipfeed|altsyncram:inv_q_rtl_0|altsyncram_h2k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  24,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_part_clipfeed:u_part_clipfeed|altsyncram:tri_q_rtl_0|altsyncram_36k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  168,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_part_clipfeed:u_part_clipfeed|zhao_raster_rcp24_v4:u_rcp|altsyncram:p_m_q_rtl_0|altsyncram_vsp1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  24,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_part_clipfeed:u_part_clipfeed|zhao_raster_rcp24_v4:u_rcp|altsyncram:p_x0_q_rtl_0|altsyncram_7fo1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_part_clipfeed:u_part_clipfeed|zhao_raster_rcp24_v4:u_rcp|altsyncram:p_x0_q_rtl_1|altsyncram_7fo1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_part_clipfeed:u_part_clipfeed|zhao_raster_rcp24_v4:u_rcp|altsyncram:res_q_rtl_0|altsyncram_agi1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  24,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_part_clipfeed:u_part_clipfeed|zhao_raster_rcp24_v4:u_rcp|altsyncram:s_w_q_rtl_0|altsyncram_ssp1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_part_clipfeed:u_part_clipfeed|zhao_raster_rcp24_v4:u_rcp|altsyncram:s_x_q_rtl_0|altsyncram_7fo1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_part_hps:u_part_hps|altsyncram:rf_m_rtl_0|altsyncram_kji1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  128,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_part_hps:u_part_hps|altsyncram:wf_m_rtl_0|altsyncram_kji1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  128,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_part_project:u_part_project|altsyncram:lq_m_rtl_0|altsyncram_b2k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2,
+                                                    "width":  155,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_part_project:u_part_project|altsyncram:m_attr_rtl_0|altsyncram_30k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  69,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_part_project:u_part_project|altsyncram:m_proj_rtl_0|altsyncram_i2k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  131,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_part_project:u_part_project|altsyncram:m_rad_rtl_0|altsyncram_fvj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_part_state:u_part_state|altsyncram:chl_m_rtl_0|altsyncram_llo1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  115,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_part_table:u_part_table|altdpram:col_m_rtl_0|dpram_9ao1:auto_generated|ALTDPRAM_INSTANCE",
+                                                    "type":  "MLAB",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  128,
+                                                    "width":  51,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_part_table:u_part_table|altdpram:crv_m_rtl_0|dpram_h8o1:auto_generated|ALTDPRAM_INSTANCE",
+                                                    "type":  "MLAB",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  14,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_part_table:u_part_table|altdpram:spw_m_rtl_0|dpram_6ao1:auto_generated|ALTDPRAM_INSTANCE",
+                                                    "type":  "MLAB",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  512,
+                                                    "width":  13,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_part_table:u_part_table|altdpram:upd_m_rtl_0|dpram_pbo1:auto_generated|ALTDPRAM_INSTANCE",
+                                                    "type":  "MLAB",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  128,
+                                                    "width":  141,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_post_composite:u_post_composite|altsyncram:pv_b_q_rtl_0|altsyncram_dio1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  32,
+                                                    "width":  72,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_post_composite:u_post_composite|altsyncram:pv_g_q_rtl_0|altsyncram_pio1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  72,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_post_composite:u_post_composite|altsyncram:pv_r_q_rtl_0|altsyncram_dio1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  32,
+                                                    "width":  72,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_post_composite:u_post_composite|altsyncram:ring_q_rtl_0|altsyncram_e9k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  3456,
+                                                    "width":  16,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_post_gather_store:u_post_gather_store|altsyncram:disp_mem_rtl_0|altsyncram_ucn1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8192,
+                                                    "width":  16,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_post_gather_store:u_post_gather_store|altsyncram:glow_mem_rtl_0|altsyncram_0dn1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8192,
+                                                    "width":  17,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_proj_subsystem:u_proj_subsystem|zhao_project_service:u_svc|zhao_project_core:u_core|altshift_taps:g_rows_spatial.p_pay_q_rtl_0|shift_taps_qvv:auto_generated|altsyncram_lic1:altsyncram5|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  40,
+                                                    "width":  13,
+                                                    "autoShift":  true
+                                                },
+                                                {
+                                                    "name":  "zhao_proj_subsystem:u_proj_subsystem|zhao_project_service:u_svc|zhao_project_core:u_core|altshift_taps:g_rows_spatial.p_pay_q_rtl_1|shift_taps_iuv:auto_generated|altsyncram_5gc1:altsyncram5|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  39,
+                                                    "width":  4,
+                                                    "autoShift":  true
+                                                },
+                                                {
+                                                    "name":  "zhao_proj_subsystem:u_proj_subsystem|zhao_project_service:u_svc|zhao_project_core:u_core|altshift_taps:s3_neg_rtl_0|shift_taps_9uv:auto_generated|altsyncram_hfc1:altsyncram4|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  32,
+                                                    "width":  2,
+                                                    "autoShift":  true
+                                                },
+                                                {
+                                                    "name":  "zhao_proj_subsystem:u_proj_subsystem|zhao_terrain_wcache:u_wc|zhao_vertex_arena:g_copy[0].u_arena|altsyncram:mem_rtl_0|altsyncram_07n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  324,
+                                                    "width":  74,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_proj_subsystem:u_proj_subsystem|zhao_terrain_wcache:u_wc|zhao_vertex_arena:g_copy[1].u_arena|altsyncram:mem_rtl_0|altsyncram_07n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  324,
+                                                    "width":  74,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_proj_subsystem:u_proj_subsystem|zhao_terrain_wcache:u_wc|zhao_vertex_arena:g_copy[2].u_arena|altsyncram:mem_rtl_0|altsyncram_07n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  324,
+                                                    "width":  74,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_shell_top_v2:u_shell|zhao_audio_fifo:u_fifo|altsyncram:mem_rtl_0|altsyncram_nuk1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2048,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_shell_top_v2:u_shell|zhao_cmd_dma:u_dma|altsyncram:slot_ram_rtl_0|altsyncram_17n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  512,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_shell_top_v2:u_shell|zhao_fb_ready_cdc_v2:u_fb_cdc|zhao_dc_sdp_ram:u_ready_ram|altsyncram:mem_rtl_0|altsyncram_csj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  23,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_shell_top_v2:u_shell|zhao_fb_ready_cdc_v2:u_fb_cdc|zhao_dc_sdp_ram:u_swap_ram|altsyncram:mem_rtl_0|altsyncram_csj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  23,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_shell_top_v2:u_shell|zhao_geom_bin_pipe_v2:u_render_bin|zhao_geom_binner_v2:u_binner|altsyncram:tile_ram_rtl_0|altsyncram_i9n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  576,
+                                                    "width":  42,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_shell_top_v2:u_shell|zhao_geom_bin_pipe_v2:u_render_bin|zhao_raster_tile_pipe_v2:u_tile|zhao_raster_tilestore:u_tilestore|altsyncram:ram0_rtl_0|altsyncram_u6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_shell_top_v2:u_shell|zhao_geom_bin_pipe_v2:u_render_bin|zhao_raster_tile_pipe_v2:u_tile|zhao_raster_tilestore:u_tilestore|altsyncram:ram1_rtl_0|altsyncram_u6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_shell_top_v2:u_shell|zhao_post_lease:u_post_lease|zhao_post_echo:u_echo|altsyncram:sk_mem_rtl_0|altsyncram_m3q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  35,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_shell_top_v2:u_shell|zhao_post_lease:u_post_lease|zhao_post_fbread:u_source|altsyncram:q_mem_rtl_0|altsyncram_60q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_shell_top_v2:u_shell|zhao_video_scanout:u_scanout|zhao_scanout_linebuf:u_linebuf|zhao_dc_sdp_ram:u_ram|altsyncram:mem_rtl_0|altsyncram_k3k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_surface_sheet:u_surface_sheet|altsyncram:mem_str_rtl_0|altsyncram_s6q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8192,
+                                                    "width":  8,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_surface_sheet:u_surface_sheet|altsyncram:mem_tag_rtl_0|altsyncram_s6q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8192,
+                                                    "width":  8,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_bake_v2:u_terrain_bake|altsyncram:meets_ram_rtl_0|altsyncram_63n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  34,
+                                                    "width":  33,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_bakerec:u_terrain_bakerec|altsyncram:e_cx_q_rtl_0|altsyncram_vuj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_bakerec:u_terrain_bakerec|altsyncram:e_cz_q_rtl_0|altsyncram_vuj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_bakerec:u_terrain_bakerec|altsyncram:e_ex0_q_rtl_0|altsyncram_vuj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_bakerec:u_terrain_bakerec|altsyncram:e_ex1_q_rtl_0|altsyncram_vuj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_bakerec:u_terrain_bakerec|altsyncram:e_ez0_q_rtl_0|altsyncram_vuj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_bakerec:u_terrain_bakerec|altsyncram:e_ez1_q_rtl_0|altsyncram_vuj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_bakerec:u_terrain_bakerec|altsyncram:e_handle_q_rtl_0|altsyncram_vuj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_bakerec:u_terrain_bakerec|altsyncram:e_rad_q_rtl_0|altsyncram_vuj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_clipfeed:u_terrain_clipfeed|zhao_raster_rcp24_v4:u_rcp|altsyncram:p_m_q_rtl_0|altsyncram_vsp1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  24,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_clipfeed:u_terrain_clipfeed|zhao_raster_rcp24_v4:u_rcp|altsyncram:p_x0_q_rtl_0|altsyncram_7fo1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_clipfeed:u_terrain_clipfeed|zhao_raster_rcp24_v4:u_rcp|altsyncram:p_x0_q_rtl_1|altsyncram_7fo1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_clipfeed:u_terrain_clipfeed|zhao_raster_rcp24_v4:u_rcp|altsyncram:res_q_rtl_0|altsyncram_agi1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  24,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_clipfeed:u_terrain_clipfeed|zhao_raster_rcp24_v4:u_rcp|altsyncram:s_w_q_rtl_0|altsyncram_ssp1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_clipfeed:u_terrain_clipfeed|zhao_raster_rcp24_v4:u_rcp|altsyncram:s_x_q_rtl_0|altsyncram_7fo1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  8,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_compcache_front:u_terrain_compcache|altsyncram:lat_m_rtl_0|altsyncram_mcn1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4356,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_compcache_front:u_terrain_compcache|altsyncram:mat_m_rtl_0|altsyncram_ccn1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2048,
+                                                    "width":  24,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_compcache_front:u_terrain_compcache|altsyncram:sub_m_rtl_0|altsyncram_49n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2048,
+                                                    "width":  2,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_compcache_front:u_terrain_compcache|altsyncram:vel_m_rtl_0|altsyncram_ocn1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2178,
+                                                    "width":  16,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_compcache_front:u_terrain_compcache|altsyncram:wx_m_rtl_0|altsyncram_m3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  66,
+                                                    "width":  17,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_compcache_front:u_terrain_compcache|altsyncram:wz_m_rtl_0|altsyncram_m3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  66,
+                                                    "width":  17,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_edgequery:u_terrain_edgequery|altsyncram:dq_ix_rtl_0|altsyncram_1fo1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  16,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_edgequery:u_terrain_edgequery|altsyncram:dq_iz_rtl_0|altsyncram_1fo1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  16,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_edgequery:u_terrain_edgequery|altsyncram:dq_src_rtl_0|altsyncram_1fo1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  16,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_edgerecon:u_terrain_edgerecon|altsyncram:bank_q_rtl_0|altsyncram_v6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  82,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_jobissue:u_terrain_jobissue|altsyncram:cq_src_rtl_0|altsyncram_1fo1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  16,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_lightlane:u_terrain_lightlane|altsyncram:mem_rtl_0|altsyncram_e9n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  324,
+                                                    "width":  104,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_lightlane:u_terrain_lightlane|zhao_terrain_shade:u_shade|zhao_qsq_bytemul:u_qsq|altsyncram:qmem_rtl_0|altsyncram_c3q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  512,
+                                                    "width":  16,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_lightlane:u_terrain_lightlane|zhao_terrain_shade:u_shade|zhao_qsq_bytemul:u_qsq|altsyncram:qmem_rtl_1|altsyncram_c3q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  512,
+                                                    "width":  16,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_loadq:u_terrain_loadq|altsyncram:mem_q_rtl_0|altsyncram_j6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  40,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_lodfeed:u_terrain_lodfeed|altsyncram:cy_q_rtl_0|altsyncram_cji1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  16,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_lodfeed:u_terrain_lodfeed|altsyncram:lat_mem_rtl_0|altsyncram_c9k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  1089,
+                                                    "width":  16,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_matpub:u_terrain_matpub|zhao_dc_sdp_ram:u_plane|altsyncram:mem_rtl_0|altsyncram_o8q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  1024,
+                                                    "width":  24,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_matpub:u_terrain_matpub|zhao_dc_sdp_ram:u_slotrec|altsyncram:mem_rtl_0|altsyncram_14q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  49,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_pageio:u_terrain_pageio|altsyncram:bwrd_q_rtl_0|altsyncram_q6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  280,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_pageio:u_terrain_pageio|altsyncram:dwrd_q_rtl_0|altsyncram_o6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  136,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_residency_v2:u_terrain_residency|altsyncram:g_bank[0].keyram[0][106]__7|altsyncram_q9n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  107,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_residency_v2:u_terrain_residency|altsyncram:g_bank[0].statram_hi[0][16]__8|altsyncram_j6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  40,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_residency_v2:u_terrain_residency|altsyncram:g_bank[1].keyram[0][106]__9|altsyncram_q9n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  107,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_residency_v2:u_terrain_residency|altsyncram:g_bank[1].statram_hi[0][16]__10|altsyncram_j6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  40,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_residency_v2:u_terrain_residency|altsyncram:g_bank[2].keyram[0][106]__11|altsyncram_q9n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  107,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_residency_v2:u_terrain_residency|altsyncram:g_bank[2].statram_hi[0][16]__12|altsyncram_j6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  40,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_residency_v2:u_terrain_residency|altsyncram:g_bank[3].keyram[0][106]__13|altsyncram_q9n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  107,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_residency_v2:u_terrain_residency|altsyncram:g_bank[3].statram_hi[0][16]__14|altsyncram_j6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  40,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_sheetseam:u_terrain_sheetseam|altsyncram:bf_q_rtl_0|altsyncram_m6q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  1089,
+                                                    "width":  9,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_sheetseam:u_terrain_sheetseam|altsyncram:str_q_rtl_0|altsyncram_k6q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  1089,
+                                                    "width":  8,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_spdesc:u_terrain_spdesc|altsyncram:dq_src_rtl_0|altsyncram_1fo1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  16,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_spdesc:u_terrain_spdesc|altsyncram:dq_src_rtl_1|altsyncram_1fo1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  16,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_terrain_uvlane:u_terrain_uvlane|altsyncram:mem_rtl_0|altsyncram_n6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  324,
+                                                    "width":  72,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_twod_band:u_twod_band|altsyncram:band_q_rtl_0|altsyncram_ecn1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  6144,
+                                                    "width":  40,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_twod_band:u_twod_band|altsyncram:desc_q_rtl_0|altsyncram_r6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  391,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_twod_cmd:u_twod_cmd|altsyncram:ring_q_rtl_0|altsyncram_m9n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  128,
+                                                    "width":  333,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_twod_plane:u_twod_plane|altsyncram:a_q_rtl_0|altsyncram_vuj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_twod_plane:u_twod_plane|altsyncram:b_q_rtl_0|altsyncram_vuj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_twod_plane:u_twod_plane|altsyncram:c_q_rtl_0|altsyncram_vuj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_twod_plane:u_twod_plane|altsyncram:d_q_rtl_0|altsyncram_vuj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_twod_plane:u_twod_plane|altsyncram:u0_q_rtl_0|altsyncram_vuj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_twod_plane:u_twod_plane|altsyncram:v0_q_rtl_0|altsyncram_vuj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                }
+                                            ],
+                       "inferredMemoryCount":  207,
+                       "inferredDesignMemoryCount":  197,
+                       "dspDecomposition":  {
+                                                "Two Independent 18x18":  32,
+                                                "Sum of two 18x18":  51,
+                                                "Independent 27x27":  44,
+                                                "Total number of DSP blocks":  128,
+                                                "Fixed Point Signed Multiplier":  18,
+                                                "Fixed Point Unsigned Multiplier":  60,
+                                                "Fixed Point Mixed Sign Multiplier":  101
+                                            },
+                       "ramConversionWarnings":  0,
+                       "errors":  0,
+                       "critical":  4
                    },
                    {
                        "module":  "zhao_crc32c_fold",
