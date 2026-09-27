@@ -5125,3 +5125,72 @@ errors** against `design/blocks.yml` (missing `reference_model`, missing
 `tests.random`, commit hashes failing `^[0-9a-f]{7,40}$`). My diff for that
 commit was one file. CI runs that gate, so it has been failing too. Recorded,
 not absorbed.
+
+### 2026-09-28 - CORRECTION, AND "WHERE WE STAND" IS ALREADY MEASURED
+
+**I WAS WRONG THAT `zhao_console_core` HAD NEVER BEEN THROUGH `quartus_map`.**
+I wrote that in the entry above and in a commit message. It has mapped
+**successfully at least five times**, and the reports are on disk:
+
+```
+@console-core-first-light   2026-09-19 01:20   5CEBA9F31C7    58138 regs  151 DSP
+@edgeclose                  2026-09-26 00:43   5CEBA9F31C7
+@post-palram                2026-09-26 05:21   5CSEBA6U23I7   <- SHIPPING PART
+@post-palram-sizing         2026-09-26 05:49   5CEBA9F31C7
+@console-snapshot-20260926  2026-09-26 14:51   5CEBA9F31C7   271464 regs  375 DSP
+```
+
+**AND THE FULL CONSOLE FIT HAS ALREADY BEEN ATTEMPTED AND CANNOT COMPLETE.**
+`tools/budget/map_entity_attrib.py`'s header records it: the 2026-09-25 fit
+**failed in `quartus_fit`** with
+
+```
+Error (170011): Design contains 336023 blocks of type combinational node.
+                However, the device contains only 227120 blocks.
+```
+
+-- and 227,120 is the **SIZING** part's capacity. So the placed fit overflows
+even the big diagnostic device, produces **no ALM figure and no Fmax**, and will
+do so again until the design shrinks. That is not a toolchain problem to solve;
+**it is the answer.** Which is exactly why the instrument for the owner's
+question is a MAP, not a fit -- reasoned to independently before finding this
+recorded, but the record is better evidence than the reasoning.
+
+### SO: WHERE WE STAND, ON THE SHIPPING PART, ALREADY COMMITTED
+
+`reports/synthesis/console_entity_attrib_shipping.md`, from `@post-palram`
+(`5CSEBA6U23I7`, A&S successful 2026-09-26 05:21):
+
+| | measured | against `5CSEBA6U23I7` |
+|---|---:|---:|
+| combinational ALUTs | 301,446 | **360%** of ~83,820 |
+| dedicated logic registers | 312,114 | **186%** of 167,640 |
+| block memory bits | 3,207,741 | **57%** of 5,662,720 |
+| DSP blocks | 128 | **114%** of 112 |
+
+**The registers ALONE need ~78,028 ALM -- 186% of the part with the
+combinational logic at zero.** Memory, by contrast, FITS at 57%. The biggest
+subtrees are `zhao_shell_top_v2` (58,514 ALUTs, 70% of the part on its own),
+`zhao_field_host_v2` (43,742, 52%) and `zhao_forge_assemble` (15,970 ALUTs but
+**39,023 registers**).
+
+**THE DEVICE TRAP IS LIVE IN THIS DATA** and nearly caught me: **four of the
+five** console reports on disk target `5CEBA9F31C7`, not the shipping part, and
+a smaller device reports fewer DSPs and MORE ALUTs for identical RTL. The file
+that created these tables is literally named *"I nearly reported a 66% DSP win
+that was a CHANGED TARGET DEVICE"*. **My running map targets the SHIPPING
+part**, so it is comparable to `@post-palram` and to nothing else here.
+
+**The tables carried NO PROVENANCE** -- no source report, no measurement date --
+while the source `.map.rpt` is gitignored. Fixed in the tool so every future
+table is self-describing, and the shipping table regenerated: **+24 lines, ZERO
+deletions**, so every previously committed number stands.
+
+### WHAT THE RUNNING MAP IS FOR, NOW THAT THE BASELINE EXISTS
+
+`@post-palram` predates this campaign's closure work. The map in flight measures
+**the current tree** -- I55's walk, `zhao_walk_meta_hold`,
+`TERRAIN.COMPOSED_MATERIAL`, the publisher -- on the **same device**, so the
+delta answers the one question the committed table cannot: **did closing the
+register cost area, and how much.** That is the honest hand-off into the owner's
+phase 3.
