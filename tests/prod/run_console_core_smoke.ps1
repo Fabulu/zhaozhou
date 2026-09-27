@@ -309,6 +309,50 @@ param(
   # required before the park may be called honest.
   [switch]$WalkRaster,
   # ---------------------------------------------------------------------------
+  # -FieldActive: THE FIRST FIELD THE COMPOSED CONSOLE HAS EVER RUN
+  # ---------------------------------------------------------------------------
+  # Directive 13.7 (reports/Zhaozhou_SHARED_FIELD_Repair_Architecture_2026-09-20
+  # .txt:1670): "Add a positive composed mode such as -FieldActive using that
+  # software producer. The current no-program smoke ... explicitly asserts zero
+  # completed FIELD runs; keep it as a refusal/control case instead of treating
+  # it as the positive gate. The new active mode must require nonzero actual
+  # runs, correct complete output values, actual terrain consumption and
+  # successful recovery after a deliberately bad program/association."
+  #
+  # Every other form of this bench prints `terrmat field_composed=0`, and it has
+  # always been zero: the composed console had never once run a field. All four
+  # Earth channels were proven in BENCHES and not one of those proves the path
+  # in the console, because the console never exercised one.
+  #
+  # With -FieldActive the bench plays HPS properly for the first time:
+  #   * it SERVES the field staging window at 0x1000_0000 (HPS region 6) with
+  #     the production packer's own ZFH2 capsule bytes -- the address
+  #     `fld_ldr_stage_base_i` has advertised all along and nothing ever backed;
+  #   * it posts an FH2 INSTALL_CAPSULE, so FIELD.LOADER fetches and seals it
+  #     over the REAL bridge and publishes handle -> hash;
+  #   * it posts the lowered image's LOAD words to the host, HEADER LAST;
+  #   * it COMMITs the hash, and only then releases the frame;
+  #   * and the packet carries a real TerrainField record naming that handle.
+  #
+  # Nothing in the datapath is bypassed and no answer is handed to the patch,
+  # which 13.7 forbids by name. Own build directory, own TAG.
+  [switch]$FieldActive,
+  # ---------------------------------------------------------------------------
+  # -FieldUncovered: THE ANTI-VACUITY CONTROL FOR -FieldActive
+  # ---------------------------------------------------------------------------
+  # Implies -FieldActive and changes ONE FIELD OF ONE RECORD: the TerrainField's
+  # footprint moves to 16384.0, where there is no lattice vertex. The capsule is
+  # still installed, the load words still posted, the commit still accepted, the
+  # record still banked and still resolved to the same program -- and
+  # `zhao_tp_covers` then rejects every vertex, so NOTHING evaluates.
+  #
+  # INVERTED-ish polarity, stated plainly: it passes when `fld_earth_runs_o` is
+  # ZERO and `skipped_uncovered` is nonzero. Its whole purpose is to answer
+  # "what would differ if no field were issued" with a measurement rather than
+  # an argument -- if -FieldActive and -FieldUncovered produced the same pixel
+  # count, -FieldActive would be proving nothing. Own build directory, own TAG.
+  [switch]$FieldUncovered,
+  # ---------------------------------------------------------------------------
   # -LintOnly: THE CHEAP HALF, AND IT BELONGS FIRST (owner ruling R71)
   # ---------------------------------------------------------------------------
   # Added 2026-09-20. Three merges in one run swallowed a closing construct --
@@ -425,6 +469,13 @@ if (-not $BuildIn) {
          # directory would mean the plain gate could run a walk-arranged
          # binary and report the parked console's numbers.
          elseif ($WalkRaster) { 'zhao_console_core_smoke_walkras' }
+         # EVERY NEW SWITCH NEEDS A TAG HERE. These two are 2026-09-27's, and
+         # the UNCOVERED arm must come FIRST because it implies -FieldActive:
+         # tested the other way round it would fall through to the positive
+         # form's tag and the two would silently share an object directory --
+         # which is the exact collision the paragraph above records.
+         elseif ($FieldUncovered) { 'zhao_console_core_smoke_flduncov' }
+         elseif ($FieldActive) { 'zhao_console_core_smoke_fldactive' }
          else { 'zhao_console_core_smoke' }
   # -LintOnly is the one switch that COMBINES with the others, so it appends
   # rather than joining the chain above. Without this it would fall through to
@@ -512,6 +563,14 @@ if ($TerrainFlatLattice) {
 if ($NoTerrainMaterial) {
   $defs += '+define+ZHAO_SMOKE_NO_TERRAIN_MATERIAL'
   Write-Host 'TERRAINMAT CONTROL (entry I13 items (a)/(b)): SetEnvironment carries terrain_material_set = 0 and terrain_material_id = 0 -- what every capture written before 2026-09-26 carries, because those bytes were pad then. DIRECT polarity (passes when terrain declares MATMODE_NONE, terr_cf_mat_backed_o is ZERO, and the texture island reports FEWER samples than fragments): a fragment published with sample_count = 0 asks for nothing, which is not the same as being refused. It is the positive control for the plain run samples == fragments equality, which was FALSE BY 26 until this packet. NOTE: raster pixels is 2816 in this form too -- terrain draws either way; what moves is whether its fragments carry a texel.'
+}
+if ($FieldActive -or $FieldUncovered) {
+  $defs += '+define+ZHAO_SMOKE_FIELD_ACTIVE'
+  Write-Host 'DIRECTIVE 13.7 POSITIVE MODE: the composed console RUNS A REAL FIELD. The bench serves the field staging window at 0x1000_0000 with the production packer''s own ZFH2 capsule (a REAL Earth spell, spells/membrane.form -> wave_pool, lowered at the console''s composed .REGS(32)), posts an FH2 INSTALL_CAPSULE so FIELD.LOADER fetches and seals it over the REAL bridge, posts the lowered image''s LOAD words to the host with the HEADER LAST, COMMITs the hash, and only then releases a frame whose packet carries a TerrainField record naming the capsule''s published handle. DIRECT polarity (passes when fld_earth_runs_o and fld_runs_o are NONZERO, out_incomplete is 0, and terrmat field_composed is NONZERO). NOTE: raster pixels is NOT the plain run''s 2816 in this form -- a field that changed no height would be a field doing nothing.'
+}
+if ($FieldUncovered) {
+  $defs += '+define+ZHAO_SMOKE_FIELD_UNCOVERED'
+  Write-Host 'ANTI-VACUITY CONTROL for -FieldActive: ONE FIELD OF ONE RECORD differs -- the TerrainField footprint sits at 16384.0 where no lattice vertex is. Same capsule, same install, same load words, same commit, same record, same packet length. INVERTED polarity on the run counter (passes when fld_earth_runs_o is ZERO and skipped_uncovered is NONZERO), and it is the measurement that says what would differ if no field were issued: raster pixels must come back to the plain run''s 2816.'
 }
 if ($BadTraceArm) {
   $defs += '+define+ZHAO_SMOKE_BAD_TRACE_ARM'

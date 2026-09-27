@@ -10816,6 +10816,21 @@ target_include_directories(smoke_geom_fixture_gen PRIVATE ${CMAKE_SOURCE_DIR}/re
 add_test(NAME smoke_geom_fixture_fresh
   COMMAND smoke_geom_fixture_gen --check ${CMAKE_CURRENT_SOURCE_DIR}/prod/smoke_geom_fixture.svh)
 set_tests_properties(smoke_geom_fixture_fresh PROPERTIES LABELS "fast;nightly" TIMEOUT 60)
+
+# THE SMOKE BENCH'S TERRAIN FIELD FIXTURE (directive 13.7's `-FieldActive`).
+# A REAL Earth program lowered by the REAL production library into the two
+# byte-streams the composed console needs: the ZFH2 capsule the loader installs
+# over the HPS bridge, and the doorbell LOAD words the host executes. Both come
+# from ONE HostPlan, so the sealed capsule and the running microcode cannot
+# describe different programs. The bench `include`s the generated header; this
+# test fails if it is stale.
+add_executable(smoke_field_fixture_gen prod/smoke_field_fixture_gen.cpp)
+target_link_libraries(smoke_field_fixture_gen PRIVATE zhao_zref)
+target_include_directories(smoke_field_fixture_gen PRIVATE ${CMAKE_SOURCE_DIR}/reference/src)
+add_test(NAME smoke_field_fixture_fresh
+  COMMAND smoke_field_fixture_gen --check ${CMAKE_CURRENT_SOURCE_DIR}/prod/smoke_field_fixture.svh)
+set_tests_properties(smoke_field_fixture_fresh PROPERTIES LABELS "fast;nightly" TIMEOUT 60)
+
 set_tests_properties(geom_meshfetch_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
 # SKIN.NORM's licence: one transformed-and-renormalised normal reused across
