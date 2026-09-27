@@ -1259,8 +1259,18 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0] geom_ab_flushcut_o,    // partial chunks cut by frame end
   output logic [15:0] geom_ab_max_chunks_o,  // deepest tile list, in chunks
   output logic        geom_ab_overflow_o,
-  input  logic [ 9:0] geom_ab_head_tile_i,
   output logic [31:0] geom_ab_head_chunk_o,
+  // SWAPCLOSE 2026-09-27: GEOM.TILEWALK evidence and the parked-arrangement
+  // selector. Added to the WRAPPER, never to the module -- owner ruling R220.
+  output logic [31:0] geom_tw_tiles_o,
+  output logic [31:0] geom_tw_empty_o,
+  output logic [31:0] geom_tw_jobs_o,
+  output logic [31:0] geom_tw_failed_o,
+  output logic [31:0] geom_tw_stall_o,
+  output logic [31:0] geom_tw_overlap_o,
+  output logic [31:0] geom_tw_door_o,
+  output logic        geom_tw_busy_o,
+  output logic        geom_walk_raster_o,
   output logic        geom_ab_head_valid_o,
   output logic [31:0] geom_pw_dirs_o,
   output logic [31:0] geom_pw_dirmiss_o,
