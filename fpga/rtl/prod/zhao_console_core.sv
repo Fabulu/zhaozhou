@@ -9395,6 +9395,166 @@
 //      output dangles, so a tile sequencer would count triangles and drop
 //      them. This packet ran NO Quartus map and makes NO area or timing claim.
 //
+//
+//      -- SWAPBUILD, 2026-09-27. STILL TIED, AND THE ENTRY'S OWN CENTRAL
+//      CLAIM IS FALSE. Five packets have written that the planes are
+//      RECOMPUTABLE from the arena record. They are not, and the reason is
+//      eight bits wide.
+//
+//      THE CLAIM, as it stands above in this entry and in four FINDINGS:
+//      "The 24-byte ProjectedVertex DOES carry what those need (x, y, invw24,
+//      status, u/w, v/w, rgba), so the planes are RECOMPUTABLE -- but only by
+//      standing up a SECOND setup and attrpack back end fed from SDRAM."
+//
+//      THE ARENA'S COLOUR IS A LOSSY 8-BIT QUANTISATION OF THE QUANTITY
+//      ATTRPACK ACTUALLY CONSUMES. `zhao_geom_vertid.sv:499`:
+//
+//        assign pv_rgba_o = {unit8_of_fx16(al_c), unit8_of_fx16(b_c),
+//                            unit8_of_fx16(g_c),  unit8_of_fx16(r_c)};
+//
+//      and `unit8_of_fx16` (`:397`) is `(v + 128) >> 8` with v[31] clamped to
+//      0 and v[30:16] != 0 clamped to 255. Meanwhile `r_c`/`g_c`/`b_c`/`al_c`
+//      (`:487-490`) are `a_c[3*32 +: 32]` and its neighbours -- the SAME
+//      32-bit attribute slots `zhao_geom_attrpack` reads to build the six
+//      planes. So the record keeps EIGHT of the sixteen fractional bits and
+//      saturates at both ends.
+//
+//      THREE OF THE SIX PLANES THEREFORE CANNOT BE REBUILT FROM IT by any
+//      back end whatever -- the R, G and B Gouraud planes owner ruling R234 D1
+//      added, the ones that widened METAW from 1157 to 1877 in the first
+//      place. This is not an argument about which back end to build; it is
+//      about a record that does not carry the function, and it blocks the
+//      SECOND-INSTANCE architecture exactly as hard as any other.
+//
+//      NOTE THE DIRECTION, because it is this file's own law. The false claim
+//      made the remaining work look SIMPLER -- "a second back end" rather than
+//      "a wider record AND a back end". It listed `rgba` beside x, y and u/w
+//      as though the four were the same kind of thing. Nobody audits good
+//      news, and this one was quoted forward five times.
+//
+//      THE FIX COSTS NO ADDRESS SPACE, WHICH IS THE PART WORTH INHERITING.
+//      `PV_STRIDE_B` is 32 and the record is 24, so every vertex slot already
+//      carries EIGHT BYTES OF DECLARED SLACK (`zhao_geom_paramarena.sv:298-309`
+//      says why: 24 is not a multiple of the 16-byte BL8 quantum). A
+//      ProjectedVertex v2 that carries the colour at full precision fits
+//      inside the stride that is already allocated:
+//
+//        x      21   (s21 IS the declared domain: `zhao_geom_parambuf`'s
+//                     `pv_illegal_o` already REFUSES any vertex failing
+//                     `fits_s21`, so this is not a truncation)
+//        y      21
+//        invw   24
+//        status  8
+//        u/w    32
+//        v/w    32
+//        r      32   <- was 8
+//        g      32   <- was 8
+//        b      32   <- was 8
+//        alpha   8   <- unchanged, and see the open sub-question below
+//        ----------
+//               242 bits = 30.25 bytes, 14 bits spare in the 32-byte slot
+//
+//      VERT_CAP_B does not move, VIEW_USED_B stays 3,407,872 of 4,194,304,
+//      and no region in `spec/memory_rules.md` section 5c changes. Owner
+//      directive section 4 authorises this by name -- "introduce a versioned
+//      extension ... The architect has explicit authority to amend record
+//      schemas for this purpose" -- and equally forbids the shortcut:
+//      "never silently overload a field, truncate a handle, or substitute a
+//      convenient zero."
+//
+//      THE OPEN SUB-QUESTION, stated so it is DECIDED rather than discovered:
+//      alpha at its full 32 bits makes the record 266 bits and it does NOT
+//      fit the 32-byte stride. `zhao_geom_attrpack` deliberately does not read
+//      slot 6, so 8 bits preserves today's behaviour exactly -- but that is an
+//      argument about the current consumer, not about the attribute. Decide it
+//      explicitly; do not let 8 bits become the answer because it fit.
+//
+//      WHAT WAS PRICED, AND THE ARCHITECTURE THAT IS REFUSED. The second
+//      INSTANCE this entry has asked for five times had NEVER BEEN MAPPED:
+//      `zhao_geom_attrpack` carried zero rows in `zhao_block_fit.json` and
+//      `zhao_block_map.json`. Row `zhao_geom_attrpack@swapbuild-secondback`,
+//      map_only, 30 s, on the shipping part 5CSEBA6U23I7, with
+//      `rtlCleanAtHead` AND `treeCleanAtHead` both true at commit 62d8b6a7:
+//      1,121 combinational ALUTs, 2,354 estimated ALMs, 2,327 registers,
+//      0 memory bits, 36 DSP. With `zhao_geom_setup`'s existing CLEAN map row
+//      (500 ALUT / 938 est ALM / 1,340 reg / 4 DSP -- NOT the dirty full-fit
+//      row, which reads 743 ALM), a second back end is +1,621 ALUT,
+//      +3,292 est ALM, +3,667 registers and +40 DSP. The part has 112 DSP.
+//      That is 35.7% of the device's whole multiplier budget for one
+//      duplicated block, and 4.4x the +9 DSP on which LANESCOST refused I34's
+//      gathering front on 2026-09-27.
+//
+//      THE ROW'S `notTargetDevice: true` IS WRONG AND IS DECLARED HERE RATHER
+//      THAN INHERITED. `run_block_fit.ps1:882-887` stamps that flag whenever
+//      `-Device` is passed, without checking whether the value IS the shipping
+//      part. It was. The row's own `sizingNote` contradicts itself in one
+//      sentence: "fitted on 5CSEBA6U23I7 ONLY to measure size; the target is
+//      5CSEBA6U23I7".
+//
+//      AND A SECOND INSTANCE WOULD BE A SECOND EXPRESSION OF RATIFIED
+//      ARITHMETIC, which is the stronger objection because it does not depend
+//      on a budget. `zhao_forge_assemble.sv:62-66` states the admissible form:
+//      "A second INSTANCE of one law is not a second law; a second EXPRESSION
+//      of it would be". A back end that RECOMPUTES the planes owes bit-equality
+//      with the live path at every plane, profile and edge case, as a claim
+//      requiring verification.
+//
+//      THE ARCHITECTURE THAT REPLACES IT IS A TIME MULTIPLEX, and the fact
+//      that licenses it is structural rather than scheduled.
+//      `zhao_geom_binner_v2.sv:818` is
+//      `tri_ready_o = (state == S_IDLE) && !drain_req_r`; `:931` sets
+//      `drain_req_r` unconditionally on `frame_end_i`; `:941` tests it BEFORE
+//      `tri_valid_i`. Bin states are 0..5, drain states 6..11, ONE FSM owns
+//      both and the ranges are disjoint -- so for the whole window in which
+//      the raster consumes `job_*`, `u_geom_setup` and `u_geom_attrpack`
+//      provably have no other work. Neither carries state across a triangle
+//      (`grep -c frame zhao_geom_setup.sv` is 0; attrpack's three hits are all
+//      comment text). Feeding that idle pair from the walk is the SAME
+//      SILICON, so the planes are bit-identical by construction rather than by
+//      verification, and the DSP bill is zero.
+//      `reports/DECISION-20260927-I55-SWAP-ARCHITECTURE.md` carries the
+//      record, including the two alternatives rejected on measured capacity.
+//
+//      SO "ADDITION, NOT SUBSTITUTION" IS TRUE OF THE INSTANCE FORM AND FALSE
+//      OF THIS ONE. What the multiplex retires is `zhao_geom_binner_v2`'s
+//      `meta_ram` -- at the ratified METAW = 1877 and TRI_CAP = 128 that is
+//      47 slices x 40 bits x 128 = 240,640 bits, and it IS block memory (the
+//      binner's map row reads 2,109 registers against 191,296 memory bits, so
+//      it inferred). Directive section 4's "may move backing state to SDRAM
+//      rather than growing a frame-sized FPGA register file", by name.
+//
+//      TWO NUMBERS IN THIS ENTRY DESCRIBE A BINNER THE CONSOLE DOES NOT BUILD.
+//      The rows quoted above as "zhao_geom_binner_v2 mapped alone on the
+//      SHIPPING part is 2,109 registers and 191,296 memory bits" carry NO
+//      `topParameters`, so they were mapped at the module DEFAULT
+//      `METAW = 1157` (`zhao_geom_binner_v2.sv:245`). The console ships 1877 --
+//      `zhao_geom_bin_pipe_v2.sv:306-309` `$fatal`s if it is anything else, and
+//      `:73-77` says so in words: R234 D1 "widened METAW from 1157 to 1877,
+//      which is 29 -> 47 forty-bit slices of the binner's metadata bank". So
+//      `meta_ram` in the console is 92,160 bits LARGER than the row says. The
+//      quoted numbers are honest measurements of the pre-R234 block.
+//
+//      AND PARAGRAPH (4) ABOVE IS STALE. It says re-architecting
+//      GEOM.ARENABIN's storage "is the next experiment and it is NOT done
+//      here" and quotes 146,414 registers as the cost. ARENAINFER DID IT, in
+//      commit `4bb430cf`, which is an ancestor of RASTERSWAP's own base --
+//      the staging banks are `zhao_dc_sdp_ram` instances now and row
+//      `zhao_geom_arenabin@arenainfer` reads 1,010 registers / 291,456 memory
+//      bits. RASTERSWAP's FINDINGS section 3 inherited the stale ordering and
+//      told the next packet to resolve it FIRST. It was already resolved four
+//      hours before that packet started.
+//
+//      WHAT THIS PACKET DID NOT BUILD, SAID PLAINLY. No vertex-fetch arm, no
+//      mux, no sequencer, no retirement. `paramwalk dirs/chunks/tris` is STILL
+//      0/0/0 and `walk_valid_i` is still `1'b0`. Building the fetch arm
+//      against a record this packet has just proved insufficient would be
+//      measuring a circuit already known to be wrong. THE NEXT LINK IS THE
+//      SCHEMA, and it is now a BUILD and not a decision: ProjectedVertex v2 at
+//      32 bytes, the writer at `zhao_geom_vertid.sv:493-500`, the decoder at
+//      `zhao_geom_parambuf.sv:199-206`, the packer's `pv_bytes_c`
+//      (`zhao_geom_paramarena.sv:804-811`), the reference model, and the three
+//      committed arena mutants, which are COPIES and go stale in the
+//      flattering direction.
 // I56. GEOM.PARAMBUF's FRAME SEAL -- NOT a tie-off: `u_measure_sealplan` validates a per-view admission plan and produces it. CLOSED 2026-09-26 (SEALPLAN).
 //      `u_geom_paramarena.seal_*_i`, in the same standing as I9, I25 and I40.
 //

@@ -1,0 +1,75 @@
+{
+  "schema": "zhao_map_receipt/1",
+  "producedBy": "SWAPBUILD, 2026-09-27, branch gz/swapbuild",
+  "question": "What does the SECOND setup+attrpack back end that entry I55 has demanded for five packets actually cost on the shipping part?",
+  "why": "zhao_geom_attrpack had ZERO rows in zhao_block_fit.json and zhao_block_map.json. The architecture was never priced.",
+  "alutsLiveOnlyInMapRpt": true,
+  "mapRptIsGitignored": ".gitignore:158 reports/synthesis/blockpaths/*.map.rpt -- this is why no ALUT number survives on disk for seven of eight geometry modules. The numbers are transcribed here because the file carrying them cannot be committed.",
+  "mapRptSha256": "d7349eed93d7a36f700876d202f55dbf40fd4299fc56849b6b74d2066b1a9e25",
+  "capacityBound": {
+    "device": "5CSEBA6U23I7",
+    "alms": 41910,
+    "m10k": 553,
+    "dsp": 112,
+    "note": "a leaf map's utilisation is not a closure claim; recorded as the BOUND only"
+  },
+  "deviceFlagCorrection": "The row carries notTargetDevice=true. That flag is WRONG. run_block_fit.ps1:882-887 stamps it whenever -Device is passed, without checking whether the value IS the shipping part. It was 5CSEBA6U23I7. The row's own sizingNote contradicts itself in one sentence.",
+  "rows": [
+    {
+      "module": "zhao_geom_attrpack@swapbuild-secondback",
+      "measuredBy": "SWAPBUILD",
+      "status": "map_only",
+      "measuredDevice": "5CSEBA6U23I7",
+      "rtlCleanAtHead": true,
+      "treeCleanAtHead": true,
+      "sourceCommit": "62d8b6a7dbd4b03f79a239814b1d04e818f2d459",
+      "sourceDigest": "2c5e09ab56a51ce0c3f0cd2662940691eccbe63d0d5d26aff1d596e464b1d3e1",
+      "sourcesHashed": 2,
+      "seconds": 30,
+      "combinationalALUTs": 1121,
+      "estimatedALMs": 2354,
+      "registers": 2327,
+      "blockMemoryBits": 0,
+      "dspBlocks": 36,
+      "virtualPins": 2341,
+      "closure": [
+        "fpga/rtl/geometry/zhao_geom_attrsetup.sv",
+        "fpga/rtl/geometry/zhao_geom_attrpack.sv"
+      ]
+    },
+    {
+      "module": "zhao_geom_setup",
+      "measuredBy": "pre-existing row in zhao_block_map.json, quoted not re-run",
+      "status": "map_only",
+      "measuredDevice": "5CSEBA6U23I7",
+      "rtlCleanAtHead": true,
+      "combinationalALUTs": 500,
+      "estimatedALMs": 938,
+      "registers": 1340,
+      "blockMemoryBits": 0,
+      "dspBlocks": 4,
+      "note": "the CLEAN map row. The full-fit row zhao_geom_setup in zhao_block_fit.json has rtlCleanAtHead=false and is NOT quoted."
+    }
+  ],
+  "sum": {
+    "what": "one additional setup+attrpack back end, the second-INSTANCE architecture",
+    "combinationalALUTs": 1621,
+    "estimatedALMs": 3292,
+    "registers": 3667,
+    "dspBlocks": 40,
+    "dspShareOfDevice": "40 of 112 = 35.7%"
+  },
+  "comparison": {
+    "lanescostRefusedI34Front": {
+      "aluts": 11979,
+      "dsp": 9,
+      "source": "reports/DECISION-20260927-I34-LANESCOST-PRICED-AND-REFUSED.md"
+    },
+    "thisIsTimesTheDspBill": 4.44
+  },
+  "limitations": [
+    "A map_only row carries no ALMs and no Fmax by construction; 'estimate of ALMs needed' is the map report's own estimate, not a placed result.",
+    "Virtual-pin inflation applies: 2,341 virtual pins on this row. LANESCOST measured the inflation at about 4% against the composed console for a different block; that figure is not re-derived here.",
+    "This prices the DUPLICATE, not the whole swap. It says what the rejected architecture costs; it makes no claim about what the chosen one costs."
+  ]
+}
