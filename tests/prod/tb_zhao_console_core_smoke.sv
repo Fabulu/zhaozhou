@@ -5083,6 +5083,301 @@ module tb_zhao_console_core_smoke
   `define PC_SHELL dut.u_shell
   `define PC_PALETTE dut.u_shell.u_render_bin.u_tile.u_texture_stage.u_texture_v3.u_palette
 `endif
+`define PC_FRAG `PC_SHELL.u_render_bin.u_tile.u_fragment
+`define PC_TILE `PC_SHELL.u_render_bin.u_tile
+`define PC_TEXST `PC_SHELL.u_render_bin.u_tile.u_texture_stage
+  // ==========================================================================
+  // TAGPHASE'S LOCALISATION PROBE -- WHICH STAGE FIRST CARRIES THE FAULT
+  // ==========================================================================
+  // Two symptoms, one question each, and the question is WHERE rather than
+  // WHETHER. MATPUB established that the plain run loses three texture samples
+  // and gains two stray tag bytes once the publisher's 64 SDRAM writes are
+  // armed, and handed over a hypothesis about the tile-store CLEAR. That
+  // hypothesis cannot hold in this fixture -- `frame_clear_word_i` is driven
+  // `'0`, all sixty-four bits at once, so a pixel whose colour came from the
+  // clear has a tag byte of zero BY CONSTRUCTION. Whatever these pixels are,
+  // they were WRITTEN.
+  //
+  // So the probe reads the state at four points, in order, and the first one
+  // that is dirty owns the defect:
+  //
+  //   A. the WALK's replayed material state (`pw_t_matstate_w`), which at
+  //      GEOM_WALK_RASTER = 1 is where every drawn triangle's sample_count and
+  //      effect_tag come from, and which has been through SDRAM;
+  //   B. the LIVE composition captured into the arena (`live_matstate_c`) on
+  //      `u_geom_vertid`'s own accept, which is what A should reproduce;
+  //   C. the fragment leaf's INPUT tag, per accepted fragment;
+  //   D. the tile-store WRITE's tag byte.
+  //
+  // A dirty A with a clean B is the arena round trip. A clean A and B with a
+  // dirty C is the island's retire join. A clean C with a dirty D is the
+  // fragment leaf's own tag select. Each is a different repair, and the counts
+  // alone cannot tell them apart -- which is why LASTGAP's and MATPUB's
+  // hypotheses were both left explicitly unproved.
+  localparam int TGP_CAP_N = 8;
+
+  // ---- A: the WALK's replayed record ---------------------------------------
+  int unsigned tgp_walk_n_q;      // records handed to the binner
+  int unsigned tgp_walk_inval_q;  // ... whose stored VALID bit is 0
+  int unsigned tgp_walk_zsamp_q;  // ... whose stored sample_count is 0
+  int unsigned tgp_walk_tag_q;    // ... whose stored effect_tag is nonzero
+  logic [7:0]  tgp_walk_tagv_q [TGP_CAP_N];
+  int unsigned tgp_walk_tagi_q [TGP_CAP_N];
+  int unsigned tgp_walk_tagc_q;
+  logic [7:0]  tgp_walk_zsv_q  [TGP_CAP_N];  // the ordinal's low byte
+  int unsigned tgp_walk_zsi_q  [TGP_CAP_N];
+  int unsigned tgp_walk_zsc_q;
+
+  // ---- B: the LIVE composition, as captured into the arena -----------------
+  int unsigned tgp_live_n_q, tgp_live_inval_q, tgp_live_zsamp_q, tgp_live_tag_q;
+
+  // ---- C: the fragment leaf's input ----------------------------------------
+  int unsigned tgp_frag_n_q, tgp_frag_tag_q;
+  logic [7:0]  tgp_frag_tagv_q [TGP_CAP_N];
+  logic [7:0]  tgp_frag_addr_q [TGP_CAP_N];
+  logic [31:0] tgp_frag_st_q   [TGP_CAP_N];
+  logic [7:0]  tgp_frag_tidx_q [TGP_CAP_N];
+  int unsigned tgp_frag_c_q;
+
+  // ---- D: the tile-store write ---------------------------------------------
+  int unsigned tgp_wr_n_q, tgp_wr_tag_q;
+  logic [7:0]  tgp_wr_tagv_q  [TGP_CAP_N];
+  logic [7:0]  tgp_wr_addr_q  [TGP_CAP_N];
+  int unsigned tgp_wr_c_q;
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      tgp_walk_n_q <= 0; tgp_walk_inval_q <= 0; tgp_walk_zsamp_q <= 0;
+      tgp_walk_tag_q <= 0; tgp_walk_tagc_q <= 0; tgp_walk_zsc_q <= 0;
+      tgp_live_n_q <= 0; tgp_live_inval_q <= 0; tgp_live_zsamp_q <= 0;
+      tgp_live_tag_q <= 0;
+      tgp_frag_n_q <= 0; tgp_frag_tag_q <= 0; tgp_frag_c_q <= 0;
+      tgp_wr_n_q <= 0; tgp_wr_tag_q <= 0; tgp_wr_c_q <= 0;
+    end else begin
+      // ---- A ----
+      if (`PC_CORE.pw_t_valid_w && `PC_CORE.pw_t_ready_w) begin
+        tgp_walk_n_q <= tgp_walk_n_q + 1;
+        if (`PC_CORE.pw_t_matstate_w[0] == 1'b0)
+          tgp_walk_inval_q <= tgp_walk_inval_q + 1;
+        if (`PC_CORE.pw_t_matstate_w[59:58] == 2'd0) begin
+          tgp_walk_zsamp_q <= tgp_walk_zsamp_q + 1;
+          if (tgp_walk_zsc_q < TGP_CAP_N) begin
+            tgp_walk_zsv_q[tgp_walk_zsc_q] <= `PC_CORE.pw_t_matstate_w[7:0];
+            tgp_walk_zsi_q[tgp_walk_zsc_q] <= tgp_walk_n_q;
+          end
+          tgp_walk_zsc_q <= tgp_walk_zsc_q + 1;
+        end
+        if (`PC_CORE.pw_t_matstate_w[17:10] != 8'd0) begin
+          tgp_walk_tag_q <= tgp_walk_tag_q + 1;
+          if (tgp_walk_tagc_q < TGP_CAP_N) begin
+            tgp_walk_tagv_q[tgp_walk_tagc_q] <= `PC_CORE.pw_t_matstate_w[17:10];
+            tgp_walk_tagi_q[tgp_walk_tagc_q] <= tgp_walk_n_q;
+          end
+          tgp_walk_tagc_q <= tgp_walk_tagc_q + 1;
+        end
+      end
+      // ---- B ----
+      if (`PC_CORE.cl_o_valid && `PC_CORE.st_tri_ready_w &&
+          `PC_CORE.ap_tri_ready_w && `PC_CORE.vid_tri_ready_w) begin
+        tgp_live_n_q <= tgp_live_n_q + 1;
+        if (`PC_CORE.live_matstate_c[0] == 1'b0)
+          tgp_live_inval_q <= tgp_live_inval_q + 1;
+        if (`PC_CORE.live_matstate_c[59:58] == 2'd0)
+          tgp_live_zsamp_q <= tgp_live_zsamp_q + 1;
+        if (`PC_CORE.live_matstate_c[17:10] != 8'd0)
+          tgp_live_tag_q <= tgp_live_tag_q + 1;
+      end
+      // ---- C ----
+      if (`PC_FRAG.frag_valid_i && `PC_FRAG.frag_ready_o) begin
+        tgp_frag_n_q <= tgp_frag_n_q + 1;
+        if (`PC_FRAG.frag_tag_i != 8'd0) begin
+          tgp_frag_tag_q <= tgp_frag_tag_q + 1;
+          if (tgp_frag_c_q < TGP_CAP_N) begin
+            tgp_frag_tagv_q[tgp_frag_c_q] <= `PC_FRAG.frag_tag_i;
+            tgp_frag_addr_q[tgp_frag_c_q] <= `PC_FRAG.frag_addr_i;
+            tgp_frag_st_q  [tgp_frag_c_q] <= `PC_FRAG.frag_state_i;
+            tgp_frag_tidx_q[tgp_frag_c_q] <= `PC_FRAG.frag_texel_idx_i;
+          end
+          tgp_frag_c_q <= tgp_frag_c_q + 1;
+        end
+      end
+      // ---- D ----
+      if (`PC_FRAG.wr_valid_o && `PC_FRAG.wr_ready_i) begin
+        tgp_wr_n_q <= tgp_wr_n_q + 1;
+        if (`PC_FRAG.wr_data_o[39:32] != 8'd0) begin
+          tgp_wr_tag_q <= tgp_wr_tag_q + 1;
+          if (tgp_wr_c_q < TGP_CAP_N) begin
+            tgp_wr_tagv_q[tgp_wr_c_q] <= `PC_FRAG.wr_data_o[39:32];
+            tgp_wr_addr_q[tgp_wr_c_q] <= `PC_FRAG.wr_addr_o;
+          end
+          tgp_wr_c_q <= tgp_wr_c_q + 1;
+        end
+      end
+    end
+  end
+
+  // ==========================================================================
+  // TAGPHASE ROUND 2 -- THE FOUR SEAMS OF THE TEXTURE ROUND TRIP
+  // ==========================================================================
+  // Round 1 settled the half nobody had measured: the WALK's replayed material
+  // state and the LIVE composition that produced it are BOTH clean -- 101 and
+  // 75 records, every one valid, every one with a nonzero sample_count, every
+  // one with effect_tag 0 -- while the tag is ALREADY nonzero when it reaches
+  // `zhao_raster_fragment`'s input. So the fault is manufactured between the
+  // tile pipe's per-fragment continuation and the fragment leaf, and that span
+  // contains exactly four seams:
+  //
+  //   E. the payload SUBMITTED to RASTER.EARLYZ  (pre-Early-Z)
+  //   F. the candidate EARLY-Z HANDS BACK        (post-Early-Z, payload RAM)
+  //   G. the candidate ADMITTED to the island    (`cand_data_i`)
+  //   H. the retire context the island RETURNS   (`v3_out_retire_ctx_w`)
+  //
+  // The field offsets are the package's own (`PRETEX_EFFECT_TAG_LO` = 371,
+  // `PRETEX_SAMPLE_COUNT_LO` = 296, `RETIRE_EFFECT_TAG_LO` = 8), quoted rather
+  // than counted -- REDFIX has already paid once for a hand-counted bit in this
+  // record.
+  //
+  // SAMPLE_COUNT RIDES ALONG AT EVERY SEAM, because the failing gate is the
+  // SAMPLE gate and the two symptoms have been argued to be one cause and two
+  // causes by two different packets without either being measured at the seam
+  // where they would have to separate.
+  //
+  // AND A CONTROL: the first four fragments' state words are captured whatever
+  // their tag, so "0x04c00000 is what this fixture's fragments carry" and
+  // "these two fragments got a strange state" can be told apart. Round 1
+  // captured the state only for the offenders, which cannot distinguish them.
+  localparam int TG2_CAP_N = 8;
+
+  int unsigned tg2_pre_n_q,  tg2_pre_tag_q,  tg2_pre_zs_q;
+  int unsigned tg2_post_n_q, tg2_post_tag_q, tg2_post_zs_q;
+  int unsigned tg2_adm_n_q,  tg2_adm_tag_q,  tg2_adm_zs_q;
+  int unsigned tg2_ret_n_q,  tg2_ret_tag_q;
+
+  logic [7:0]  tg2_post_tagv_q [TG2_CAP_N];
+  logic [7:0]  tg2_post_addr_q [TG2_CAP_N];
+  logic [23:0] tg2_post_rgb_q  [TG2_CAP_N];
+  int unsigned tg2_post_c_q;
+
+  logic [7:0]  tg2_ret_tagv_q  [TG2_CAP_N];
+  logic [7:0]  tg2_ret_addr_q  [TG2_CAP_N];
+  logic [23:0] tg2_ret_rgb_q   [TG2_CAP_N];
+  logic [31:0] tg2_ret_seq_q   [TG2_CAP_N];
+  logic [31:0] tg2_ret_st_q    [TG2_CAP_N];
+  int unsigned tg2_ret_c_q;
+
+  // the CONTROL: the first few fragments, offenders or not
+  logic [31:0] tg2_ctl_st_q    [TG2_CAP_N];
+  logic [7:0]  tg2_ctl_tag_q   [TG2_CAP_N];
+  logic [7:0]  tg2_ctl_addr_q  [TG2_CAP_N];
+  int unsigned tg2_ctl_c_q;
+
+  int unsigned tg3_job_n_q, tg3_job_nopw_q, tg3_job_inval_q, tg3_job_zs_q, tg3_job_tag_q;
+  logic [7:0]  tg3_tag_q  [TG2_CAP_N];
+  logic [1:0]  tg3_samp_q [TG2_CAP_N];
+  logic        tg3_val_q  [TG2_CAP_N];
+  logic [31:0] tg3_st_q   [TG2_CAP_N];
+  logic        tg3_pwv_q  [TG2_CAP_N];
+  int unsigned tg3_ord_q  [TG2_CAP_N];
+  int unsigned tg3_c_q;
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      tg2_pre_n_q <= 0;  tg2_pre_tag_q <= 0;  tg2_pre_zs_q <= 0;
+      tg2_post_n_q <= 0; tg2_post_tag_q <= 0; tg2_post_zs_q <= 0;
+      tg2_adm_n_q <= 0;  tg2_adm_tag_q <= 0;  tg2_adm_zs_q <= 0;
+      tg2_ret_n_q <= 0;  tg2_ret_tag_q <= 0;
+      tg2_post_c_q <= 0; tg2_ret_c_q <= 0;    tg2_ctl_c_q <= 0;
+      tg3_job_n_q <= 0; tg3_job_nopw_q <= 0; tg3_job_inval_q <= 0;
+      tg3_job_zs_q <= 0; tg3_job_tag_q <= 0; tg3_c_q <= 0;
+    end else begin
+      // ---- E: submitted to Early-Z ----
+      if (`PC_TILE.earlyz_frag_valid_w && `PC_TILE.earlyz_frag_ready_w) begin
+        tg2_pre_n_q <= tg2_pre_n_q + 1;
+        if (`PC_TILE.earlyz_payload_in_w[378:371] != 8'd0)
+          tg2_pre_tag_q <= tg2_pre_tag_q + 1;
+        if (`PC_TILE.earlyz_payload_in_w[297:296] == 2'd0)
+          tg2_pre_zs_q <= tg2_pre_zs_q + 1;
+      end
+      // ---- F: handed back by Early-Z ----
+      if (`PC_TILE.earlyz_cand_valid_w && `PC_TILE.earlyz_cand_ready_w) begin
+        tg2_post_n_q <= tg2_post_n_q + 1;
+        if (`PC_TILE.earlyz_cand_payload_w[297:296] == 2'd0)
+          tg2_post_zs_q <= tg2_post_zs_q + 1;
+        if (`PC_TILE.earlyz_cand_payload_w[378:371] != 8'd0) begin
+          tg2_post_tag_q <= tg2_post_tag_q + 1;
+          if (tg2_post_c_q < TG2_CAP_N) begin
+            tg2_post_tagv_q[tg2_post_c_q] <= `PC_TILE.earlyz_cand_payload_w[378:371];
+            tg2_post_addr_q[tg2_post_c_q] <= `PC_TILE.earlyz_cand_addr_w;
+            tg2_post_rgb_q [tg2_post_c_q] <= `PC_TILE.earlyz_cand_payload_w[410:387];
+          end
+          tg2_post_c_q <= tg2_post_c_q + 1;
+        end
+      end
+      // ---- G: admitted to the island ----
+      if (`PC_TEXST.cand_fire_o) begin
+        tg2_adm_n_q <= tg2_adm_n_q + 1;
+        if (`PC_TEXST.cand_data_i[378:371] != 8'd0)
+          tg2_adm_tag_q <= tg2_adm_tag_q + 1;
+        if (`PC_TEXST.cand_data_i[297:296] == 2'd0)
+          tg2_adm_zs_q <= tg2_adm_zs_q + 1;
+      end
+      // ---- H: returned by the island ----
+      if (`PC_TEXST.retire_head_capture_w) begin
+        tg2_ret_n_q <= tg2_ret_n_q + 1;
+        if (`PC_TEXST.v3_out_retire_ctx_w[15:8] != 8'd0) begin
+          tg2_ret_tag_q <= tg2_ret_tag_q + 1;
+          if (tg2_ret_c_q < TG2_CAP_N) begin
+            tg2_ret_tagv_q[tg2_ret_c_q] <= `PC_TEXST.v3_out_retire_ctx_w[15:8];
+            tg2_ret_addr_q[tg2_ret_c_q] <= `PC_TEXST.v3_out_retire_ctx_w[127:120];
+            tg2_ret_rgb_q [tg2_ret_c_q] <= `PC_TEXST.v3_out_retire_ctx_w[47:24];
+            tg2_ret_seq_q [tg2_ret_c_q] <= `PC_TEXST.v3_out_retire_ctx_w[159:128];
+            tg2_ret_st_q  [tg2_ret_c_q] <= `PC_TEXST.v3_out_retire_ctx_w[95:64];
+          end
+          tg2_ret_c_q <= tg2_ret_c_q + 1;
+        end
+      end
+      // ---- I: THE JOIN ITSELF (TAGPHASE round 3) ----
+      // Round 2 put the fault at or before `job_metadata_capture_w`, and the
+      // control showed THREE matstate fields moving together on the offenders
+      // while every other fragment reads `state=0 tag=0`. Those three fields --
+      // flat_request, continuation_tail and fragment_state -- are the ONLY part
+      // of `job_meta_i` that is NOT held by GEOM.SETUP / GEOM.ATTRPACK: on the
+      // walk path they are combinational from `pw_t_matstate_w`, the PARAMWALK'S
+      // LIVE OUTPUT BUS, while the job is offered by `zhao_geom_tilewalk` in
+      // T_JOB -- several cycles after that same walker released the record in
+      // T_TAKE. So this samples the matstate AT THE JOB ACCEPT, the instant
+      // `zhao_geom_bin_pipe_v2` reads it, and records whether the walk was even
+      // presenting a record at the time.
+      if (`PC_CORE.tw_job_valid_w && `PC_CORE.shell_walk_job_ready_w) begin
+        tg3_job_n_q <= tg3_job_n_q + 1;
+        if (!`PC_CORE.pw_t_valid_w) tg3_job_nopw_q <= tg3_job_nopw_q + 1;
+        if (`PC_CORE.tri_matstate_c[0] == 1'b0) tg3_job_inval_q <= tg3_job_inval_q + 1;
+        if (`PC_CORE.tri_matstate_c[59:58] == 2'd0) tg3_job_zs_q <= tg3_job_zs_q + 1;
+        if (`PC_CORE.tri_matstate_c[17:10] != 8'd0) tg3_job_tag_q <= tg3_job_tag_q + 1;
+        if ((`PC_CORE.tri_matstate_c[17:10] != 8'd0) ||
+            (`PC_CORE.tri_matstate_c[59:58] == 2'd0) ||
+            (`PC_CORE.tri_matstate_c[0] == 1'b0)) begin
+          if (tg3_c_q < TG2_CAP_N) begin
+            tg3_tag_q [tg3_c_q] <= `PC_CORE.tri_matstate_c[17:10];
+            tg3_samp_q[tg3_c_q] <= `PC_CORE.tri_matstate_c[59:58];
+            tg3_val_q [tg3_c_q] <= `PC_CORE.tri_matstate_c[0];
+            tg3_st_q  [tg3_c_q] <= `PC_CORE.tri_matstate_c[57:26];
+            tg3_pwv_q [tg3_c_q] <= `PC_CORE.pw_t_valid_w;
+            tg3_ord_q [tg3_c_q] <= tg3_job_n_q;
+          end
+          tg3_c_q <= tg3_c_q + 1;
+        end
+      end
+      // ---- the control ----
+      if (`PC_FRAG.frag_valid_i && `PC_FRAG.frag_ready_o &&
+          (tg2_ctl_c_q < TG2_CAP_N)) begin
+        tg2_ctl_st_q  [tg2_ctl_c_q] <= `PC_FRAG.frag_state_i;
+        tg2_ctl_tag_q [tg2_ctl_c_q] <= `PC_FRAG.frag_tag_i;
+        tg2_ctl_addr_q[tg2_ctl_c_q] <= `PC_FRAG.frag_addr_i;
+        tg2_ctl_c_q <= tg2_ctl_c_q + 1;
+      end
+    end
+  end
   int unsigned pc_ctrl_busy_q, pc_bursts_rd_q, pc_bursts_wr_q, pc_bursts_other_q;
   int unsigned pc_share_fill_q, pc_fbw_stall_q, pc_src_starve_q, pc_src_block_q;
   int unsigned pc_conflicts0_q, pc_refresh0_q;
@@ -10359,6 +10654,54 @@ module tb_zhao_console_core_smoke
                  mpb_tag_x_q[t], mpb_tag_y_q[t], mpb_tag_ad_q[t],
                  mpb_tag_ad_q[t][7:4], mpb_tag_ad_q[t][3:0], mpb_tag_ix_q[t],
                  mpb_tag_rgb_q[t]);
+
+    // ---- TAGPHASE: WHICH STAGE FIRST CARRIES THE FAULT ---------------------
+    // Above every gate, like the two blocks either side of it, and for the same
+    // reason: a localisation that only prints in a passing run cannot be read
+    // in the run that needs reading.
+    $display("SMOKE: early-diag tagphase WALK records=%0d invalid=%0d zero_sample=%0d nonzero_tag=%0d | LIVE captures=%0d invalid=%0d zero_sample=%0d nonzero_tag=%0d",
+             tgp_walk_n_q, tgp_walk_inval_q, tgp_walk_zsamp_q, tgp_walk_tag_q,
+             tgp_live_n_q, tgp_live_inval_q, tgp_live_zsamp_q, tgp_live_tag_q);
+    for (int t = 0; t < TGP_CAP_N; t++)
+      if (t < int'(tgp_walk_tagc_q))
+        $display("SMOKE: early-diag tagphase walktag[%0d] tag=%02h at record %0d", t, tgp_walk_tagv_q[t], tgp_walk_tagi_q[t]);
+    for (int t = 0; t < TGP_CAP_N; t++)
+      if (t < int'(tgp_walk_zsc_q))
+        $display("SMOKE: early-diag tagphase walkzsamp[%0d] ms[7:0]=%02h at record %0d", t, tgp_walk_zsv_q[t], tgp_walk_zsi_q[t]);
+    $display("SMOKE: early-diag tagphase FRAG accepted=%0d nonzero_tag=%0d | STORE writes=%0d nonzero_tag=%0d",
+             tgp_frag_n_q, tgp_frag_tag_q, tgp_wr_n_q, tgp_wr_tag_q);
+    for (int t = 0; t < TGP_CAP_N; t++)
+      if (t < int'(tgp_frag_c_q))
+        $display("SMOKE: early-diag tagphase fragtag[%0d] tag=%02h addr=%02h state=%08h texel_idx=%02h",
+                 t, tgp_frag_tagv_q[t], tgp_frag_addr_q[t], tgp_frag_st_q[t], tgp_frag_tidx_q[t]);
+    for (int t = 0; t < TGP_CAP_N; t++)
+      if (t < int'(tgp_wr_c_q))
+        $display("SMOKE: early-diag tagphase wrtag[%0d] tag=%02h addr=%02h", t, tgp_wr_tagv_q[t], tgp_wr_addr_q[t]);
+
+    // ---- TAGPHASE ROUND 2: THE FOUR SEAMS ---------------------------------
+    $display("SMOKE: early-diag tagphase2 preEZ n=%0d tag=%0d zsamp=%0d | postEZ n=%0d tag=%0d zsamp=%0d | admit n=%0d tag=%0d zsamp=%0d | retire n=%0d tag=%0d",
+             tg2_pre_n_q, tg2_pre_tag_q, tg2_pre_zs_q,
+             tg2_post_n_q, tg2_post_tag_q, tg2_post_zs_q,
+             tg2_adm_n_q, tg2_adm_tag_q, tg2_adm_zs_q,
+             tg2_ret_n_q, tg2_ret_tag_q);
+    for (int t = 0; t < TG2_CAP_N; t++)
+      if (t < int'(tg2_post_c_q))
+        $display("SMOKE: early-diag tagphase2 postEZ[%0d] tag=%02h addr=%02h vrgb=%06h", t, tg2_post_tagv_q[t], tg2_post_addr_q[t], tg2_post_rgb_q[t]);
+    for (int t = 0; t < TG2_CAP_N; t++)
+      if (t < int'(tg2_ret_c_q))
+        $display("SMOKE: early-diag tagphase2 retire[%0d] tag=%02h addr=%02h vrgb=%06h seq=%0d state=%08h",
+                 t, tg2_ret_tagv_q[t], tg2_ret_addr_q[t], tg2_ret_rgb_q[t], tg2_ret_seq_q[t], tg2_ret_st_q[t]);
+    for (int t = 0; t < TG2_CAP_N; t++)
+      if (t < int'(tg2_ctl_c_q))
+        $display("SMOKE: early-diag tagphase2 control[%0d] state=%08h tag=%02h addr=%02h", t, tg2_ctl_st_q[t], tg2_ctl_tag_q[t], tg2_ctl_addr_q[t]);
+
+    // ---- TAGPHASE ROUND 3: THE JOIN, MEASURED AT THE JOB ACCEPT -----------
+    $display("SMOKE: early-diag tagphase3 jobs=%0d walk_bus_idle=%0d ms_invalid=%0d ms_zero_sample=%0d ms_nonzero_tag=%0d",
+             tg3_job_n_q, tg3_job_nopw_q, tg3_job_inval_q, tg3_job_zs_q, tg3_job_tag_q);
+    for (int t = 0; t < TG2_CAP_N; t++)
+      if (t < int'(tg3_c_q))
+        $display("SMOKE: early-diag tagphase3 badjob[%0d] ordinal=%0d valid=%0b sampcnt=%0d tag=%02h fragstate=%08h pw_t_valid=%0b",
+                 t, tg3_ord_q[t], tg3_val_q[t], tg3_samp_q[t], tg3_tag_q[t], tg3_st_q[t], tg3_pwv_q[t]);
 
     // ---- TERRAIN.COMPOSED_MATERIAL's publisher, MATPUB 2026-09-27 ----------
     // Hoisted here with the rest: this is ABOVE both the fragment-tag gate and
