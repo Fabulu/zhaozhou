@@ -4161,3 +4161,73 @@ leaf row on the shipping part and may refuse on it.
 
 **Not launched yet, deliberately:** the work is GEOM and **GEOM is PVSCHEMA's
 lane**. Launching it now would mean two packets editing the same files.
+
+### 2026-09-27 (night) - PVSCHEMA MERGED, GATE 31 CAUGHT A REAL OMISSION, AND I55'S LAST EXCUSE IS GONE
+
+**Register 2.** HEAD `b4bd4830`, pushed. **MUXBUILD launched, alone in GEOM.**
+
+### PVSCHEMA: THE PREMISE IS NOW TRUE RATHER THAN MERELY CORRECTED
+
+Schema v2, declared **ONCE** in `zhao_pkg` as field offsets and widths -- it had
+been **three hand-maintained copies**:
+
+```
+x s21 | y s21 | invw u24 | status u8 | u/w s32 | v/w s32
+      | r s32 | g s32 | b s32 | alpha s22      = 256 bits = 32 bytes
+```
+
+Into stride slack **already allocated**: no address space, no region change.
+**Declared cost: vertex writes 3 -> 4 beats, +33% SDRAM write traffic on that
+arm.** Alpha is **s22 BY MEASUREMENT, not remainder** -- it is the only field
+with no plane consumer (attrpack waives slot 6 by name), so all six plane inputs
+store at full width **with no domain claim that could be wrong**. The inverse
+was refused because `art_r_i` is a **named editable owner constant** and capping
+it silently is the art law's rule 6.
+
+**And it caught MY brief's layout being silently truncated.** The 30.25-byte
+figure I wrote would have been cut to 24 by `m_beats_q <= 4'(PV_B/8)`, an
+**unguarded integer division** in a block that refuses six other alignment
+breaches by name. Guard added.
+
+**THE INSTRUMENT FINDING: a positive control had silently become a NO-OP.** The
+align mutant's mutation `PV_SLOT_B = PV_B` created misalignment **only because
+`PV_B` was 24**; at v2's 32 it installs a perfectly aligned layout and
+`burst_unaligned_o` **cannot move**. Provenance perfect, drift green **and
+correct to be**, mutation intact -- **only the arithmetic moved, one file away,
+and nothing watched it.** Repaired, and **the guard was FIRED, not asserted.**
+
+### GATE 31 WENT RED ON THE MERGE, AND IT WAS RIGHT
+
+`PINMISSING: pv_narrow_o`. PVSCHEMA's **decision** was correct -- exporting that
+counter to the core adds a gate that **cannot reach its state**, since vertid's
+coordinates are already s21. **The FORM was wrong.** An omitted pin is
+indistinguishable from the oversight the comment says it is not. Rewritten as an
+**explicit empty connection**, `.pv_narrow_o ()`, exactly as `u_geom_arenabin`'s
+`.busy_o ()` above it. **Repaired, not baselined.**
+
+**The two gates PVSCHEMA deliberately left to the merge both run clean now:**
+gate_sweep **31/31 at baseline**, and the console smoke **PASS** -- `raster
+pixels=2816`, `texture fragments=1216 samples=1216`, terrain drawing **61**
+triangles, 75 triangles in 1 admitted frame.
+
+**One number checked rather than assumed:** the bench's `bl8-align` summary
+reads `bursts=90409 unaligned=32 (rd=32 wr=0)`. PVSCHEMA changed **writes**;
+**write misalignment is ZERO**, so those reads are not from this merge. No
+baseline run needed -- the structure answers it.
+
+### I34's CARRIER IS DECIDED AND WAITING ON THE FILE
+
+`reports/DECISION-20260927-I34-MATERIAL-CARRIER.md`: **widen the riders, do not
+add a parallel aligned FIFO**, because a side queue in lockstep with a pipeline
+**is the `u_geom_tidq` defect class** -- 74 of 75 triangles mis-attributed, ids
+in range, every gate green.
+
+**Not launched, deliberately.** It needs `zhao_geom_setup.sv` and so does
+MUXBUILD. **Two packets in one file is the hazard this campaign has already paid
+for**, so they run in sequence, and MUXBUILD is fenced off that rider by name.
+
+### WHERE THINGS STAND
+
+**Six refusals on I55, and every one's stated reason is now discharged:** the
+premise is true, the architecture is chosen, the ids are correct. MUXBUILD is
+the build. **No console fit until the register reads 0.**
