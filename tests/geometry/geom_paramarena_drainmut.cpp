@@ -94,7 +94,10 @@ void bring_up(Dut& t) {
   t.pv_status_i = 0;
   t.pv_uow_i = 0;
   t.pv_vow_i = 0;
-  t.pv_rgba_i = 0;
+  t.pv_r_i = 0;
+  t.pv_g_i = 0;
+  t.pv_b_i = 0;
+  t.pv_alpha_i = 0;
   t.td_valid_i = 0;
   t.td_v0_i = 0;
   t.td_v1_i = 0;

@@ -166,13 +166,27 @@ struct Vertex {
   uint32_t invw;
   uint8_t  status;
   int32_t  uow, vow;
-  uint32_t rgba;
+  // SCHEMA v2: the Gouraud channels and alpha at their full 32-bit slot
+  // width, in place of v1's single 8-bit-per-channel `rgba`.
+  int32_t  r, g, b, alpha;
 };
 
 struct Descriptor {
   uint16_t v0, v1, v2, material;
   uint32_t raster, source;
 };
+
+// Cut `w` bits at bit offset `lo` out of a little-endian byte buffer. Schema
+// v2's ProjectedVertex is not byte-aligned past the status byte, so a
+// byte-granular read cannot express it -- and would pass while misaligned.
+uint32_t get_field(const uint8_t* b, int lo, int w) {
+  uint32_t v = 0;
+  for (int i = 0; i < w; ++i) {
+    const int p = lo + i;
+    if ((b[p / 8] >> (p % 8)) & 1u) v |= (1u << i);
+  }
+  return v;
+}
 
 // Offer a record and hold it until the arena takes it.  TRUE ready/valid: the
 // arena's `ready` falls while its one-op engine is busy, so a bench that fired
@@ -186,7 +200,10 @@ bool push_pv(Dut& t, const Vertex& v, int max_wait = 20000) {
   t.pv_status_i = v.status;
   t.pv_uow_i = static_cast<uint32_t>(v.uow);
   t.pv_vow_i = static_cast<uint32_t>(v.vow);
-  t.pv_rgba_i = v.rgba;
+  t.pv_r_i = v.r;
+  t.pv_g_i = v.g;
+  t.pv_b_i = v.b;
+  t.pv_alpha_i = v.alpha;
   for (int i = 0; i < max_wait; ++i) {
     t.eval();
     const bool go = t.pv_ready_o != 0;
@@ -398,7 +415,10 @@ void bring_up(Dut& t) {
   t.pv_status_i = 0;
   t.pv_uow_i = 0;
   t.pv_vow_i = 0;
-  t.pv_rgba_i = 0;
+  t.pv_r_i = 0;
+  t.pv_g_i = 0;
+  t.pv_b_i = 0;
+  t.pv_alpha_i = 0;
   t.td_valid_i = 0;
   t.td_v0_i = 0;
   t.td_v1_i = 0;
@@ -468,7 +488,8 @@ void case1a_straight_composition() {
 
   for (int i = 0; i < nv; ++i) {
     Vertex v{100 + i, 200 + i, 0x000300u + static_cast<uint32_t>(i),
-             static_cast<uint8_t>(i), 1000 + i, 2000 + i, 0x11223344u + static_cast<uint32_t>(i)};
+             static_cast<uint8_t>(i), 1000 + i, 2000 + i,
+             0x00001200 + i, 0x0000ABCD - i, -(4242 + i), 0x00010000};
     ckt(push_pv(t, v), "1a: a vertex is accepted");
   }
   for (int i = 0; i < nt; ++i) {
@@ -593,7 +614,7 @@ int main(int argc, char** argv) {
   {
     Descriptor d{0, 1, 2, 0x5555, 0x01020304u, 0x0000AAAAu};
     ckt(push_td(t, d), "prelude: a descriptor with no frame open is ACCEPTED");
-    Vertex v{1, 2, 3, 4, 5, 6, 7};
+    Vertex v{1, 2, 3, 4, 5, 6, 7, 8, 9, 0x00010000};
     ckt(push_pv(t, v), "prelude: a vertex with no frame open is ACCEPTED");
     cke(2, t.records_unsealed_o, "prelude: both are counted at records_unsealed_o");
     cke(0, t.verts_written_o, "prelude: nothing was written");
@@ -618,10 +639,24 @@ int main(int argc, char** argv) {
     v.x = -1000 - i;                       // negative, to exercise the sign
     v.y = 1000 + i;
     v.invw = 0x00ABC0u + static_cast<uint32_t>(i);
-    v.status = static_cast<uint8_t>(0x80 + i);
+    // A LEGAL status byte. v1 used 0x80 + i, which under schema v2's
+      // newly-enforced rules is MALFORMED -- GEOM.VERTID.md rules [7:4]
+      // "reserved, written 0. Nonzero is a malformed record" and domain 3
+      // reserved. The arena stores the byte verbatim and does not judge it,
+      // so nothing here failed; it is corrected so that a later packet
+      // reading these records back through `zhao_geom_parambuf` does not
+      // inherit a stream of spurious illegals from the test fixture.
+      // Twelve legal values: {shared, untex} x {MESH, FORGE, PARTICLE}.
+      v.status = static_cast<uint8_t>(((i % 4) << 2) | (i % 3));
     v.uow = 0x00010000 + i;
     v.vow = -(0x00020000 + i);
-    v.rgba = 0xC0FFEE00u + static_cast<uint32_t>(i);
+    // Deliberately NOT saturated and deliberately differing in the low
+      // eight bits: v1's quantiser threw those away, so these values are the
+      // ones a v1 record could not have carried.
+      v.r = 0x00001200 + i;
+      v.g = 0x0000ABCD - i;
+      v.b = -(4242 + i);
+      v.alpha = 0x00010000;
     verts.push_back(v);
     ckt(push_pv(t, v), "A: a vertex is accepted");
   }
@@ -709,14 +744,34 @@ int main(int argc, char** argv) {
     for (int i = 0; i < 2; ++i) {
       // THE SLOT, not the record: the allocator advances by PV_SLOT_B.
       const uint32_t a = vbase + static_cast<uint32_t>(i) * PV_SLOT_B;
-      cke(static_cast<uint32_t>(verts[i].x), peek32(t, a + 0), "A: PV byte 0..3 is screen_x");
-      cke(static_cast<uint32_t>(verts[i].y), peek32(t, a + 4), "A: PV byte 4..7 is screen_y");
-      const uint32_t w2 = peek32(t, a + 8);
-      cke(verts[i].invw, w2 & 0x00FFFFFFu, "A: PV byte 8..10 is invw24");
-      cke(verts[i].status, (w2 >> 24) & 0xFFu, "A: PV byte 11 is the status byte");
-      cke(static_cast<uint32_t>(verts[i].uow), peek32(t, a + 12), "A: PV byte 12..15 is u/w");
-      cke(static_cast<uint32_t>(verts[i].vow), peek32(t, a + 16), "A: PV byte 16..19 is v/w");
-      cke(verts[i].rgba, peek32(t, a + 20), "A: PV byte 20..23 is rgba");
+      // SCHEMA v2 IS A BIT LAYOUT, NOT A BYTE LAYOUT, past the status byte.
+      // Reading it with byte-granular peeks would silently pass while every
+      // field after `status` sat five bits over, so the record is lifted
+      // whole and the fields are cut out of it at the offsets `zhao_pkg`
+      // declares -- transcribed here independently, which is the point.
+      uint8_t rec[32];
+      for (int k = 0; k < 32; k += 4) {
+        const uint32_t w = peek32(t, a + static_cast<uint32_t>(k));
+        for (int q = 0; q < 4; ++q) rec[k + q] = static_cast<uint8_t>(w >> (8 * q));
+      }
+      cke(static_cast<uint32_t>(verts[i].x) & 0x1FFFFFu, get_field(rec, 0, 21),
+          "A: PV bits 0..20 are screen_x");
+      cke(static_cast<uint32_t>(verts[i].y) & 0x1FFFFFu, get_field(rec, 21, 21),
+          "A: PV bits 21..41 are screen_y");
+      cke(verts[i].invw, get_field(rec, 42, 24), "A: PV bits 42..65 are invw24");
+      cke(verts[i].status, get_field(rec, 66, 8), "A: PV bits 66..73 are the status byte");
+      cke(static_cast<uint32_t>(verts[i].uow), get_field(rec, 74, 32),
+          "A: PV bits 74..105 are u/w");
+      cke(static_cast<uint32_t>(verts[i].vow), get_field(rec, 106, 32),
+          "A: PV bits 106..137 are v/w");
+      cke(static_cast<uint32_t>(verts[i].r), get_field(rec, 138, 32),
+          "A: PV bits 138..169 are gouraud_r AT FULL PRECISION");
+      cke(static_cast<uint32_t>(verts[i].g), get_field(rec, 170, 32),
+          "A: PV bits 170..201 are gouraud_g at full precision");
+      cke(static_cast<uint32_t>(verts[i].b), get_field(rec, 202, 32),
+          "A: PV bits 202..233 are gouraud_b at full precision");
+      cke(static_cast<uint32_t>(verts[i].alpha) & 0x3FFFFFu, get_field(rec, 234, 22),
+          "A: PV bits 234..255 are alpha, s22");
     }
     const uint32_t tbase = VIEW1_BASE + TRI_OFF_B;
     for (int i = 0; i < NT; ++i) {
@@ -863,7 +918,8 @@ int main(int argc, char** argv) {
   std::vector<Descriptor> trisB;
   for (int i = 0; i < NVB; ++i) {
     Vertex v{2000 + i, -2000 - i, 0x001234u, static_cast<uint8_t>(i),
-             7000 + i, 8000 + i, 0xFACE0000u + static_cast<uint32_t>(i)};
+             7000 + i, 8000 + i,
+             0x00003400 + i, 0x00005600 - i, -(1111 + i), 0x00010000};
     ckt(push_pv(t, v), "B: a vertex is accepted");
   }
 
@@ -874,7 +930,8 @@ int main(int argc, char** argv) {
   // would take effect and destroy frame B.
   // -------------------------------------------------------------------
   {
-    Vertex v{31337, -31337, 0x00BEEFu, 0x7F, 1, 2, 0x99999999u};
+    Vertex v{31337, -31337, 0x00BEEFu, 0x0C, 1, 2,
+             0x00001200, 0x0000ABCD, -4242, 0x00010000};
     t.pv_valid_i = 1;
     t.pv_x_i = static_cast<uint32_t>(v.x);
     t.pv_y_i = static_cast<uint32_t>(v.y);
@@ -882,7 +939,10 @@ int main(int argc, char** argv) {
     t.pv_status_i = v.status;
     t.pv_uow_i = static_cast<uint32_t>(v.uow);
     t.pv_vow_i = static_cast<uint32_t>(v.vow);
-    t.pv_rgba_i = v.rgba;
+    t.pv_r_i = v.r;
+    t.pv_g_i = v.g;
+    t.pv_b_i = v.b;
+    t.pv_alpha_i = v.alpha;
     // consume it
     bool taken = false;
     for (int i = 0; i < 20000 && !taken; ++i) {
@@ -982,7 +1042,7 @@ int main(int argc, char** argv) {
   cke(1, t.pb_wr_view_o, "C: the view alternated back to 1");
   {
     for (int i = 0; i < 4; ++i) {
-      Vertex v{i, i, 0x000111u, 0, i, i, 0x0u};
+      Vertex v{i, i, 0x000111u, 0, i, i, 0, 0, 0, 0};
       ckt(push_pv(t, v), "C: a vertex is accepted");
     }
     Descriptor d{0, 1, 2, 0xC300, 0xAAAA0000u, 0xBBBB0000u};
@@ -1021,7 +1081,7 @@ int main(int argc, char** argv) {
   ckt(seal(t, 32, 8, 8, GEN_D) >= 0, "D: the seal takes effect");
   {
     for (int i = 0; i < 4; ++i) {
-      Vertex v{i, i, 0x000222u, 0, i, i, 0x0u};
+      Vertex v{i, i, 0x000222u, 0, i, i, 0, 0, 0, 0};
       ckt(push_pv(t, v), "D: a vertex is accepted");
     }
     Descriptor d{0, 1, 2, 0xD400, 0xCCCC0000u, 0xDDDD0000u};
@@ -1095,7 +1155,7 @@ int main(int argc, char** argv) {
       Descriptor d{0, 1, 2, 0xFFFF, 0xEEEE0000u, 0x0000BEEFu};
       ckt(push_td(t, d), "case 4: a descriptor after the fault is accepted");
     }
-    Vertex v{9, 9, 9, 9, 9, 9, 9};
+    Vertex v{9, 9, 9, 9, 9, 9, 9, 9, 9, 9};
     ckt(push_pv(t, v), "case 4: a vertex after the fault is accepted");
     uint32_t ids[14] = {0};
     ckt(push_ck(t, 0xFFFFFFFFu, 1, ids), "case 4: a chunk after the fault is accepted");

@@ -405,7 +405,19 @@ module zhao_geom_paramarena_align_mutant
     input  var logic [7:0]         pv_status_i,
     input  var logic signed [31:0] pv_uow_i,
     input  var logic signed [31:0] pv_vow_i,
-    input  var logic [31:0]        pv_rgba_i,
+    // SCHEMA v2 (2026-09-27, packet PVSCHEMA). `pv_rgba_i` -- eight bits per
+    // channel through `unit8_of_fx16` -- WAS THE RECORD'S PRECISION FLOOR and
+    // is replaced by the three Gouraud channels at their full 32-bit slot
+    // width plus alpha. `zhao_geom_attrpack` builds R234 D1's three planes
+    // from exactly these slots, so v1 could not be a source for them at all;
+    // that is entry I55's real blocker and it is a RECORD, not an
+    // architecture. The 8-bit view is not lost: `zhao_geom_parambuf` DERIVES
+    // it on the way back out, by the same `zhao_unit8_of_fx16` in `zhao_pkg`.
+    // See reports/DECISION-20260927-PROJECTEDVERTEX-V2.md.
+    input  var logic signed [31:0] pv_r_i,
+    input  var logic signed [31:0] pv_g_i,
+    input  var logic signed [31:0] pv_b_i,
+    input  var logic signed [31:0] pv_alpha_i,
 
     input  var logic        td_valid_i,
     output var logic        td_ready_o,
@@ -584,6 +596,29 @@ module zhao_geom_paramarena_align_mutant
     // arithmetic above is correct, which is why it owes a committed mutant
     // (`tests/mutants/zhao_geom_paramarena_align_mutant.sv`) rather than an
     // argument.
+    // THE s21 REFUSAL, MOVED HERE BY SCHEMA v2 -- and the move is the whole
+    // point. v1 stored screen coordinates as s32 and `zhao_geom_parambuf`
+    // flagged an out-of-s21 value on DECODE. v2 stores s21, so a decoded
+    // coordinate is legal BY CONSTRUCTION and that decoder term could never
+    // fire again. CLAUDE.md: "a detector reading zero is a claim, and it is
+    // the claim to check hardest" -- a term that cannot reach its own fault
+    // looks like enforcement and is not.
+    //
+    // This block is the last place the 32-bit value exists to be judged, so
+    // the refusal lives here. It is a WHOLE-FRAME FAULT, the same class as
+    // `quota_overflow_o` and `arena_overrun_o` beside it, because directive
+    // section 4 rules overflow "a whole-frame fault with drain, source
+    // attribution and repeat of the prior complete frame" and a vertex that
+    // cannot be represented is the same kind of unrenderable frame. Refused
+    // and not clamped: clamping would place a triangle somewhere plausible.
+    //
+    // UNREACHABLE FROM THE COMPOSED PRODUCER, ON PURPOSE.
+    // `zhao_geom_vertid`'s `cx_q`/`cy_q` are `signed [20:0]`, so the console's
+    // own producer cannot present an illegal coordinate. The port is 32 bits
+    // wide and `tb_zhao_geom_paramarena` drives it directly, which is how
+    // `geom_paramarena_directed` fires this counter with legal stimulus at the
+    // port rather than leaving it asserted at zero forever.
+    output var logic [31:0] pv_narrow_o,
     output var logic [31:0] burst_unaligned_o,
     output var logic [31:0] scr_contend_o,
     output var logic [31:0] retire_underflow_o,
@@ -648,8 +683,52 @@ module zhao_geom_paramarena_align_mutant
   // `BURST_ALIGN_B` itself is NOT touched, so `ALIGN_LSB` and the detector go
   // on measuring against the real SDRAM quantum while the layout is wrong --
   // which is the only arrangement in which the counter is evidence.
-  localparam int unsigned PV_SLOT_B      = PV_B;
+  //
+  // ===================================================================
+  // RE-AUTHORED 2026-09-27 BY PVSCHEMA, AND THE REASON IS THE WHOLE
+  // POINT OF HAVING POSITIVE CONTROLS AT ALL
+  // ===================================================================
+  // This mutation USED TO READ `PV_SLOT_B = PV_B`, and that expression
+  // was the pre-repair 24-byte vertex stride because `PV_B` WAS 24.
+  //
+  // `ProjectedVertex` SCHEMA v2 made the record 32 bytes. `PV_B` is
+  // therefore now 32, which IS a multiple of `BURST_ALIGN_B` -- so
+  // `PV_SLOT_B = PV_B` installs a PERFECTLY ALIGNED layout and
+  // `burst_unaligned_o` CANNOT MOVE. The mutation survived the refresh
+  // intact and the FAULT IT EXISTS TO CREATE DID NOT.
+  //
+  // Note what every instrument would have said. The copy's provenance is
+  // perfect -- it is regenerated from production in the same commit --
+  // so `tools/budget/mutant_copy_drift.py` is GREEN and correct to be.
+  // The one substantive line is present and unchanged. Only the
+  // arithmetic moved, one file away, and nothing was watching the
+  // arithmetic. This is CLAUDE.md's "a copy goes stale in the flattering
+  // direction" arriving from the direction nobody named: not a stale
+  // copy, but a FRESH copy whose mutation has quietly become a no-op.
+  //
+  // The value is now written LITERALLY rather than derived, because the
+  // thing being restored is a historical constant -- the 24-byte stride
+  // the layout carried when owner item 4 merged -- and deriving it from
+  // a name that has since changed meaning is exactly how it broke.
+  localparam int unsigned PV_SLOT_B      = 24;
   localparam int unsigned LAYOUT_ALIGN_B = 1;
+
+  // AND THE MUTANT NOW ASSERTS ITS OWN FAULTINESS, so that this cannot
+  // happen again silently. A positive control is only evidence if the
+  // layout it installs is genuinely misaligned; if a future schema
+  // change makes these two lines benign again, this copy FAILS TO
+  // ELABORATE instead of running and proving nothing.
+  //
+  // `--lint-only` does not execute `initial` blocks, so a clean lint says
+  // nothing about this guard -- it fires in simulation, which is where
+  // the driver runs. Quartus 17.0 needs the check inside `initial begin`
+  // and never at module scope.
+  // synthesis translate_off
+  initial begin
+    if ((PV_SLOT_B % BURST_ALIGN_B) == 0)
+      $fatal(1, "align_mutant: PV_SLOT_B is burst-aligned, so this positive control is a NO-OP");
+  end
+  // synthesis translate_on
 
   localparam int unsigned VERT_CAP_B  = MAX_VERTS  * PV_SLOT_B;    // 2,097,152
   // THE NEXT TWO ARE ON ONE LINE EACH, AND THAT IS NOT STYLE.
@@ -718,6 +797,30 @@ module zhao_geom_paramarena_align_mutant
       $fatal(1, "zhao_geom_paramarena: BURST_ALIGN_B must be a power of two >= 2");
     if (PV_STRIDE_B < PV_B)
       $fatal(1, "zhao_geom_paramarena: PV_STRIDE_B is narrower than the record");
+    // THE BEAT COUNT IS AN INTEGER DIVISION AND IT HAD NO GUARD.
+    // `m_beats_q <= 4'(PV_B / 8)` truncates: a 30-byte record would be
+    // ALLOCATED 32 bytes, DECLARED 30 in `m_len_q`, and WRITTEN 24 -- three
+    // beats -- with no diagnostic anywhere, and the missing bytes would read
+    // back as whatever SDRAM held. A short write completes and every counter
+    // balances, which is the flattering direction.
+    //
+    // Schema v2 is 32 bytes so it does not trip this. The guard is added
+    // anyway, because the surrounding section's own words are that "a guard
+    // that holds by luck is one that should say so out loud", and the obvious
+    // v2 layout considered in the decision record was 30.25 bytes.
+    if ((PV_B % 8) != 0)
+      $fatal(1, "zhao_geom_paramarena: PV_B is not a whole number of 8-byte beats");
+    if ((TD_B % 8) != 0)
+      $fatal(1, "zhao_geom_paramarena: TD_B is not a whole number of 8-byte beats");
+    if ((CK_B % 8) != 0)
+      $fatal(1, "zhao_geom_paramarena: CK_B is not a whole number of 8-byte beats");
+    // AND THE LAYOUT MUST FILL THE RECORD EXACTLY. `zhao_pkg` declares the
+    // field offsets; this is the assertion that the table there and the byte
+    // count here are the same statement.
+    if (ZHAO_PV_END_BIT != PV_B * 8)
+      $fatal(1, "zhao_geom_paramarena: the ProjectedVertex field table does not fill the record");
+    if (ZHAO_PARAMBUF_PV_SCHEMA != 2)
+      $fatal(1, "zhao_geom_paramarena: this block encodes ProjectedVertex SCHEMA v2");
     if ((PV_STRIDE_B % BURST_ALIGN_B) != 0)
       $fatal(1, "zhao_geom_paramarena: PV_STRIDE_B is not burst-aligned");
     if ((TD_B % BURST_ALIGN_B) != 0)
@@ -853,14 +956,52 @@ module zhao_geom_paramarena_align_mutant
   // `zhao_geom_parambuf`'s decode and the two must agree bit for bit; the
   // acceptance test is what says they do, by writing here and decoding there
   // with SDRAM in between.
-  wire [PV_B*8-1:0] pv_bytes_c = {
-      pv_rgba_i,                    // byte 20..23
-      pv_vow_i,                     // byte 16..19
-      pv_uow_i,                     // byte 12..15
-      pv_status_i, pv_invw_i,       // byte  8..11
-      pv_y_i,                       // byte  4.. 7
-      pv_x_i                        // byte  0.. 3
-  };
+  // SCHEMA v2 IS ASSEMBLED BY FIELD OFFSET, NOT BY CONCATENATION ORDER.
+  // Every offset and width below is `zhao_pkg`'s, the same constants
+  // `zhao_geom_parambuf` decodes with, so the encoder and the decoder can no
+  // longer disagree -- which is what the sentence above used to have to
+  // promise by hand.
+  //
+  // x, y and alpha are NARROWED here, and only here. x and y to the s21 the
+  // hardware already refuses outside of (`pv_narrow_c`, below, is the refusal
+  // that used to live on the decode side and could no longer fire there), and
+  // alpha to s22 because it is the one field with no plane consumer --
+  // `zhao_geom_attrpack` waives slot 6 by name and every declared alpha in the
+  // tree is 0x1_0000, seventeen bits.
+  logic [PV_B*8-1:0] pv_bytes_c;
+  always_comb begin
+    pv_bytes_c = '0;
+    pv_bytes_c[ZHAO_PV_X_LO      +: ZHAO_PV_X_W]      = pv_x_i[ZHAO_PV_X_W-1:0];
+    pv_bytes_c[ZHAO_PV_Y_LO      +: ZHAO_PV_Y_W]      = pv_y_i[ZHAO_PV_Y_W-1:0];
+    pv_bytes_c[ZHAO_PV_INVW_LO   +: ZHAO_PV_INVW_W]   = pv_invw_i;
+    pv_bytes_c[ZHAO_PV_STATUS_LO +: ZHAO_PV_STATUS_W] = pv_status_i;
+    pv_bytes_c[ZHAO_PV_UOW_LO    +: ZHAO_PV_UOW_W]    = pv_uow_i;
+    pv_bytes_c[ZHAO_PV_VOW_LO    +: ZHAO_PV_VOW_W]    = pv_vow_i;
+    pv_bytes_c[ZHAO_PV_R_LO      +: ZHAO_PV_R_W]      = pv_r_i;
+    pv_bytes_c[ZHAO_PV_G_LO      +: ZHAO_PV_G_W]      = pv_g_i;
+    pv_bytes_c[ZHAO_PV_B_LO      +: ZHAO_PV_B_W]      = pv_b_i;
+    pv_bytes_c[ZHAO_PV_A_LO      +: ZHAO_PV_A_W]      = pv_alpha_i[ZHAO_PV_A_W-1:0];
+  end
+
+  // s21 legality: every bit above bit 20 must equal bit 20, which is the
+  // definition of "this s32 fits in s21" and needs no comparison. The same
+  // three lines `zhao_geom_parambuf` used to carry, on the side of the store
+  // where the wide value still exists.
+  // Only the sign-extension bits matter: the low twenty carry the value and
+  // are legal whatever they hold. The waiver names the reason rather than
+  // silencing the file.
+  /* verilator lint_off UNUSEDSIGNAL */
+  function automatic logic fits_s21(input logic signed [31:0] v);
+    fits_s21 = (v[31:20] == 12'h000) || (v[31:20] == 12'hFFF);
+  endfunction
+
+  // s22 legality for alpha, by the same rule at a different width.
+  function automatic logic fits_s22(input logic signed [31:0] v);
+    fits_s22 = (v[31:21] == 11'h000) || (v[31:21] == 11'h7FF);
+  endfunction
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  wire pv_narrow_c = !fits_s21(pv_x_i) || !fits_s21(pv_y_i) || !fits_s22(pv_alpha_i);
 
   wire [TD_B*8-1:0] td_bytes_c = {
       td_source_i,                  // byte 12..15
@@ -1147,6 +1288,7 @@ module zhao_geom_paramarena_align_mutant
       view_flip_blocked_o <= '0;
       publish_blocked_o   <= '0;
       addr_view_bad_o     <= '0;
+      pv_narrow_o         <= '0;
       burst_unaligned_o   <= '0;
       scr_contend_o       <= '0;
       retire_underflow_o  <= '0;
@@ -1233,7 +1375,14 @@ module zhao_geom_paramarena_align_mutant
           // Accepted and thrown away. Never written, never counted as work.
           records_discarded_o <= records_discarded_o + 32'd1;
         end else if (pv_fire_c) begin
-          if (!pv_fits_c) begin
+          // THE MALFORMED-VERTEX REFUSAL COMES FIRST. A coordinate that does
+          // not fit the stored field is not a capacity question and must not
+          // be reported as one; it says the producer is wrong.
+          if (pv_narrow_c) begin
+            pv_narrow_o    <= pv_narrow_o + 32'd1;
+            frame_fault_q  <= 1'b1;
+            fault_source_o <= 16'd0;   // a vertex has no source id of its own
+          end else if (!pv_fits_c) begin
             quota_overflow_o <= quota_overflow_o + 32'd1;
             frame_fault_q    <= 1'b1;
             fault_source_o   <= 16'd0;   // a vertex has no source id of its own

@@ -264,7 +264,12 @@ bool push_pv(Dut& t, int32_t x) {
   t.pv_status_i = 0;
   t.pv_uow_i = 0;
   t.pv_vow_i = 0;
-  t.pv_rgba_i = 0xFFFFFFFFu;
+  // SCHEMA v2: the slots, not an 8-bit-per-channel word. fx16 1.0 is
+  // 0x1_0000, so this is opaque white at full precision.
+  t.pv_r_i = 0x00010000;
+  t.pv_g_i = 0x00010000;
+  t.pv_b_i = 0x00010000;
+  t.pv_alpha_i = 0x00010000;
   for (int i = 0; i < 20000; ++i) {
     t.eval();
     const bool go = t.pv_ready_o != 0;

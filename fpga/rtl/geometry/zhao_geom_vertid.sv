@@ -295,7 +295,26 @@ module zhao_geom_vertid #(
     output var logic [7:0]              pv_status_o,
     output var logic signed [31:0]      pv_uow_o,
     output var logic signed [31:0]      pv_vow_o,
-    output var logic [31:0]             pv_rgba_o,
+    // SCHEMA v2 (2026-09-27, packet PVSCHEMA). THIS BLOCK NO LONGER
+    // QUANTISES THE COLOUR. It used to publish `pv_rgba_o` -- eight bits per
+    // channel through a private `unit8_of_fx16` -- and that single assignment
+    // WAS the arena record's precision floor: `zhao_geom_attrpack` builds
+    // R234 D1's three Gouraud planes from the FULL 32-bit attribute slots
+    // those channels arrive in, so no back end fed from the arena could
+    // rebuild them. That is entry I55's real blocker, and it is a RECORD
+    // rather than an architecture.
+    //
+    // v2 publishes the slots UNCHANGED and the arena stores them exactly. The
+    // 8-bit view is not lost and the published law is not duplicated:
+    // `zhao_unit8_of_fx16` moved to `zhao_pkg`, and `zhao_geom_parambuf`
+    // derives `pv_rgba_o` from the stored channels on the way back out -- one
+    // EXPRESSION of the law with two INSTANCES, which is the distinction
+    // `zhao_forge_assemble.sv:62-66` draws.
+    // reports/DECISION-20260927-PROJECTEDVERTEX-V2.md.
+    output var logic signed [31:0]      pv_r_o,
+    output var logic signed [31:0]      pv_g_o,
+    output var logic signed [31:0]      pv_b_o,
+    output var logic signed [31:0]      pv_alpha_o,
     // The allocator's verdict and the index it gave. See THE ID IS NOT MINE.
     input  var logic                    pv_accept_i,
     input  var logic [17:0]             pv_id_i,
@@ -390,23 +409,21 @@ module zhao_geom_vertid #(
   endfunction
   /* verilator lint_on UNUSEDSIGNAL */
 
-  // ------------------------------------------- zref::unit8_from_fx16 in RTL --
-  // The published law, not a local rounding choice. `v` is the 32-bit slot;
-  // the lit channels occupy its low 17 bits and alpha its low 17 too, so the
-  // sign test below is the slot's own and never a reinterpretation.
-  function automatic logic [7:0] unit8_of_fx16(input logic [31:0] v);
-    logic [31:0] q;
-    begin
-      if (v[31]) begin
-        unit8_of_fx16 = 8'd0;
-      end else if (v[30:16] != 15'd0) begin
-        unit8_of_fx16 = 8'd255;
-      end else begin
-        q = (v + 32'd128) >> 8;
-        unit8_of_fx16 = (q > 32'd255) ? 8'd255 : q[7:0];
-      end
-    end
-  endfunction
+  // ----------------------------------- WHERE zref::unit8_from_fx16 WENT --
+  // It used to be a private `unit8_of_fx16` here, and it was the only thing
+  // standing between the full-precision attribute slots and the arena record.
+  // Schema v2 stores the channels at full width, so the conversion is no
+  // longer performed on the way IN; it is performed on the way OUT, in
+  // `zhao_geom_parambuf`, from the package function `zhao_unit8_of_fx16`.
+  //
+  // It was MOVED rather than copied. Two sites now need it, and duplicating
+  // the body would have been a second EXPRESSION of a ratified law -- the
+  // failure `GEOM.LIGHT`'s contract and CLAUDE.md's sibling-contract rule
+  // exist to refuse, and one this tree has shipped before.
+  //
+  // The lit channels occupy a slot's low 17 bits and alpha its low 17 too --
+  // measured at all four attribute-packet producers, which is what let alpha
+  // be stored in s22 rather than 32. See `zhao_pkg`.
 
   // -------------------------------------------------------- the held record --
   typedef enum logic [2:0] { S_IDLE, S_LOOK, S_DEC, S_PUB, S_TD } st_e;
@@ -496,8 +513,14 @@ module zhao_geom_vertid #(
   assign pv_status_o = {4'd0, shareable_q, untex_q, dom_q};
   assign pv_uow_o    = uow_c;
   assign pv_vow_o    = vow_c;
-  assign pv_rgba_o   = {unit8_of_fx16(al_c), unit8_of_fx16(b_c),
-                        unit8_of_fx16(g_c),  unit8_of_fx16(r_c)};
+  // THE SLOTS, PUBLISHED UNCHANGED. Not a conversion, not a clamp: the same
+  // 32-bit words `zhao_geom_attrpack` reads on the live path, so a back end
+  // fed from the arena builds planes that are bit-identical by construction
+  // rather than by a verification argument at every plane and edge case.
+  assign pv_r_o      = $signed(r_c);
+  assign pv_g_o      = $signed(g_c);
+  assign pv_b_o      = $signed(b_c);
+  assign pv_alpha_o  = $signed(al_c);
 
   assign td_valid_o    = (st_q == S_TD) && !frame_seal_i;
   assign td_v0_o       = id_q[0];

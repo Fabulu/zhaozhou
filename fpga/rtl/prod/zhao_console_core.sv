@@ -10987,6 +10987,27 @@
 //            (`zhao_raster_tile_pipe_v2.sv:601`), so slots 3..6 -- lit r/g/b
 //            AND alpha -- have no interpolator and no carriage even if a
 //            producer existed;
+//            *** TWO CORRECTIONS, 2026-09-27 (PVSCHEMA). BOTH BULLETS ABOVE
+//            *** WERE TRUE WHEN WRITTEN AND ARE NOW FALSE, and the second is
+//            *** load-bearing enough that a reader taking it at face value
+//            *** would conclude the Gouraud channels have no consumer.
+//            *** (a) `ALPHA_C` is written into attribute SLOT **6**, not
+//            ***     slot 3. `zhao_geom_vattr.sv:537` writes
+//            ***     `rep_data_o[191:160]` -- the SIXTH 32-bit field -- and
+//            ***     every `SLOT_ALPHA` parameter in the tree reads 6. Slot 3
+//            ***     is `SLOT_R`. The sentence above sends a reader to the red
+//            ***     Gouraud channel while talking about alpha.
+//            *** (b) attrpack emits **SIX** planes, not three, and DOES index
+//            ***     SLOT_R / SLOT_G / SLOT_B. Owner ruling R234 D1
+//            ***     (2026-09-21) paid for the three Gouraud lanes and widened
+//            ***     `METAW` from 1157 to 1877 to carry them; see that block's
+//            ***     header. So slots 3..5 have an interpolator AND carriage,
+//            ***     all the way to `zhao_raster_fragment.frag_vert_rgb_i`.
+//            *** Only slot 6, alpha, still has neither -- which is exactly why
+//            *** `ProjectedVertex` schema v2 stores r/g/b at full 32-bit width
+//            *** and alpha at s22. The paragraph is amended rather than
+//            *** rewritten: it is the record of what was believed when the
+//            *** R48/R89 reading was taken, and that reading still stands.
 //          * the flat per-triangle alpha and the blend-mode selector are
 //            `tri_continuation_tail_i` and `tri_fragment_state_i`, which this
 //            module's own port table already marks "OPEN, still a BOUNDARY";
@@ -20319,7 +20340,9 @@ module zhao_console_core
   wire signed [31:0]  vid_pv_x, vid_pv_y, vid_pv_uow, vid_pv_vow;
   wire [23:0]         vid_pv_invw;
   wire [7:0]          vid_pv_status;
-  wire [31:0]         vid_pv_rgba;
+  // SCHEMA v2: the three Gouraud channels and alpha at their full slot
+  // width, in place of the 8-bit-per-channel `vid_pv_rgba` v1 carried.
+  wire signed [31:0]  vid_pv_r, vid_pv_g, vid_pv_b, vid_pv_alpha;
   wire [17:0]         vid_pv_id;
   wire                vid_td_valid, vid_td_ready, vid_td_accept;
   wire [15:0]         vid_td_v0, vid_td_v1, vid_td_v2, vid_td_material;
@@ -20610,7 +20633,10 @@ module zhao_console_core
     .pv_status_o (vid_pv_status),
     .pv_uow_o    (vid_pv_uow),
     .pv_vow_o    (vid_pv_vow),
-    .pv_rgba_o   (vid_pv_rgba),
+    .pv_r_o      (vid_pv_r),
+    .pv_g_o      (vid_pv_g),
+    .pv_b_o      (vid_pv_b),
+    .pv_alpha_o  (vid_pv_alpha),
     .pv_accept_i (vid_pv_accept),
     .pv_id_i     (vid_pv_id),
 
@@ -30871,7 +30897,10 @@ module zhao_console_core
       .pv_status_i (vid_pv_status),
       .pv_uow_i    (vid_pv_uow),
       .pv_vow_i    (vid_pv_vow),
-      .pv_rgba_i   (vid_pv_rgba),
+      .pv_r_i      (vid_pv_r),
+      .pv_g_i      (vid_pv_g),
+      .pv_b_i      (vid_pv_b),
+      .pv_alpha_i  (vid_pv_alpha),
       .pv_accept_o (vid_pv_accept),
       .pv_id_o     (vid_pv_id),
 
@@ -30969,6 +30998,16 @@ module zhao_console_core
       .view_flip_blocked_o (geom_pa_flipblock_o),
       .publish_blocked_o   (geom_pa_pubblock_o),
       .addr_view_bad_o     (geom_pa_addrbad_o),
+      // `pv_narrow_o` IS DELIBERATELY NOT EXPORTED, and the reason is that
+      // exporting it would add a counter to the console's evidence surface
+      // that CANNOT MOVE THERE. Schema v2 stores screen coordinates as s21
+      // and this counter refuses a wider one, but the composed producer is
+      // `zhao_geom_vertid`, whose `cx_q`/`cy_q` are `signed [20:0]` -- so no
+      // console stimulus can reach the fault. CLAUDE.md: "a gate that cannot
+      // reach the state is not evidence about the state." It is fired where
+      // it CAN be fired: `tb_zhao_geom_paramarena` drives the 32-bit port
+      // directly and `geom_paramarena_directed` presents an out-of-s21
+      // coordinate. Left unconnected by decision, not by oversight.
       .burst_unaligned_o   (geom_pa_unaligned_o),
       .scr_contend_o       (geom_pa_scrcontend_o),
       .retire_underflow_o  (geom_pa_retireunder_o),

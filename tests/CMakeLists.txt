@@ -4331,7 +4331,11 @@ target_link_libraries(test_geom_parambuf_directed PRIVATE zhao_harness zhao_zref
 verilate(test_geom_parambuf_directed
   PREFIX Vzhao_geom_parambuf
   TOP_MODULE zhao_geom_parambuf
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_parambuf.sv)
+  # SCHEMA v2 (2026-09-27, PVSCHEMA): the record layout -- field offsets and
+  # widths, not just the byte count -- is declared once in zhao_pkg, and this
+  # decoder imports it, so the two packages join the source list.
+  SOURCES ${ZHAO_ABI_PKG} ${ZHAO_ZHAO_PKG}
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_parambuf.sv)
 add_test(NAME geom_parambuf_directed COMMAND test_geom_parambuf_directed)
 set_tests_properties(geom_parambuf_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 

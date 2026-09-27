@@ -16,9 +16,34 @@
 // ---------------------------------------------------------------------------
 // THE THREE RECORDS (R7)
 // ---------------------------------------------------------------------------
-//   ProjectedVertex, 24 B
-//     screen_x s32 (LEGAL RANGE s21), screen_y s32 (legal s21),
-//     invw24 + status byte, u_over_w s32, v_over_w s32, rgba8 u32
+//   ProjectedVertex, 32 B -- SCHEMA v2, 2026-09-27 (packet PVSCHEMA)
+//     screen_x s21, screen_y s21, invw24, status byte,
+//     u_over_w s32, v_over_w s32,
+//     gouraud_r s32, gouraud_g s32, gouraud_b s32, alpha s22
+//
+//     THE LAYOUT IS DECLARED ONCE, in `zhao_pkg` as ZHAO_PV_*_LO / ZHAO_PV_*_W,
+//     and this decoder and `zhao_geom_paramarena`'s encoder both derive from
+//     it. Until v2 they were two hand-maintained inverses whose only guarantee
+//     was the encoder's own comment saying "the two must agree bit for bit".
+//
+//     WHY v2 EXISTS. v1 stored colour as `rgba8 u32` -- eight bits per channel
+//     through `unit8_of_fx16`, railed at both ends -- while
+//     `zhao_geom_attrpack` builds its six planes from the FULL 32-bit
+//     attribute slots those channels arrive in. So the three Gouraud planes
+//     owner ruling R234 D1 added were not reconstructible from the record by
+//     any back end. That is entry I55's real blocker, it is a RECORD and not
+//     an architecture, and v2 removes it by storing the three channels
+//     EXACTLY. Full record: reports/DECISION-20260927-PROJECTEDVERTEX-V2.md.
+//
+//     IT COST NO ADDRESS SPACE: `PV_STRIDE_B` was already 32 while the record
+//     was 24, so the eight bytes were allocated and skipped.
+//
+//     `pv_rgba_o` IS RETAINED AND IS NOW DERIVED HERE rather than stored. The
+//     published conversion `zref::unit8_from_fx16` moved to `zhao_pkg` as
+//     `zhao_unit8_of_fx16` so that this block and `zhao_geom_vertid` are two
+//     INSTANCES of one law rather than two EXPRESSIONS of it -- the
+//     distinction `zhao_forge_assemble.sv:62-66` states and CLAUDE.md's
+//     sibling-contract rule exists to enforce.
 //
 //   TriangleDescriptor, 16 B
 //     vertex_id[3] u16, material_id u16, raster_state u32, source_id u32
@@ -37,13 +62,39 @@
 // this frame into a list that was not.
 //
 // ---------------------------------------------------------------------------
-// s32 STORED, s21 LEGAL
+// s21 STORED AND s21 LEGAL -- AND THE DETECTOR THAT WENT BLIND, DECLARED
 // ---------------------------------------------------------------------------
-// R7 says screen coordinates are stored as s32 with a legal range of s21. That
-// is deliberate slack, and the rule that comes with it is that a value outside
-// s21 is a MALFORMED DESCRIPTOR, not a coordinate to be wrapped or clamped.
-// Clamping it would place a triangle somewhere plausible; refusing it says the
-// producer is wrong.
+// R7 said screen coordinates are STORED as s32 with a legal range of s21, and
+// the rule that came with it is that a value outside s21 is a MALFORMED
+// DESCRIPTOR, not a coordinate to be wrapped or clamped: clamping would place
+// a triangle somewhere plausible, refusing says the producer is wrong.
+//
+// v2 STORES s21. That is not a truncation -- it is the domain the hardware
+// ALREADY refuses outside of -- but it has a consequence that must be written
+// down rather than left as a reassuring zero:
+//
+//   `pv_illegal_o`'s OLD s21 TERM CAN NEVER FIRE AGAIN. A field stored in
+//   twenty-one bits decodes to a legal s21 by construction. CLAUDE.md: "a
+//   detector reading zero is a claim, and it is the claim to check hardest."
+//   A term that cannot reach its own fault is worse than absent, because it
+//   looks like enforcement.
+//
+// SO THE REFUSAL MOVED TO THE ENCODER, which is the only place the 32-bit
+// value still exists to be judged: `zhao_geom_paramarena.pv_narrow_o` counts a
+// vertex whose x or y does not fit s21 and REFUSES the record. The illegal
+// state is now unrepresentable in the arena, which is a strengthening.
+//
+// AND `pv_illegal_o` KEEPS ITS PORT AND ITS MEANING -- "this record is
+// malformed" -- now watching the two things that CAN still be malformed on the
+// way back, both of which are written laws that had NO DETECTOR AT ALL before
+// v2 (design/contracts/GEOM.VERTID.md, "The ProjectedVertex status byte"):
+//
+//   * `status[7:4]` is "reserved, written 0. Nonzero is a malformed record."
+//   * `status[1:0]` domain 3 is "reserved (illegal)".
+//
+// Both are reachable with legal stimulus and both are exercised by
+// `geom_parambuf_directed`. This is strictly more enforcement than v1 had, not
+// a port kept alive for appearances.
 // ---------------------------------------------------------------------------
 // WHY THIS BLOCK IS NOT COMPOSED, MEASURED 2026-09-22 (packet GEOMCLOSE)
 // ---------------------------------------------------------------------------
@@ -126,7 +177,9 @@
 // ---------------------------------------------------------------------------
 `default_nettype none
 
-module zhao_geom_parambuf #(
+module zhao_geom_parambuf
+  import zhao_pkg::*;
+#(
     parameter int unsigned CHUNK_IDS = 14,
     // The arena, in chunk units. A `next_chunk` outside it is malformed.
     parameter int unsigned ARENA_CHUNKS = 65536
@@ -134,17 +187,36 @@ module zhao_geom_parambuf #(
     input var logic clk,
     input var logic rst_n,
 
-    // ---- ProjectedVertex: 24 bytes in, fields out ---------------------------
+    // ---- ProjectedVertex: SCHEMA v2, 32 bytes in, fields out ---------------
+    // The width is the package's, not a literal, so the port cannot disagree
+    // with the record the allocator strides by.
     input  var logic          pv_valid_i,
-    input  var logic [191:0]  pv_bytes_i,
-    output var logic signed [31:0] pv_x_o,
-    output var logic signed [31:0] pv_y_o,
+    input  var logic [ZHAO_PARAMBUF_PV_BYTES*8-1:0] pv_bytes_i,
+    output var logic signed [31:0] pv_x_o,       // sign-extended from s21
+    output var logic signed [31:0] pv_y_o,       // sign-extended from s21
     output var logic [23:0]   pv_invw_o,
     output var logic [7:0]    pv_status_o,
     output var logic signed [31:0] pv_uow_o,
     output var logic signed [31:0] pv_vow_o,
+    // THE THREE GOURAUD CHANNELS AT FULL PRECISION -- the whole reason v2
+    // exists. These are the 32-bit attribute slots `zhao_geom_attrpack` reads
+    // to build R234 D1's three planes, stored EXACTLY, so a back end fed from
+    // this arena produces planes that are bit-identical to the live path's
+    // rather than merely close.
+    output var logic signed [31:0] pv_r_o,
+    output var logic signed [31:0] pv_g_o,
+    output var logic signed [31:0] pv_b_o,
+    // ALPHA IS s22 AND IT IS THE ONLY FIELD NARROWED BELOW ITS SLOT, because
+    // it is the only one with no plane consumer -- `zhao_geom_attrpack` waives
+    // slot 6 by name. Its full declared domain across all four attribute
+    // producers is 0x1_0000, seventeen bits; s22 is that plus a sign bit plus
+    // five bits of overbright headroom. See `zhao_pkg`.
+    output var logic signed [31:0] pv_alpha_o,   // sign-extended from s22
+    // R7's 8-bit view, DERIVED rather than stored. `zhao_unit8_of_fx16` is the
+    // published law and lives in `zhao_pkg`; byte order is { a, b, g, r } with
+    // r in the low byte, as GEOM.VERTID.md declares.
     output var logic [31:0]   pv_rgba_o,
-    output var logic          pv_illegal_o,   // outside s21
+    output var logic          pv_illegal_o,   // a MALFORMED status byte
 
     // ---- TriangleDescriptor: 16 bytes ---------------------------------------
     input  var logic          td_valid_i,
@@ -196,30 +268,52 @@ module zhao_geom_parambuf #(
     output var logic [31:0]   ck_illegal_count_o
 );
 
-  // ---- ProjectedVertex ----------------------------------------------------
-  logic signed [31:0] x_c, y_c;
-  assign x_c = $signed(pv_bytes_i[  0 +: 32]);
-  assign y_c = $signed(pv_bytes_i[ 32 +: 32]);
+  // ---- ProjectedVertex, SCHEMA v2 -----------------------------------------
+  // EVERY OFFSET AND WIDTH BELOW IS `zhao_pkg`'s. Not one literal, because the
+  // encoder in `zhao_geom_paramarena` reads the same constants and the pair
+  // used to be two hand-maintained inverses.
+  wire signed [ZHAO_PV_X_W-1:0] x_raw_c =
+      $signed(pv_bytes_i[ZHAO_PV_X_LO +: ZHAO_PV_X_W]);
+  wire signed [ZHAO_PV_Y_W-1:0] y_raw_c =
+      $signed(pv_bytes_i[ZHAO_PV_Y_LO +: ZHAO_PV_Y_W]);
+  wire signed [ZHAO_PV_A_W-1:0] a_raw_c =
+      $signed(pv_bytes_i[ZHAO_PV_A_LO +: ZHAO_PV_A_W]);
 
-  assign pv_x_o      = x_c;
-  assign pv_y_o      = y_c;
-  assign pv_invw_o   = pv_bytes_i[ 64 +: 24];
-  assign pv_status_o = pv_bytes_i[ 88 +:  8];
-  assign pv_uow_o    = $signed(pv_bytes_i[ 96 +: 32]);
-  assign pv_vow_o    = $signed(pv_bytes_i[128 +: 32]);
-  assign pv_rgba_o   = pv_bytes_i[160 +: 32];
+  // Signed-to-wider-signed assignment sign-extends, which is what makes s21
+  // storage lossless for every value the encoder is willing to accept.
+  // The sized cast is what performs the sign extension -- for a SIGNED
+  // operand `32'(v)` replicates the sign bit, where a bare assignment leaves
+  // the tool to widen it and warn. Written out so the widening is visible.
+  // (The word that cannot start this line is the linter's own name: a comment
+  // whose first token after the slashes is that word is parsed as a pragma.)
+  assign pv_x_o      = 32'(x_raw_c);
+  assign pv_y_o      = 32'(y_raw_c);
+  assign pv_alpha_o  = 32'(a_raw_c);
 
-  // s21 legality: every bit above bit 20 must equal bit 20, which is the
-  // definition of "this s32 fits in s21" and needs no comparison.
-  /* verilator lint_off UNUSEDSIGNAL */
-  function automatic logic fits_s21(input logic signed [31:0] v);
-    // Only the sign-extension bits matter: the low twenty carry the value and
-    // are legal whatever they hold.
-    fits_s21 = (v[31:20] == 12'h000) || (v[31:20] == 12'hFFF);
-  endfunction
-  /* verilator lint_on UNUSEDSIGNAL */
+  assign pv_invw_o   = pv_bytes_i[ZHAO_PV_INVW_LO   +: ZHAO_PV_INVW_W];
+  assign pv_status_o = pv_bytes_i[ZHAO_PV_STATUS_LO +: ZHAO_PV_STATUS_W];
+  assign pv_uow_o    = $signed(pv_bytes_i[ZHAO_PV_UOW_LO +: ZHAO_PV_UOW_W]);
+  assign pv_vow_o    = $signed(pv_bytes_i[ZHAO_PV_VOW_LO +: ZHAO_PV_VOW_W]);
+  assign pv_r_o      = $signed(pv_bytes_i[ZHAO_PV_R_LO   +: ZHAO_PV_R_W]);
+  assign pv_g_o      = $signed(pv_bytes_i[ZHAO_PV_G_LO   +: ZHAO_PV_G_W]);
+  assign pv_b_o      = $signed(pv_bytes_i[ZHAO_PV_B_LO   +: ZHAO_PV_B_W]);
 
-  assign pv_illegal_o = pv_valid_i && (!fits_s21(x_c) || !fits_s21(y_c));
+  // R7's rgba8, DERIVED from the stored channels by the published law rather
+  // than stored lossily beside them. { a, b, g, r }, r in the low byte.
+  assign pv_rgba_o   = {zhao_unit8_of_fx16(pv_alpha_o), zhao_unit8_of_fx16(pv_b_o),
+                        zhao_unit8_of_fx16(pv_g_o),     zhao_unit8_of_fx16(pv_r_o)};
+
+  // ---- what MALFORMED means in v2 -----------------------------------------
+  // See the header. The s21 term is gone because it cannot fire against an
+  // s21-stored field; these two CAN fire and had no detector before v2.
+  // design/contracts/GEOM.VERTID.md, "The ProjectedVertex status byte":
+  //   [7:4] "reserved, written 0. Nonzero is a malformed record."
+  //   [1:0] domain 3 is "reserved (illegal)".
+  wire status_reserved_bad_c =
+      (pv_status_o[ZHAO_PV_STATUS_W-1:4] != 4'd0);
+  wire status_domain_bad_c   = (pv_status_o[1:0] == 2'b11);
+
+  assign pv_illegal_o = pv_valid_i && (status_reserved_bad_c || status_domain_bad_c);
 
   // ---- TriangleDescriptor -------------------------------------------------
   logic [15:0] v0_c, v1_c, v2_c;

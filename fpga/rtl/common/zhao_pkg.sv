@@ -184,9 +184,119 @@ package zhao_pkg;
   // them. `zhao_geom_parambuf` decodes 192 / 128 / 512 BITS respectively;
   // these are the same three numbers in the unit an ADDRESS is counted in,
   // which is the unit the allocator needs and the decoder does not have.
-  localparam int unsigned ZHAO_PARAMBUF_PV_BYTES = 24;
+  localparam int unsigned ZHAO_PARAMBUF_PV_BYTES = 32;   // SCHEMA v2 -- was 24
   localparam int unsigned ZHAO_PARAMBUF_TD_BYTES = 16;
   localparam int unsigned ZHAO_PARAMBUF_CK_BYTES = 64;
+
+  // =====================================================================
+  // `ProjectedVertex` SCHEMA v2 -- THE LAYOUT, DECLARED ONCE
+  // =====================================================================
+  // Authority: owner vacation directive section 4 -- "If the old compact
+  // records cannot carry the full commissioned function, introduce a
+  // VERSIONED EXTENSION or immutable sidecar keyed by the same identity ...
+  // The architect has explicit authority to amend record schemas for this
+  // purpose." Full record:
+  // `reports/DECISION-20260927-PROJECTEDVERTEX-V2.md`.
+  //
+  // WHY v1 COULD NOT STAND. `zhao_geom_vertid` stored colour through
+  // `unit8_of_fx16` -- `(v + 128) >> 8`, railed at both ends -- while
+  // `zhao_geom_attrpack` reads the FULL 32-bit attribute slots those
+  // channels arrive in. So the three Gouraud planes owner ruling R234 D1
+  // added were NOT reconstructible from the record by any back end, which
+  // is entry I55's real blocker and is a RECORD rather than an
+  // architecture. v1 kept 8 of 16 fractional bits and saturated.
+  //
+  // IT COSTS NO ADDRESS SPACE. `PV_STRIDE_B` has been 32 since ARENAWIRE
+  // while the record was 24, so every vertex slot already carried eight
+  // bytes of DECLARED SLACK. VERT_CAP_B does not move and no region in
+  // `spec/memory_rules.md` section 5c changes. 32 bytes is a CEILING and
+  // not a preference: a 48-byte stride takes the view's used footprint to
+  // 4,456,448 bytes against a VIEW_SPAN of 4,194,304 and does not fit.
+  //
+  // WHY THE OFFSETS LIVE HERE AND NOT IN THE TWO BLOCKS. The encoder
+  // (`zhao_geom_paramarena`) and the decoder (`zhao_geom_parambuf`) were
+  // two hand-maintained inverses, and the encoder's own comment said "the
+  // two must agree bit for bit". They now derive from these constants, so
+  // they cannot disagree. This package previously carried the three record
+  // SIZES and nothing whatever about their FIELDS.
+  localparam int unsigned ZHAO_PARAMBUF_PV_SCHEMA = 2;
+
+  //   offset  width  field        signed  note
+  //   ------  -----  -----------  ------  --------------------------------
+  //        0     21  screen_x        yes  the domain `fits_s21` ALREADY refuses
+  //       21     21  screen_y        yes  outside of -- a law written down, not
+  //                                       a truncation
+  //       42     24  invw24           no  R7, unchanged. Plane input, exact.
+  //       66      8  status           no  R7's ratified byte. GEOM.VERTID.md
+  //                                       section 169 defines [3:0]; [7:4] stay
+  //                                       reserved-zero and are the reserve.
+  //       74     32  u_over_w        yes  PLANE INPUT -- stored EXACTLY
+  //      106     32  v_over_w        yes  plane input -- exact
+  //      138     32  gouraud_r       yes  plane input (R234 D1) -- exact
+  //      170     32  gouraud_g       yes  plane input -- exact
+  //      202     32  gouraud_b       yes  plane input -- exact
+  //      234     22  alpha           yes  see ALPHA IS s22 below
+  //   ------------
+  //      256 bits = 32 bytes exactly
+  //
+  // ALPHA IS s22, AND THE REASON IS A MEASUREMENT RATHER THAN A LEFTOVER.
+  // Alpha is the ONLY field narrowed below its 32-bit slot, because it is
+  // the only one with no plane consumer. `zhao_geom_attrpack.sv:141-146`
+  // waives slot 6 BY NAME -- "the only slot this block does not ask for is
+  // `alpha` (slot 6), whose value is governed by ruling R48's named
+  // `ALPHA_C` constant and whose PER-PRIMITIVE producer is
+  // `tri_continuation_tail_i`'s `vertex_alpha` (ruling R89)" -- and the
+  // alpha that reaches the blend is an 8-bit unit8 off the continuation
+  // tail on a DIFFERENT path entirely.
+  //
+  // So every quantity the six planes are built from is stored at its full
+  // 32-bit slot width and carries NO DOMAIN CLAIM THAT COULD BE WRONG, and
+  // alpha takes the remainder. Alpha's entire declared domain, measured at
+  // all four attribute-packet producers rather than assumed, is 0x1_0000 --
+  // seventeen bits: `ALPHA_C` = 32'h0001_0000, `TERR_ALPHA` = 65536,
+  // `PART_ALPHA` = 65536, and `zhao_forge_assemble`'s `art_alpha_i` driven
+  // from SHADOW_ART_ALPHA = 32'sh0000_6000. s22 is that domain plus a sign
+  // bit plus FIVE BITS OF OVERBRIGHT HEADROOM.
+  //
+  // THE TEMPTING INVERSE IS REFUSED, and the direction is the whole reason.
+  // Narrowing r/g/b to their measured 17-bit domain and giving alpha 32
+  // would make this record's ONE JOB -- the six planes come out bit-
+  // identical -- conditional on a claim about every present and future
+  // producer. `zhao_forge_assemble`'s `art_r_i` is a 32-bit port driven by
+  // a NAMED, EDITABLE OWNER CONSTANT, and a record that silently caps it is
+  // CLAUDE.md rule 6's "removing the owner's control in the name of
+  // fidelity". No claim at all beats a claim with a large margin.
+  //
+  // THE SCHEMA IS VERSIONED AT ELABORATION, NOT PER RECORD. A per-record
+  // version nibble was considered and REJECTED: the only place it could go
+  // is `status[7:4]`, which GEOM.VERTID.md section 169 rules "reserved,
+  // written 0. Nonzero is a malformed record" -- so spending it would
+  // repeal a live legality rule to encode something no reader needs. v1 and
+  // v2 records never coexist in one arena; one build writes it and the same
+  // build reads it back inside the frame.
+  localparam int unsigned ZHAO_PV_X_LO       = 0;
+  localparam int unsigned ZHAO_PV_X_W        = 21;
+  localparam int unsigned ZHAO_PV_Y_LO       = 21;
+  localparam int unsigned ZHAO_PV_Y_W        = 21;
+  localparam int unsigned ZHAO_PV_INVW_LO    = 42;
+  localparam int unsigned ZHAO_PV_INVW_W     = 24;
+  localparam int unsigned ZHAO_PV_STATUS_LO  = 66;
+  localparam int unsigned ZHAO_PV_STATUS_W   = 8;
+  localparam int unsigned ZHAO_PV_UOW_LO     = 74;
+  localparam int unsigned ZHAO_PV_UOW_W      = 32;
+  localparam int unsigned ZHAO_PV_VOW_LO     = 106;
+  localparam int unsigned ZHAO_PV_VOW_W      = 32;
+  localparam int unsigned ZHAO_PV_R_LO       = 138;
+  localparam int unsigned ZHAO_PV_R_W        = 32;
+  localparam int unsigned ZHAO_PV_G_LO       = 170;
+  localparam int unsigned ZHAO_PV_G_W        = 32;
+  localparam int unsigned ZHAO_PV_B_LO       = 202;
+  localparam int unsigned ZHAO_PV_B_W        = 32;
+  localparam int unsigned ZHAO_PV_A_LO       = 234;
+  localparam int unsigned ZHAO_PV_A_W        = 22;
+  // The end of the last field, so a block can assert the layout FILLS the
+  // record exactly rather than trusting the table above.
+  localparam int unsigned ZHAO_PV_END_BIT    = ZHAO_PV_A_LO + ZHAO_PV_A_W;   // 256
 
   // ---------------------------------------------------------------------
   // RENDER asset pool -- the Phase-3/Packet-E shared ENGINE1 region
@@ -383,6 +493,44 @@ package zhao_pkg;
   // rather than as five hand-written copies backed by a green suite.
   //
   // ENFORCED-BY: tests/formal/sat_add.sby
+  // ---------------------------------------------------------------------
+  // `zref::unit8_from_fx16` -- THE PUBLISHED COLOUR LAW, IN ONE PLACE
+  // ---------------------------------------------------------------------
+  // Lit channels arrive as fx16 (1.0 == 0x1_0000) in 32-bit attribute slots;
+  // R7's `ProjectedVertex` exposes an `rgba8 u32` view of them. This is that
+  // conversion: negative -> 0, above 0xFFFF -> 255, otherwise (v + 128) >> 8
+  // with a 255 rail -- the Review C2 clamp that stops a ~1.0 weight wrapping
+  // to 0. `design/contracts/GEOM.VERTID.md`, "The colour law is cited, not
+  // chosen", and `tests/geometry/geom_vertid_directed.cpp` differences the
+  // RTL against an independent transcription of it.
+  //
+  // WHY IT LIVES HERE AS OF SCHEMA v2 (2026-09-27, packet PVSCHEMA). It used
+  // to be a private `unit8_of_fx16` inside `zhao_geom_vertid`, which was fine
+  // while that block was the only place the conversion happened. v2 stores
+  // the channels at full precision and DERIVES the 8-bit view in
+  // `zhao_geom_parambuf` on the way back out, so there are now two sites.
+  // Copying the body would have been A SECOND EXPRESSION OF A RATIFIED LAW --
+  // `zhao_forge_assemble.sv:62-66`: "A second INSTANCE of one law is not a
+  // second law; a second EXPRESSION of it would be" -- and CLAUDE.md's
+  // sibling-contract rule exists because this tree has shipped exactly that
+  // twice. One function, two callers.
+  //
+  // The argument is the 32-bit SLOT, so the sign test below is the slot's own
+  // and never a reinterpretation.
+  function automatic logic [7:0] zhao_unit8_of_fx16(input logic [31:0] v);
+    logic [31:0] q;
+    begin
+      if (v[31]) begin
+        zhao_unit8_of_fx16 = 8'd0;
+      end else if (v[30:16] != 15'd0) begin
+        zhao_unit8_of_fx16 = 8'd255;
+      end else begin
+        q = (v + 32'd128) >> 8;
+        zhao_unit8_of_fx16 = (q > 32'd255) ? 8'd255 : q[7:0];
+      end
+    end
+  endfunction
+
   function automatic logic [63:0] zhao_sat_add64(input logic [63:0] a,
                                                  input logic [63:0] b);
     zhao_sat_add64 = (a > ~b) ? 64'hFFFF_FFFF_FFFF_FFFF : (a + b);

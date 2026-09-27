@@ -172,8 +172,52 @@ ALIGN_NEW = """  // ============ THE MUTATION, AND IT IS THESE TWO LINES =======
   // `BURST_ALIGN_B` itself is NOT touched, so `ALIGN_LSB` and the detector go
   // on measuring against the real SDRAM quantum while the layout is wrong --
   // which is the only arrangement in which the counter is evidence.
-  localparam int unsigned PV_SLOT_B      = PV_B;
+  //
+  // ===================================================================
+  // RE-AUTHORED 2026-09-27 BY PVSCHEMA, AND THE REASON IS THE WHOLE
+  // POINT OF HAVING POSITIVE CONTROLS AT ALL
+  // ===================================================================
+  // This mutation USED TO READ `PV_SLOT_B = PV_B`, and that expression
+  // was the pre-repair 24-byte vertex stride because `PV_B` WAS 24.
+  //
+  // `ProjectedVertex` SCHEMA v2 made the record 32 bytes. `PV_B` is
+  // therefore now 32, which IS a multiple of `BURST_ALIGN_B` -- so
+  // `PV_SLOT_B = PV_B` installs a PERFECTLY ALIGNED layout and
+  // `burst_unaligned_o` CANNOT MOVE. The mutation survived the refresh
+  // intact and the FAULT IT EXISTS TO CREATE DID NOT.
+  //
+  // Note what every instrument would have said. The copy's provenance is
+  // perfect -- it is regenerated from production in the same commit --
+  // so `tools/budget/mutant_copy_drift.py` is GREEN and correct to be.
+  // The one substantive line is present and unchanged. Only the
+  // arithmetic moved, one file away, and nothing was watching the
+  // arithmetic. This is CLAUDE.md's "a copy goes stale in the flattering
+  // direction" arriving from the direction nobody named: not a stale
+  // copy, but a FRESH copy whose mutation has quietly become a no-op.
+  //
+  // The value is now written LITERALLY rather than derived, because the
+  // thing being restored is a historical constant -- the 24-byte stride
+  // the layout carried when owner item 4 merged -- and deriving it from
+  // a name that has since changed meaning is exactly how it broke.
+  localparam int unsigned PV_SLOT_B      = 24;
   localparam int unsigned LAYOUT_ALIGN_B = 1;
+
+  // AND THE MUTANT NOW ASSERTS ITS OWN FAULTINESS, so that this cannot
+  // happen again silently. A positive control is only evidence if the
+  // layout it installs is genuinely misaligned; if a future schema
+  // change makes these two lines benign again, this copy FAILS TO
+  // ELABORATE instead of running and proving nothing.
+  //
+  // `--lint-only` does not execute `initial` blocks, so a clean lint says
+  // nothing about this guard -- it fires in simulation, which is where
+  // the driver runs. Quartus 17.0 needs the check inside `initial begin`
+  // and never at module scope.
+  // synthesis translate_off
+  initial begin
+    if ((PV_SLOT_B % BURST_ALIGN_B) == 0)
+      $fatal(1, "align_mutant: PV_SLOT_B is burst-aligned, so this positive control is a NO-OP");
+  end
+  // synthesis translate_on
 """
 
 ALIGN_HEAD = """// zhao_geom_paramarena_align_mutant.sv -- A POSITIVE CONTROL, NOT A DESIGN.
