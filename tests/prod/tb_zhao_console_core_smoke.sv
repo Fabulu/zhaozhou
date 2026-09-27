@@ -10371,6 +10371,76 @@ module tb_zhao_console_core_smoke
              terr_mp_denied_o, terr_mp_cell_oob_o, terr_mp_short_fill_o,
              terr_mp_commit_busy_o, terr_mp_busy_o);
 
+    // ======================================================================
+    // I34 ACCEPTANCE CLAUSES 3 AND 4, AT THE CONSUMER -- HOISTED HERE SO THEY
+    // ACTUALLY EXECUTE (MATPUB, 2026-09-27).
+    // ======================================================================
+    // MATFIELD wrote these and they had never run. LASTGAP measured their
+    // numbers, printed them above the gate, and refused to claim they passed.
+    // This is where they execute: ABOVE the fragment-tag gate and ABOVE the
+    // sample gate, which are the two that stop the positive form.
+    //
+    // THE TWO-SIDED PROPERTY IS PRESERVED, and it is the thing that makes this
+    // evidence rather than two numbers. The SAME instrument -- the tile index
+    // recovered by subtraction from the ADDRESS the texture island issued on
+    // its fill requests -- is asserted in OPPOSITE directions: strictly ABOVE
+    // the authored range in the covered form, and at-or-below it in the
+    // uncovered form and in every no-field form. Either arm alone could pass
+    // for a reason that has nothing to do with the field.
+    //
+    // THE GUARDS ARE CARRIED WITH THE ARMS, not left behind. `palette_lookups
+    // != 0` is what means "a terrain fragment actually sampled CLUT" -- gating
+    // on `tsfill_lines_q > 0` bare fails `-TerrainFlatLattice` correctly, and
+    // gating on `mat_win_clut_owned_o` does not work either because the span is
+    // resolved at the door before the clip culls the triangles behind it. And
+    // `tile_max != 0` is the anti-vacuity half: an unwired mosaic reader
+    // displaces by ZERO, so every fill would land in tile 0.
+    if (render_texture_palette_lookups_o != 32'd0) begin
+      if (tsfill_tile_max_q == 32'd0)
+        $fatal(1, "SMOKE: every tileset fill landed in TILE 0 -- the mosaic pick is not reaching the binding resolver's displacement");
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+  `ifdef ZHAO_SMOKE_FIELD_UNCOVERED
+      // CLAUSE 5, AT THIS INSTRUMENT. The capsule installed, the microcode
+      // loaded, the hash committed, the record banked and resolved -- and the
+      // footprint contains no vertex, so every cell must still be AUTHORED.
+      if (tsfill_tile_max_q > 32'(TERR_AUTHORED_TILE_MAX_C))
+        $fatal(1, "SMOKE: -FieldUncovered fetched mosaic tile %0d and the AUTHORED layer-E plane can name at most %0d -- the field covers no vertex in this form, so no field material may reach the mosaic. A tile above the authored range here means coverage is not what gates the material write",
+               tsfill_tile_max_q, 32'(TERR_AUTHORED_TILE_MAX_C));
+      $display("SMOKE: fieldmat CLAUSE 5 EXECUTED tile_max=%0d (authored range tops out at %0d) field_composed=%0d token_refused=%0d",
+               tsfill_tile_max_q, TERR_AUTHORED_TILE_MAX_C,
+               terr_mj_field_composed_o, terr_mj_token_refused_o);
+  `else
+      // CLAUSE 3, POSITIVE. The tile the island fetched is one the authored
+      // plane CANNOT name. Not "differs from 6" -- strictly above the whole
+      // authored range, which is the statement the layouts support.
+      if (tsfill_tile_max_q <= 32'(TERR_AUTHORED_TILE_MAX_C))
+        $fatal(1, "SMOKE: -FieldActive fetched mosaic tile %0d, which is inside the AUTHORED layer-E range (max %0d). The field's material never displaced the pick: either TERRAIN.MATJOIN did not override the authored triple, or the override did not survive to the mosaic. field_composed=%0d token_refused=%0d",
+               tsfill_tile_max_q, TERR_AUTHORED_TILE_MAX_C,
+               terr_mj_field_composed_o, terr_mj_token_refused_o);
+      // CLAUSE 4. And it is not merely "not authored" -- it is EXACTLY one of
+      // the two candidate ids the staged program emits. A stuck bus, a
+      // truncated token or a displaced-by-garbage pick would land somewhere
+      // else and pass the test above.
+      if ((tsfill_tile_max_q != 32'(SFF_MAT_A)) && (tsfill_tile_max_q != 32'(SFF_MAT_B)))
+        $fatal(1, "SMOKE: -FieldActive fetched mosaic tile %0d and the staged field program can only name %0d or %0d -- the word reaching the mosaic is not this field's material",
+               tsfill_tile_max_q, SFF_MAT_A, SFF_MAT_B);
+      $display("SMOKE: fieldmat CLAUSE 3/4 EXECUTED tile_max=%0d tile_or=%0d (field names %0d/%0d, authored range tops out at %0d) field_composed=%0d token_refused=%0d",
+               tsfill_tile_max_q, tsfill_tile_or_q, SFF_MAT_A, SFF_MAT_B,
+               TERR_AUTHORED_TILE_MAX_C, terr_mj_field_composed_o, terr_mj_token_refused_o);
+  `endif
+`else
+      // CLAUSE 6, AT THIS INSTRUMENT. No field is issued in any other form, so
+      // every tile the mosaic fetches must be an authored one. This is the arm
+      // that makes the positive assertion above mean something: it says the
+      // console does not wander above the authored range on its own.
+      if (tsfill_tile_max_q > 32'(TERR_AUTHORED_TILE_MAX_C))
+        $fatal(1, "SMOKE: mosaic tile %0d exceeds the AUTHORED layer-E maximum %0d with NO field issued in this form -- the pick is reading something other than the authored plane",
+               tsfill_tile_max_q, 32'(TERR_AUTHORED_TILE_MAX_C));
+      $display("SMOKE: fieldmat CLAUSE 6 EXECUTED tile_max=%0d (authored range tops out at %0d)",
+               tsfill_tile_max_q, TERR_AUTHORED_TILE_MAX_C);
+`endif
+    end
+
     mpb_q_frag_b  = render_texture_fragments_o;
     mpb_q_samp_b  = render_texture_samples_o;
     mpb_q_gfrag_b = gather_fragments_o;
@@ -11273,44 +11343,34 @@ module tb_zhao_console_core_smoke
       // construction, and `compiler/tests/material_program.test.ts` fails if a
       // later edit to EITHER side destroys that -- so neither half of this law
       // is a literal somebody copied out of a passing run.
-`ifdef ZHAO_SMOKE_FIELD_ACTIVE
-  `ifdef ZHAO_SMOKE_FIELD_UNCOVERED
-      // CLAUSE 5, AT THIS INSTRUMENT. The capsule installed, the microcode
-      // loaded, the hash committed, the record banked and resolved -- and the
-      // footprint contains no vertex, so every cell must still be AUTHORED.
-      // This is the same number the plain run produces, and it is what makes
-      // the covered form's moved tile attributable to the field.
-      if (tsfill_tile_max_q > 32'(TERR_AUTHORED_TILE_MAX_C))
-        $fatal(1, "SMOKE: -FieldUncovered fetched mosaic tile %0d and the AUTHORED layer-E plane can name at most %0d -- the field covers no vertex in this form, so no field material may reach the mosaic. A tile above the authored range here means coverage is not what gates the material write",
-               tsfill_tile_max_q, 32'(TERR_AUTHORED_TILE_MAX_C));
-  `else
-      // CLAUSE 3, POSITIVE. The tile the island fetched is one the authored
-      // plane CANNOT name. Not "differs from 6" -- strictly above the whole
-      // authored range, which is the statement the layouts support.
-      if (tsfill_tile_max_q <= 32'(TERR_AUTHORED_TILE_MAX_C))
-        $fatal(1, "SMOKE: -FieldActive fetched mosaic tile %0d, which is inside the AUTHORED layer-E range (max %0d). The field's material never displaced the pick: either TERRAIN.MATJOIN did not override the authored triple, or the override did not survive to the mosaic. field_composed=%0d token_refused=%0d",
-               tsfill_tile_max_q, TERR_AUTHORED_TILE_MAX_C,
-               terr_mj_field_composed_o, terr_mj_token_refused_o);
-      // CLAUSE 4. And it is not merely "not authored" -- it is EXACTLY one of
-      // the two candidate ids the staged program emits. A stuck bus, a
-      // truncated token or a displaced-by-garbage pick would land somewhere
-      // else and pass the test above.
-      if ((tsfill_tile_max_q != 32'(SFF_MAT_A)) && (tsfill_tile_max_q != 32'(SFF_MAT_B)))
-        $fatal(1, "SMOKE: -FieldActive fetched mosaic tile %0d and the staged field program can only name %0d or %0d -- the word reaching the mosaic is not this field's material",
-               tsfill_tile_max_q, SFF_MAT_A, SFF_MAT_B);
-      $display("SMOKE: fieldmat CLAUSE 3/4 tile_max=%0d tile_or=%0d (field names %0d/%0d, authored range tops out at %0d) field_composed=%0d token_refused=%0d",
-               tsfill_tile_max_q, tsfill_tile_or_q, SFF_MAT_A, SFF_MAT_B,
-               TERR_AUTHORED_TILE_MAX_C, terr_mj_field_composed_o, terr_mj_token_refused_o);
-  `endif
-`else
-      // CLAUSE 6, AT THIS INSTRUMENT. No field is issued in any other form, so
-      // every tile the mosaic fetches must be an authored one. This is the arm
-      // that makes the positive assertion above mean something: it says the
-      // console does not wander above the authored range on its own.
-      if (tsfill_tile_max_q > 32'(TERR_AUTHORED_TILE_MAX_C))
-        $fatal(1, "SMOKE: mosaic tile %0d exceeds the AUTHORED layer-E maximum %0d with NO field issued in this form -- the pick is reading something other than the authored plane",
-               tsfill_tile_max_q, 32'(TERR_AUTHORED_TILE_MAX_C));
-`endif
+      // ================================================================
+      // THE THREE ARMS OF THAT LAW HAVE MOVED UP, AND THE MOVE IS THE WHOLE
+      // POINT (MATPUB, 2026-09-27).
+      // ================================================================
+      // They are now in the early-diag block, above the fragment-tag gate and
+      // above the sample gate. They are NOT duplicated here: a copied
+      // assertion is two things to keep in step, and this file already
+      // carries a chapter about copies going stale in the flattering
+      // direction.
+      //
+      // WHY THEY MOVED. MATFIELD committed the clause-3 and clause-4 arms and
+      // they had NEVER EXECUTED in any run, in either packet that owned them
+      // -- `-FieldActive` stopped ~780 lines above this point, so the two
+      // assertions that decide the owner's acceptance were dead text.
+      // LASTGAP measured the numbers they assert on, printed them, and
+      // explicitly REFUSED to claim they passed: "a number printed above a
+      // gate is not an assertion executed." That refusal was right, and the
+      // repair for it is to move the assertion, not to quote the number.
+      //
+      // MOVING AN ASSERTION IS ONLY HONEST IF ITS SUBJECT IS ALREADY FINAL,
+      // so that is the thing to check rather than the line number.
+      // `tsfill_tile_max_q`, `tsfill_tile_or_q` and
+      // `render_texture_palette_lookups_o` are all accumulated by the fill
+      // socket during the frame and are complete before ANY of these gates
+      // run -- the early-diag block already printed all three, which is how
+      // LASTGAP could read them there. Nothing between the two sites can
+      // change them. So this is the same assertion on the same values,
+      // executed earlier; it is not a weakened one.
     end else if (tsfill_lines_q != 32'd0) begin
       $fatal(1, "SMOKE: %0d cache fill(s) came out of the TILESET row with NO palette lookup -- a CLUT8 row was sampled without its palette",
              tsfill_lines_q);
