@@ -1603,6 +1603,19 @@ module zhao_console_board
   output logic [31:0] geom_tw_stall_o,
   output logic [31:0] geom_tw_overlap_o,
   output logic [31:0] geom_tw_door_o,
+  // ---- THE WALKED MATSTATE'S HOLD (TAGPHASE, 2026-09-27) -----------------
+  // `zhao_walk_meta_hold`'s two interlock counters, at the boundary for the
+  // same reason `geom_tw_door_o` is: a guard on a join that was MEASURED
+  // defective is worth reading, and a counter only a hierarchical bench probe
+  // can reach is a counter nobody will check again.
+  //
+  // Both are zero on a healthy sweep and BOTH ARE REACHABLE -- unlike
+  // `geom_tw_overlap_o` two lines above, whose guard ANDs `tstate_q != T_TAKE`
+  // with a `t_ready_o` that contains `tstate_q == T_TAKE` and therefore cannot
+  // fire at all. `walk_meta_hold_directed` cases 4 and 5 move these two with
+  // ordinary stimulus, no mutant required.
+  output logic [31:0] geom_wmh_job_unheld_o,
+  output logic [31:0] geom_wmh_overwrite_o,
   // ---- I55's PHASE INTERLOCK (PHASEFIX, 2026-09-27) ----------------------
   // `zhao_post_lease`'s WALK GATE, brought to the boundary for the same
   // reason `geom_tw_door_o` was: the door proved the walk's JOBS arrived, and
@@ -5149,6 +5162,8 @@ module zhao_console_board
       .geom_tw_stall_o                    (geom_tw_stall_o),
       .geom_tw_overlap_o                  (geom_tw_overlap_o),
       .geom_tw_door_o                     (geom_tw_door_o),
+      .geom_wmh_job_unheld_o              (geom_wmh_job_unheld_o),
+      .geom_wmh_overwrite_o               (geom_wmh_overwrite_o),
       .geom_tw_phasehold_o                (geom_tw_phasehold_o),
       .geom_tw_phasesweeps_o              (geom_tw_phasesweeps_o),
       .geom_tw_busy_o                     (geom_tw_busy_o),

@@ -547,6 +547,12 @@ module tb_zhao_console_core_smoke
   logic [31:0] geom_tw_stall_o;
   logic [31:0] geom_tw_overlap_o;
   logic [31:0] geom_tw_door_o;
+  // TAGPHASE, 2026-09-27: `zhao_walk_meta_hold`'s two interlock counters.
+  // `dut (.*)` binds by NAME, so a core port with no net here is an
+  // elaboration error rather than a silent miss -- which is the way round
+  // this bench wants it.
+  logic [31:0] geom_wmh_job_unheld_o;
+  logic [31:0] geom_wmh_overwrite_o;
   // I55's PHASE INTERLOCK (PHASEFIX). `phasehold` is CLOCKS the post phase was
   // held shut waiting for the sweep; `phasesweeps` is sweeps that completed
   // under the hold. Read together they separate the two faults nothing else in
@@ -10702,6 +10708,61 @@ module tb_zhao_console_core_smoke
       if (t < int'(tg3_c_q))
         $display("SMOKE: early-diag tagphase3 badjob[%0d] ordinal=%0d valid=%0b sampcnt=%0d tag=%02h fragstate=%08h pw_t_valid=%0b",
                  t, tg3_ord_q[t], tg3_val_q[t], tg3_samp_q[t], tg3_tag_q[t], tg3_st_q[t], tg3_pwv_q[t]);
+
+    // ======================================================================
+    // THE WALKED MATSTATE IS THE TRIANGLE'S OWN (TAGPHASE, 2026-09-27)
+    // ======================================================================
+    // Hoisted here with the rest, ABOVE the fragment-tag gate and the sample
+    // gate, so it survives a run that stops on either.
+    //
+    // WHAT THIS ASSERTS AND WHY IT IS NOT VACUOUS. At GEOM_WALK_RASTER = 1 the
+    // door read the job's 378 bits of material state COMBINATIONALLY from
+    // GEOM.PARAMWALK's live output bus, while GEOM.SETUP and GEOM.ATTRPACK hold
+    // the other 2,037 until the job is taken. `zhao_geom_tilewalk` releases the
+    // record in T_TAKE and offers the job in T_JOB, so the door could read A's
+    // corners with B's material state. Measured before the repair:
+    //
+    //   tagphase3 jobs=101 walk_bus_idle=60 ms_invalid=3 ms_zero_sample=5
+    //             ms_nonzero_tag=4
+    //
+    // `walk_bus_idle` IS THE PREMISE AND IS DELIBERATELY NOT ASSERTED ZERO.
+    // It counts job accepts at which the paramwalk was presenting NO record,
+    // and that is a property of the walker's own T_TAKE/T_JOB sequencing -- it
+    // is TRUE of a healthy console and asserting it away would be asserting the
+    // walk stopped walking. It is asserted NONZERO instead, because that is
+    // what makes the three lines below evidence: the matstate reads clean AT
+    // ACCEPTS WHERE THE BUS HAS NOTHING ON IT, which can only be true if
+    // something is holding it. With `walk_bus_idle` at zero these three would
+    // pass on a console that never exercised the hold at all.
+    if (geom_walk_raster_o) begin
+      if (tg3_job_n_q == 0)
+        $fatal(1, "SMOKE: the walk took NO jobs, so the matstate assertions below describe nothing");
+      if (tg3_job_nopw_q == 0)
+        $fatal(1, "SMOKE: `walk_bus_idle` is ZERO over %0d job accept(s). That is the PREMISE of the three checks below -- if the paramwalk's bus is live at every accept then a held record and a live read are indistinguishable here, and these lines stop being evidence about zhao_walk_meta_hold.",
+               tg3_job_n_q);
+      if (tg3_job_inval_q != 0)
+        $fatal(1, "SMOKE: %0d of %0d job(s) read a matstate whose VALID bit is CLEAR. zhao_ms_flat_request returns an all-zero request for those, so the triangle asks for no texture sample at all -- entry I34 clause 6's sample shortfall, and the door reading GEOM.PARAMWALK's bus instead of the held record.",
+               tg3_job_inval_q, tg3_job_n_q);
+      if (tg3_job_zs_q != 0)
+        $fatal(1, "SMOKE: %0d of %0d job(s) read a matstate with sample_count = 0. Every material this fixture uploads declares ONE sample, so a zero here is a record that is not this triangle's.",
+               tg3_job_zs_q, tg3_job_n_q);
+      if (tg3_job_tag_q != 0)
+        $fatal(1, "SMOKE: %0d of %0d job(s) read a matstate carrying a NONZERO effect tag. No record in this fixture declares one (fragment_decl bit 0 is clear in all three material records), so a tag here is a record that is not this triangle's -- and zhao_ms_tail reads EFFTAG UNGATED BY VALID, which is how it reaches a pixel.",
+               tg3_job_tag_q, tg3_job_n_q);
+      $display("SMOKE: walkmeta THE WALKED MATSTATE IS THE TRIANGLE'S OWN -- %0d job accept(s), %0d of them with GEOM.PARAMWALK PRESENTING NOTHING, and not one read an invalid record, a zero sample_count or a stray effect tag",
+               tg3_job_n_q, tg3_job_nopw_q);
+    end
+    // THE BLOCK'S OWN GUARDS. Both are zero on a healthy sweep and both are
+    // REACHABLE -- `walk_meta_hold_directed` cases 4 and 5 move them with
+    // ordinary stimulus, no mutant required. That matters here because a
+    // counter asserted zero in a console bench and never seen to move anywhere
+    // is a claim, and this console has shipped four of those in one week.
+    if (geom_wmh_job_unheld_o != 32'd0)
+      $fatal(1, "SMOKE: %0d job(s) were taken with NOTHING held. The door then read whatever GEOM.PARAMWALK's bus carried, which is entry I34 clause 6's defect exactly.",
+             geom_wmh_job_unheld_o);
+    if (geom_wmh_overwrite_o != 32'd0)
+      $fatal(1, "SMOKE: %0d record(s) were captured before the previous one was consumed by a job. zhao_geom_tilewalk's handshake is meant to be SERIAL, and this is the violation its own `overlap_o` cannot see -- that guard ANDs `tstate_q != T_TAKE` with a `t_ready_o` containing `tstate_q == T_TAKE`.",
+             geom_wmh_overwrite_o);
 
     // ---- TERRAIN.COMPOSED_MATERIAL's publisher, MATPUB 2026-09-27 ----------
     // Hoisted here with the rest: this is ABOVE both the fragment-tag gate and
