@@ -500,7 +500,7 @@ table says exactly what has a verdict and what does not.
 | plain | **PASS** | `raster pixels=2816`, `frames_admitted=1`, `mosaic tile[max/or]=[6 7]` |
 | `-TerrainFlatLattice` | **PASS** | `raster pixels=2560`; 128 terrain triangles culled, all verdict ZERO_AREA; `tileset fills=0` |
 | `-Mutant` | **PASS** (inverted) | `terr_pl_slot_overflow_o` fired 1x; `terrcf triangles=0` |
-| `-UntexMutant` | **FATAL — NOT MINE, and it is NOT in the merge gate's list** | see below |
+| `-UntexMutant` | **FATAL — NOT MINE (identical at base, MEASURED), and NOT in the merge gate's list** | see below |
 | `-BadVertex` | **NO VERDICT** — still building when I stopped | — |
 | `-NoEchoArm` | **NO VERDICT** — queued when I stopped | — |
 | `-BadTraceArm` | **NO VERDICT** — queued when I stopped | — |
@@ -556,10 +556,37 @@ that "INHERITED is the word that makes a red nobody's job":**
   modify neither `cl_in_untex_c`, nor `cl_in_refuse_c`, nor
   `GEOM_REPLAY_UNTEX_DECL`, nor the door's refusal term.
 
-**WHAT I DID NOT FINISH, declared:** a `-UntexMutant` run at base `71122893` in a
-throwaway worktree was still building when I stopped. It would have converted the
-above from an argument into a measurement. The dates and the diff are strong, but
-they are not that run, and I am not calling it measured.
+**AND IT IS NOW MEASURED, not argued.** The `-UntexMutant` run at base
+`71122893`, in a throwaway worktree, landed after the close-out and fails
+**IDENTICALLY**:
+
+```
+base 71122893   clip submitted=128 clipped=67 culled=0 setup_submitted=61
+                     (reference mesh: 16 / 2 / 0 / 14, terrain: 128 / 67 / 0 / 61)
+                MUTANT ... refused=16 (want 16) clip_submitted=128
+                           setup_submitted=61 raster_pixels=512
+                [10298916000] %Fatal tb_..._smoke.sv:8166  MUTANT FAILED: 128 ...
+
+mine 662180d7   clip submitted=128 clipped=67 culled=0 setup_submitted=61
+                     (reference mesh: 16 / 2 / 0 / 14, terrain: 128 / 67 / 0 / 61)
+                MUTANT ... refused=16 (want 16) clip_submitted=128
+                           setup_submitted=61 raster_pixels=512
+                [10298916000] %Fatal tb_..._smoke.sv:8255  MUTANT FAILED: 128 ...
+```
+
+Same counts, same message, **same simulation timestamp**. The only difference is
+the assertion's line number, and it moved by exactly the lines my layer-E block
+added ABOVE it -- which identifies it as the same assertion rather than a
+coincidence.
+
+Two things follow, and the second is the one I did not expect to get for free:
+
+1. **The red is not mine**, now by measurement and not only by the dates and the
+   diff. It is CARRIAGE's, from composing the door's fourth client.
+2. **My layer-E authoring is behaviourally INVISIBLE in this form** -- identical
+   sim time and identical counts on both trees. That is a stronger statement than
+   `-TerrainFlatLattice` alone gave me about the fixture change not perturbing
+   the control set.
 
 **AND THE PART THAT MUST NOT BE LOST.** `-UntexMutant` is **not in the merge
 gate's five-form list** (`-Mutant`, `-BadVertex`, `-NoEchoArm`, `-BadTraceArm`,
