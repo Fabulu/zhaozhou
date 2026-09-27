@@ -5487,3 +5487,30 @@ it, by someone awake.
 the latest and nobody saw them, because `build/` could not configure and every
 green in sight came from a self-contained runner's own workspace. See handover
 15.39.
+
+#### All five lint reds characterised, so the next pass does not re-derive them
+
+| test | diagnostic | file kind |
+|---|---|---|
+| `lint_zhao_console_board` | `PINCONNECTEMPTY` | **production** |
+| `lint_zhao_field_host` | `PINCONNECTEMPTY` on `.rcp0_o ()` | **production** |
+| `lint_tb_procmat_acceptance` | `PINCONNECTEMPTY` | testbench |
+| `lint_tb_projshare` | `UNUSEDSIGNAL` `rf_x`, `rf_y`, `rf_w` | testbench |
+| `lint_zhao_field_doorbell_op3_alias_mutant` | `UNUSEDPARAM` `OpFh2` | mutant |
+
+**THREE OF FIVE ARE THE SAME GATE CONFLICT** -- `PINCONNECTEMPTY` on the
+`.port_o ()` form that Quartus's `PINMISSING` gate REQUIRES. They cannot be
+fixed by editing the RTL without breaking the other gate; they need the
+`-Wno-PINCONNECTEMPTY` policy decision described above. **Two are trivial
+hygiene** -- delete an unused signal and an unused parameter -- and are safe for
+anyone to take.
+
+**THE MUTANT ONE IS WORTH A SECOND LOOK RATHER THAN A DELETION.**
+`zhao_field_doorbell_op3_alias_mutant.sv` declares a parameter `OpFh2` that
+nothing uses. A committed mutant is a COPY of production, and this repository's
+own chapter says a copy goes stale in the flattering direction: the mutation
+stays intact while the body around it ages, and the control goes on passing
+while measuring a block that no longer exists. An unused parameter is exactly
+the residue that shape leaves. **Run `tools/budget/mutant_copy_drift.py` against
+it before deciding whether to delete the parameter or refresh the copy** --
+deleting it would silence the only visible symptom.
