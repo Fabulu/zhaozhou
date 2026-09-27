@@ -71,6 +71,13 @@ CLIENTS = [
     # audit is only exact if a new client joins this list in the same change
     # that creates it.
     "fpga/rtl/terrain/zhao_terrain_pageloader.sv",
+    # TERRAIN.COMPOSED_MATERIAL's publisher (MATPUB, 2026-09-27). Added at the
+    # MERGE rather than in the packet, which is one change too late -- the list
+    # above says in two places that a client joins "WITH the block" precisely so
+    # the coverage audit is exact. The gate caught the omission itself, which is
+    # what it is for: it refuses to become "a gate that skips the one file nobody
+    # added", so an unregistered client is a RED rather than a silent pass.
+    "fpga/rtl/terrain/zhao_terrain_matpub.sv",
     # TERRAIN.WRITEBACK -- the same port in the other direction. It is the first
     # guard client in the tree that READS the terrain page pool, and it has TWO
     # request/verdict pairs (the page header, then each sheet chunk), so it has
