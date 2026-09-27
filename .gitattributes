@@ -346,6 +346,27 @@ captures/** -text
 # the W4 block above.
 compiler/tests/generated/** text eol=lf
 
+# ...BUT `.zprog` IS A BINARY PROGRAM IMAGE AND THE `**` GLOB ABOVE CAUGHT IT.
+# Added 2026-09-27 (MATFIELD), with the corruption MEASURED rather than argued.
+# The rule above is right about what it names -- the emitted C++ wrappers are
+# text and are byte-compared -- but `compiler/tests/generated/` also holds the
+# serialized `.zprog` images, and `text eol=lf` means a CRLF byte PAIR in one of
+# them is collapsed to a single LF on check-in.
+#
+# The four images committed today survive only by LUCK: each contains CR bytes
+# (crater_ring 6, impact_wave 7, scorch_wash 7, wave_pool 4) and ZERO CRLF pairs,
+# so the transform happens to be a no-op. Proved with a 16-byte probe containing
+# two deliberate 0x0D 0x0A pairs: `git add` stored a 14-BYTE blob, one byte lost
+# per pair. Git does warn -- "CRLF will be replaced by LF" -- but that line is
+# identical to the one it prints for every ordinary source file, so it reads as
+# routine rather than as silent data loss.
+#
+# The symptom would have surfaced as a decode failure or a program-hash mismatch
+# in a GENERATED file, i.e. pointing at the emitter rather than at the checkout.
+# `-text` rather than `binary`, to match this file's own convention for
+# committed binary evidence a few blocks up.
+compiler/tests/generated/*.zprog -text
+
 # W3.2: form frontend corpus + AST goldens (regenerated with LF, byte-diffed
 # by the corpus test; CRLF checkout would shift byte-offset spans)
 compiler/tests/frontend/corpus/positive/*.form text eol=lf
