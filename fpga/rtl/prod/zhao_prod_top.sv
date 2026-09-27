@@ -2586,7 +2586,7 @@ module zhao_prod_top (
   logic [18-1:0] u26_publish_chunks_o;
   zhao_guard_req_t u26_guard_req_o;
   zhao_guard_rsp_t u26_guard_rsp_i;
-  assign u26_guard_rsp_i = zhao_guard_rsp_t'(u26_src[238 +: $bits(zhao_guard_rsp_t)]);
+  assign u26_guard_rsp_i = zhao_guard_rsp_t'(u26_src[259 +: $bits(zhao_guard_rsp_t)]);
   logic [64-1:0] u26_guard_wdata_o;
   logic [1-1:0] u26_guard_wvalid_o;
   logic [1-1:0] u26_guard_wlast_o;
@@ -2607,6 +2607,7 @@ module zhao_prod_top (
   logic [32-1:0] u26_view_flip_blocked_o;
   logic [32-1:0] u26_publish_blocked_o;
   logic [32-1:0] u26_addr_view_bad_o;
+  logic [32-1:0] u26_pv_narrow_o;
   logic [32-1:0] u26_burst_unaligned_o;
   logic [32-1:0] u26_scr_contend_o;
   logic [32-1:0] u26_retire_underflow_o;
@@ -2638,25 +2639,28 @@ module zhao_prod_top (
       .pv_status_i(u26_src[98 +: 8]),
       .pv_uow_i(u26_src[105 +: 32]),
       .pv_vow_i(u26_src[112 +: 32]),
-      .pv_rgba_i(u26_src[119 +: 32]),
-      .td_valid_i(u26_src[126 +: 1]),
+      .pv_r_i(u26_src[119 +: 32]),
+      .pv_g_i(u26_src[126 +: 32]),
+      .pv_b_i(u26_src[133 +: 32]),
+      .pv_alpha_i(u26_src[140 +: 32]),
+      .td_valid_i(u26_src[147 +: 1]),
       .td_ready_o(u26_td_ready_o),
-      .td_v0_i(u26_src[133 +: 16]),
-      .td_v1_i(u26_src[140 +: 16]),
-      .td_v2_i(u26_src[147 +: 16]),
-      .td_material_i(u26_src[154 +: 16]),
-      .td_raster_i(u26_src[161 +: 32]),
-      .td_source_i(u26_src[168 +: 32]),
-      .ck_valid_i(u26_src[175 +: 1]),
+      .td_v0_i(u26_src[154 +: 16]),
+      .td_v1_i(u26_src[161 +: 16]),
+      .td_v2_i(u26_src[168 +: 16]),
+      .td_material_i(u26_src[175 +: 16]),
+      .td_raster_i(u26_src[182 +: 32]),
+      .td_source_i(u26_src[189 +: 32]),
+      .ck_valid_i(u26_src[196 +: 1]),
       .ck_ready_o(u26_ck_ready_o),
-      .ck_next_i(u26_src[182 +: 32]),
-      .ck_count_i(u26_src[189 +: 16]),
-      .ck_ids_i(u26_src[196 +: 448]),
-      .lk_valid_i(u26_src[203 +: 1]),
+      .ck_next_i(u26_src[203 +: 32]),
+      .ck_count_i(u26_src[210 +: 16]),
+      .ck_ids_i(u26_src[217 +: 448]),
+      .lk_valid_i(u26_src[224 +: 1]),
       .lk_ready_o(u26_lk_ready_o),
-      .lk_index_i(u26_src[210 +: 18]),
-      .lk_next_i(u26_src[217 +: 32]),
-      .lk_count_i(u26_src[224 +: 16]),
+      .lk_index_i(u26_src[231 +: 18]),
+      .lk_next_i(u26_src[238 +: 32]),
+      .lk_count_i(u26_src[245 +: 16]),
       .pv_accept_o(u26_pv_accept_o),
       .pv_id_o(u26_pv_id_o),
       .td_accept_o(u26_td_accept_o),
@@ -2664,7 +2668,7 @@ module zhao_prod_top (
       .ck_accept_o(u26_ck_accept_o),
       .ck_alloc_id_o(u26_ck_alloc_id_o),
       .seal_fire_o(u26_seal_fire_o),
-      .scr_req_i(u26_src[231 +: 1]),
+      .scr_req_i(u26_src[252 +: 1]),
       .scr_grant_o(u26_scr_grant_o),
       .publish_valid_o(u26_publish_valid_o),
       .publish_view_o(u26_publish_view_o),
@@ -2679,9 +2683,9 @@ module zhao_prod_top (
       .guard_rsp_i(u26_guard_rsp_i),
       .guard_wdata_o(u26_guard_wdata_o),
       .guard_wvalid_o(u26_guard_wvalid_o),
-      .guard_wready_i(u26_src[245 +: 1]),
+      .guard_wready_i(u26_src[266 +: 1]),
       .guard_wlast_o(u26_guard_wlast_o),
-      .retire_words_i(u26_src[252 +: 8]),
+      .retire_words_i(u26_src[273 +: 8]),
       .verts_written_o(u26_verts_written_o),
       .tris_written_o(u26_tris_written_o),
       .chunks_written_o(u26_chunks_written_o),
@@ -2699,6 +2703,7 @@ module zhao_prod_top (
       .view_flip_blocked_o(u26_view_flip_blocked_o),
       .publish_blocked_o(u26_publish_blocked_o),
       .addr_view_bad_o(u26_addr_view_bad_o),
+      .pv_narrow_o(u26_pv_narrow_o),
       .burst_unaligned_o(u26_burst_unaligned_o),
       .scr_contend_o(u26_scr_contend_o),
       .retire_underflow_o(u26_retire_underflow_o),
@@ -2709,7 +2714,7 @@ module zhao_prod_top (
   logic u26_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u26_fold_q <= 1'b0;
-    else u26_fold_q <= u26_fold_q ^ (((^u26_seal_ready_o)) & u26_src[0]) ^ (((^u26_pb_lease_valid_o)) & u26_src[1]) ^ (((^u26_pb_wr_view_o)) & u26_src[2]) ^ (((^u26_pb_scratch_valid_o)) & u26_src[3]) ^ (((^u26_pv_ready_o)) & u26_src[4]) ^ (((^u26_td_ready_o)) & u26_src[5]) ^ (((^u26_ck_ready_o)) & u26_src[6]) ^ (((^u26_lk_ready_o)) & u26_src[7]) ^ (((^u26_pv_accept_o)) & u26_src[8]) ^ (((^u26_pv_id_o)) & u26_src[9]) ^ (((^u26_td_accept_o)) & u26_src[10]) ^ (((^u26_td_id_o)) & u26_src[11]) ^ (((^u26_ck_accept_o)) & u26_src[12]) ^ (((^u26_ck_alloc_id_o)) & u26_src[13]) ^ (((^u26_seal_fire_o)) & u26_src[14]) ^ (((^u26_scr_grant_o)) & u26_src[15]) ^ (((^u26_publish_valid_o)) & u26_src[16]) ^ (((^u26_publish_view_o)) & u26_src[17]) ^ (((^u26_publish_gen_o)) & u26_src[18]) ^ (((^u26_publish_vert_base_o)) & u26_src[19]) ^ (((^u26_publish_tri_base_o)) & u26_src[20]) ^ (((^u26_publish_chunk_base_o)) & u26_src[21]) ^ (((^u26_publish_verts_o)) & u26_src[22]) ^ (((^u26_publish_tris_o)) & u26_src[23]) ^ (((^u26_publish_chunks_o)) & u26_src[24]) ^ (((^u26_guard_req_o)) & u26_src[25]) ^ (((^u26_guard_wdata_o)) & u26_src[26]) ^ (((^u26_guard_wvalid_o)) & u26_src[27]) ^ (((^u26_guard_wlast_o)) & u26_src[28]) ^ (((^u26_verts_written_o)) & u26_src[29]) ^ (((^u26_tris_written_o)) & u26_src[30]) ^ (((^u26_chunks_written_o)) & u26_src[31]) ^ (((^u26_links_written_o)) & u26_src[32]) ^ (((^u26_link_illegal_o)) & u26_src[33]) ^ (((^u26_frames_published_o)) & u26_src[34]) ^ (((^u26_guard_denied_o)) & u26_src[35]) ^ (((^u26_quota_overflow_o)) & u26_src[36]) ^ (((^u26_q_giant_refs_o)) & u26_src[37]) ^ (((^u26_q_giant_chunks_o)) & u26_src[38]) ^ (((^u26_giant_reserve_breach_o)) & u26_src[39]) ^ (((^u26_records_discarded_o)) & u26_src[40]) ^ (((^u26_records_unsealed_o)) & u26_src[41]) ^ (((^u26_arena_overrun_o)) & u26_src[42]) ^ (((^u26_view_flip_blocked_o)) & u26_src[43]) ^ (((^u26_publish_blocked_o)) & u26_src[44]) ^ (((^u26_addr_view_bad_o)) & u26_src[45]) ^ (((^u26_burst_unaligned_o)) & u26_src[46]) ^ (((^u26_scr_contend_o)) & u26_src[47]) ^ (((^u26_retire_underflow_o)) & u26_src[48]) ^ (((^u26_fault_source_o)) & u26_src[49]) ^ (((^u26_frame_fault_o)) & u26_src[50]) ^ (((^u26_busy_o)) & u26_src[51]);
+    else u26_fold_q <= u26_fold_q ^ (((^u26_seal_ready_o)) & u26_src[0]) ^ (((^u26_pb_lease_valid_o)) & u26_src[1]) ^ (((^u26_pb_wr_view_o)) & u26_src[2]) ^ (((^u26_pb_scratch_valid_o)) & u26_src[3]) ^ (((^u26_pv_ready_o)) & u26_src[4]) ^ (((^u26_td_ready_o)) & u26_src[5]) ^ (((^u26_ck_ready_o)) & u26_src[6]) ^ (((^u26_lk_ready_o)) & u26_src[7]) ^ (((^u26_pv_accept_o)) & u26_src[8]) ^ (((^u26_pv_id_o)) & u26_src[9]) ^ (((^u26_td_accept_o)) & u26_src[10]) ^ (((^u26_td_id_o)) & u26_src[11]) ^ (((^u26_ck_accept_o)) & u26_src[12]) ^ (((^u26_ck_alloc_id_o)) & u26_src[13]) ^ (((^u26_seal_fire_o)) & u26_src[14]) ^ (((^u26_scr_grant_o)) & u26_src[15]) ^ (((^u26_publish_valid_o)) & u26_src[16]) ^ (((^u26_publish_view_o)) & u26_src[17]) ^ (((^u26_publish_gen_o)) & u26_src[18]) ^ (((^u26_publish_vert_base_o)) & u26_src[19]) ^ (((^u26_publish_tri_base_o)) & u26_src[20]) ^ (((^u26_publish_chunk_base_o)) & u26_src[21]) ^ (((^u26_publish_verts_o)) & u26_src[22]) ^ (((^u26_publish_tris_o)) & u26_src[23]) ^ (((^u26_publish_chunks_o)) & u26_src[24]) ^ (((^u26_guard_req_o)) & u26_src[25]) ^ (((^u26_guard_wdata_o)) & u26_src[26]) ^ (((^u26_guard_wvalid_o)) & u26_src[27]) ^ (((^u26_guard_wlast_o)) & u26_src[28]) ^ (((^u26_verts_written_o)) & u26_src[29]) ^ (((^u26_tris_written_o)) & u26_src[30]) ^ (((^u26_chunks_written_o)) & u26_src[31]) ^ (((^u26_links_written_o)) & u26_src[32]) ^ (((^u26_link_illegal_o)) & u26_src[33]) ^ (((^u26_frames_published_o)) & u26_src[34]) ^ (((^u26_guard_denied_o)) & u26_src[35]) ^ (((^u26_quota_overflow_o)) & u26_src[36]) ^ (((^u26_q_giant_refs_o)) & u26_src[37]) ^ (((^u26_q_giant_chunks_o)) & u26_src[38]) ^ (((^u26_giant_reserve_breach_o)) & u26_src[39]) ^ (((^u26_records_discarded_o)) & u26_src[40]) ^ (((^u26_records_unsealed_o)) & u26_src[41]) ^ (((^u26_arena_overrun_o)) & u26_src[42]) ^ (((^u26_view_flip_blocked_o)) & u26_src[43]) ^ (((^u26_publish_blocked_o)) & u26_src[44]) ^ (((^u26_addr_view_bad_o)) & u26_src[45]) ^ (((^u26_pv_narrow_o)) & u26_src[46]) ^ (((^u26_burst_unaligned_o)) & u26_src[47]) ^ (((^u26_scr_contend_o)) & u26_src[48]) ^ (((^u26_retire_underflow_o)) & u26_src[49]) ^ (((^u26_fault_source_o)) & u26_src[50]) ^ (((^u26_frame_fault_o)) & u26_src[51]) ^ (((^u26_busy_o)) & u26_src[52]);
 
   // ---- zhao_geom_paramwalk ----
   logic [63:0] u27_lfsr_q;
@@ -3531,7 +3536,10 @@ module zhao_prod_top (
   logic [8-1:0] u38_pv_status_o;
   logic signed [32-1:0] u38_pv_uow_o;
   logic signed [32-1:0] u38_pv_vow_o;
-  logic [32-1:0] u38_pv_rgba_o;
+  logic signed [32-1:0] u38_pv_r_o;
+  logic signed [32-1:0] u38_pv_g_o;
+  logic signed [32-1:0] u38_pv_b_o;
+  logic signed [32-1:0] u38_pv_alpha_o;
   logic [1-1:0] u38_td_valid_o;
   logic [16-1:0] u38_td_v0_o;
   logic [16-1:0] u38_td_v1_o;
@@ -3586,7 +3594,10 @@ module zhao_prod_top (
       .pv_status_o(u38_pv_status_o),
       .pv_uow_o(u38_pv_uow_o),
       .pv_vow_o(u38_pv_vow_o),
-      .pv_rgba_o(u38_pv_rgba_o),
+      .pv_r_o(u38_pv_r_o),
+      .pv_g_o(u38_pv_g_o),
+      .pv_b_o(u38_pv_b_o),
+      .pv_alpha_o(u38_pv_alpha_o),
       .pv_accept_i(u38_src[140 +: 1]),
       .pv_id_i(u38_src[147 +: 18]),
       .td_valid_o(u38_td_valid_o),
@@ -3619,7 +3630,7 @@ module zhao_prod_top (
   logic u38_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u38_fold_q <= 1'b0;
-    else u38_fold_q <= u38_fold_q ^ (((^u38_tri_ready_o)) & u38_src[0]) ^ (((^u38_pv_valid_o)) & u38_src[1]) ^ (((^u38_pv_x_o)) & u38_src[2]) ^ (((^u38_pv_y_o)) & u38_src[3]) ^ (((^u38_pv_invw_o)) & u38_src[4]) ^ (((^u38_pv_status_o)) & u38_src[5]) ^ (((^u38_pv_uow_o)) & u38_src[6]) ^ (((^u38_pv_vow_o)) & u38_src[7]) ^ (((^u38_pv_rgba_o)) & u38_src[8]) ^ (((^u38_td_valid_o)) & u38_src[9]) ^ (((^u38_td_v0_o)) & u38_src[10]) ^ (((^u38_td_v1_o)) & u38_src[11]) ^ (((^u38_td_v2_o)) & u38_src[12]) ^ (((^u38_td_material_o)) & u38_src[13]) ^ (((^u38_td_raster_o)) & u38_src[14]) ^ (((^u38_td_source_o)) & u38_src[15]) ^ (((^u38_tri_id_valid_o)) & u38_src[16]) ^ (((^u38_tri_id_o)) & u38_src[17]) ^ (((^u38_tri_id_retire_o)) & u38_src[18]) ^ (((^u38_vid_tris_o)) & u38_src[19]) ^ (((^u38_vid_refs_o)) & u38_src[20]) ^ (((^u38_vid_published_o)) & u38_src[21]) ^ (((^u38_vid_reused_o)) & u38_src[22]) ^ (((^u38_vid_unshared_o)) & u38_src[23]) ^ (((^u38_vid_opens_o)) & u38_src[24]) ^ (((^u38_vid_sunk_o)) & u38_src[25]) ^ (((^u38_vid_index_oob_o)) & u38_src[26]) ^ (((^u38_vid_key_split_o)) & u38_src[27]) ^ (((^u38_vid_id_unnameable_o)) & u38_src[28]) ^ (((^u38_vid_seal_abort_o)) & u38_src[29]) ^ (((^u38_vid_stall_o)) & u38_src[30]) ^ (((^u38_busy_o)) & u38_src[31]);
+    else u38_fold_q <= u38_fold_q ^ (((^u38_tri_ready_o)) & u38_src[0]) ^ (((^u38_pv_valid_o)) & u38_src[1]) ^ (((^u38_pv_x_o)) & u38_src[2]) ^ (((^u38_pv_y_o)) & u38_src[3]) ^ (((^u38_pv_invw_o)) & u38_src[4]) ^ (((^u38_pv_status_o)) & u38_src[5]) ^ (((^u38_pv_uow_o)) & u38_src[6]) ^ (((^u38_pv_vow_o)) & u38_src[7]) ^ (((^u38_pv_r_o)) & u38_src[8]) ^ (((^u38_pv_g_o)) & u38_src[9]) ^ (((^u38_pv_b_o)) & u38_src[10]) ^ (((^u38_pv_alpha_o)) & u38_src[11]) ^ (((^u38_td_valid_o)) & u38_src[12]) ^ (((^u38_td_v0_o)) & u38_src[13]) ^ (((^u38_td_v1_o)) & u38_src[14]) ^ (((^u38_td_v2_o)) & u38_src[15]) ^ (((^u38_td_material_o)) & u38_src[16]) ^ (((^u38_td_raster_o)) & u38_src[17]) ^ (((^u38_td_source_o)) & u38_src[18]) ^ (((^u38_tri_id_valid_o)) & u38_src[19]) ^ (((^u38_tri_id_o)) & u38_src[20]) ^ (((^u38_tri_id_retire_o)) & u38_src[21]) ^ (((^u38_vid_tris_o)) & u38_src[22]) ^ (((^u38_vid_refs_o)) & u38_src[23]) ^ (((^u38_vid_published_o)) & u38_src[24]) ^ (((^u38_vid_reused_o)) & u38_src[25]) ^ (((^u38_vid_unshared_o)) & u38_src[26]) ^ (((^u38_vid_opens_o)) & u38_src[27]) ^ (((^u38_vid_sunk_o)) & u38_src[28]) ^ (((^u38_vid_index_oob_o)) & u38_src[29]) ^ (((^u38_vid_key_split_o)) & u38_src[30]) ^ (((^u38_vid_id_unnameable_o)) & u38_src[31]) ^ (((^u38_vid_seal_abort_o)) & u38_src[32]) ^ (((^u38_vid_stall_o)) & u38_src[33]) ^ (((^u38_busy_o)) & u38_src[34]);
 
   // ---- zhao_host_reg_hist ----
   logic [63:0] u39_lfsr_q;

@@ -181,6 +181,15 @@ amend record schemas. The amendment:
                             record is one corner's own vertex
     [7:4]  reserved, written 0. Nonzero is a malformed record.
 
+**AND AS OF SCHEMA v2 BOTH OF THOSE RULES HAVE A DETECTOR** (2026-09-27).
+They were written here and enforced nowhere. `zhao_geom_parambuf`'s
+`pv_illegal_o` now asserts on a nonzero `[7:4]` **and** on the reserved domain
+3, counted by `pv_illegal_count_o`, and `geom_parambuf_directed` fires both
+with legal stimulus rather than quoting the counter at zero. The port used to
+carry the s21 rule, which v2 made unreachable on the decode side by storing
+x and y in 21 bits; the refusal moved to `zhao_geom_paramarena.pv_narrow_o`
+and the port gained the laws it could actually still see.
+
 The byte deliberately does **not** carry the near-plane `behind` bit: post-clip
 it is zero for every accepted triangle by construction, and a field that can
 never be set is a lie that reads like evidence.
@@ -192,17 +201,37 @@ they cannot here, because the declaration is per producer arm
 identities never span arms. A counter whose two operands are the same constant
 is the shape this repository has been caught building four times.
 
-## The colour law is cited, not chosen
+## The colour law is cited, not chosen — AND AS OF SCHEMA v2 IT IS NOT APPLIED HERE
 
-Lit channels arrive as fx16 (1.0 = `0x1_0000`) in 32-bit slots; R7's record
-holds `rgba8 u32`. `zref::unit8_from_fx16` is the published conversion —
-negative → 0, above `0xFFFF` → 255, otherwise `(v + 128) >> 8` with a 255 rail
-(the Review C2 clamp that stops a ~1.0 weight wrapping to 0). The RTL implements
-exactly that and the directed test differences every channel against an
-independent transcription of it.
+Lit channels arrive as fx16 (1.0 = `0x1_0000`) in 32-bit slots.
+`zref::unit8_from_fx16` is the published conversion — negative → 0, above
+`0xFFFF` → 255, otherwise `(v + 128) >> 8` with a 255 rail (the Review C2 clamp
+that stops a ~1.0 weight wrapping to 0). **Byte order is declared:**
+`rgba8 = { a, b, g, r }`, r in the low byte, LSB-first like every other packing
+in this subsystem. None of that changed.
 
-**Byte order is declared:** `rgba8 = { a, b, g, r }`, r in the low byte,
-LSB-first like every other packing in this subsystem.
+**WHAT CHANGED IS WHERE IT HAPPENS, 2026-09-27 (packet PVSCHEMA).** This block
+used to apply that conversion on the way *in*, publishing `pv_rgba_o`, and
+**that single assignment was the arena record's precision floor.**
+`zhao_geom_attrpack` builds owner ruling R234 D1's three Gouraud planes from
+the **full 32-bit slots**, so eight bits per channel meant the planes were not
+reconstructible from the record by any back end — console entry `I55`'s real
+blocker, and a record problem rather than an architecture one.
+
+`ProjectedVertex` **schema v2** stores the three channels and alpha at full
+precision, so this block now publishes `pv_r_o`, `pv_g_o`, `pv_b_o` and
+`pv_alpha_o` — **the slots unchanged, not a conversion**. The 8-bit view is
+derived on the way *out*, in `zhao_geom_parambuf`.
+
+**The law was MOVED, not copied.** `zhao_unit8_of_fx16` now lives in
+`zhao_pkg`, so the decoder and this block's history are two *instances* of one
+law rather than two *expressions* of it — the failure `GEOM.LIGHT`'s contract
+and CLAUDE.md's sibling-contract rule exist to refuse.
+
+**The measurement that made s22 alpha safe** was taken here: across all four
+attribute-packet producers — `zhao_geom_vattr`, `zhao_terrain_clipfeed`,
+`zhao_part_clipfeed` and `zhao_forge_assemble` — no colour or alpha constant in
+the tree exceeds `0x1_0000`, seventeen bits.
 
 ## What the records still cannot carry, stated rather than absorbed
 

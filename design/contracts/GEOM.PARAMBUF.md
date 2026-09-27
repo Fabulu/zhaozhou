@@ -41,14 +41,74 @@ choose the design.
 
 ## Input and output packet layouts
 
-### `ProjectedVertex` — 24 bytes
+### `ProjectedVertex` — 32 bytes, **SCHEMA v2**
 
-    screen_x    s32   legal range s21
-    screen_y    s32   legal range s21
-    invw24 + status byte      (u24 depth, u8 status, one word)
-    u_over_w    s32
-    v_over_w    s32
-    rgba8       u32
+**Amended 2026-09-27 (packet PVSCHEMA) under directive §4**, which grants the
+architect authority to amend record schemas and requires *"a versioned
+extension or immutable sidecar keyed by the same identity"* rather than
+silently overloading a field. Decision record:
+`reports/DECISION-20260927-PROJECTEDVERTEX-V2.md`.
+
+    bit  0  +21  screen_x    s21   the domain the hardware already refuses
+    bit 21  +21  screen_y    s21     outside of -- declared, not truncated
+    bit 42  +24  invw24      u24
+    bit 66  + 8  status      u8    [3:0] per GEOM.VERTID.md; [7:4] reserved 0
+    bit 74  +32  u_over_w    s32
+    bit106  +32  v_over_w    s32
+    bit138  +32  gouraud_r   s32   R234 D1, stored EXACTLY
+    bit170  +32  gouraud_g   s32
+    bit202  +32  gouraud_b   s32
+    bit234  +22  alpha       s22
+    ------------------------------
+    256 bits = 32 bytes exactly
+
+**The layout is declared ONCE**, in `fpga/rtl/common/zhao_pkg.sv` as
+`ZHAO_PV_*_LO` / `ZHAO_PV_*_W`, and both `zhao_geom_paramarena` (encode) and
+`zhao_geom_parambuf` (decode) derive from it. Before v2 they were two
+hand-maintained inverses whose only guarantee was a comment.
+
+#### WHY v1 COULD NOT STAND
+
+v1 stored colour as `rgba8 u32` — eight bits per channel through
+`zref::unit8_from_fx16`, railed at both ends — while `zhao_geom_attrpack`
+builds its six plane equations from the **full 32-bit attribute slots** those
+channels arrive in. So the three Gouraud planes owner ruling R234 D1 added
+were **not reconstructible from the record by any back end whatever**. That is
+console entry `I55`'s real blocker, and it is a **record**, not an
+architecture — the premise five packets quoted, that the record "carries what
+those need … so the planes are RECOMPUTABLE", was false.
+
+#### `rgba8` IS NOT LOST — IT IS DERIVED
+
+R7's 8-bit view is computed on the way **out**, in `zhao_geom_parambuf`, from
+the stored channels. The conversion moved to `zhao_pkg` as
+`zhao_unit8_of_fx16` so that the decoder and `zhao_geom_vertid` are two
+**instances** of one law rather than two **expressions** of it. Byte order is
+unchanged: `{ a, b, g, r }`, r in the low byte.
+
+#### ALPHA IS s22, AND THAT IS THE ONE FIELD NARROWED BELOW ITS SLOT
+
+Alpha is the only field with no plane consumer — `zhao_geom_attrpack` waives
+slot 6 by name, its six planes being invw, u/w, v/w and the three Gouraud
+channels. So every quantity the planes are built from is stored at its full
+32-bit width and carries **no domain claim that could be wrong**, and alpha
+takes the remainder of the slot. Its entire declared domain across all four
+attribute-packet producers is `0x1_0000` — 17 bits — so s22 is that domain
+plus a sign bit plus five bits of overbright headroom.
+
+The inverse (narrow r/g/b to 17 bits, give alpha 32) was refused: it would
+make the record's one job conditional on a claim about every present and
+future producer, and `zhao_forge_assemble`'s `art_r_i` is a 32-bit port driven
+by a **named, editable owner constant**.
+
+#### THE s21 REFUSAL MOVED TO THE ENCODER
+
+x and y are now **stored** in 21 bits, so a decoded coordinate is legal by
+construction and `pv_illegal_o`'s old s21 term could never fire again. The
+refusal therefore lives at `zhao_geom_paramarena.pv_narrow_o`, the last place
+the 32-bit value exists to be judged, as a whole-frame fault. `pv_illegal_o`
+keeps its port and now enforces the two **status-byte** laws in
+`GEOM.VERTID.md`, neither of which had any detector before v2.
 
 ### `TriangleDescriptor` — 16 bytes
 
@@ -103,7 +163,7 @@ is **not** the record size.
 
 | record | size | allocation stride | why |
 |---|---|---|---|
-| `ProjectedVertex` | 24 B | **32 B** (`PV_STRIDE_B`, a knob) | 24 is not a multiple of the SDRAM's 16-byte burst-alignment quantum, so a 24-byte stride puts every **odd** vertex 8 bytes into an aligned eight-column block — where a JEDEC BL8 sequential burst wraps |
+| `ProjectedVertex` | **32 B** (v2; was 24) | **32 B** (`PV_STRIDE_B`, a knob) | 24 was not a multiple of the SDRAM's 16-byte burst-alignment quantum, so a 24-byte stride put every **odd** vertex 8 bytes into an aligned eight-column block — where a JEDEC BL8 sequential burst wraps. **Schema v2 grew the record into that stride**, so record and stride now coincide and the slack is zero |
 | `TriangleDescriptor` | 16 B | 16 B | already a multiple |
 | tile-reference chunk | 64 B | 64 B | already a multiple |
 
@@ -119,6 +179,28 @@ and the law is `spec/memory_rules.md` §5c (**provisional**).
 524,288 bytes at 65,536 vertices. The view's used footprint is **3,407,872 of
 4,194,304 bytes** — 2,097,152 vertex + 262,144 descriptor + 1,048,576 chunk —
 so R7's preferred tier still fits inside 4 MiB with the stride applied.
+
+**AND SCHEMA v2 SPENT THAT SLACK RATHER THAN ADDING TO IT — 2026-09-27.** The
+record grew 24 → 32 bytes into the eight bytes the stride had already
+allocated and skipped, so **`VERT_CAP_B` does not move, the footprint above is
+unchanged to the byte, and no region in `spec/memory_rules.md` §5c changes.**
+
+32 bytes is therefore a **ceiling, not a preference**: a 48-byte stride would
+take the used footprint to 4,456,448 against a `VIEW_SPAN` of 4,194,304 and
+does not fit, and §0 forbids reaching a fit by shrinking a declared maximum.
+
+**The one real cost is bus beats.** The vertex write goes from three 8-byte
+beats to four — 24 bytes written into a 32-byte slot becomes 32 — so SDRAM
+write traffic on the vertex arm rises **33%**: 1,704 extra bytes per frame at
+the smoke fixture's 213 vertices, 512 KiB per frame at R7's 65,536-vertex
+giant. It is unavoidable, because the bytes are the function.
+
+**A latent defect was found and guarded while doing this.**
+`zhao_geom_paramarena` derives its burst length as `m_beats_q <= 4'(PV_B / 8)`
+— an integer division that had **no elaboration guard**, in a block that
+refuses six other alignment breaches by name. A 30-byte record would have been
+allocated 32, declared 30 in `m_len_q`, and **written 24**, with no diagnostic
+anywhere. v2 is 32 bytes so it does not trip it; the guard was added anyway.
 
 **AND IT WAS NOT A PRECAUTION.** The layout before this change put
 `TRI_OFF_B` at `65,535 * 24` = 1,572,840, which is **8 mod 16**, so every

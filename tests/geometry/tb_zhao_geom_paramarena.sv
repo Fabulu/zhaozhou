@@ -142,7 +142,11 @@ module tb_zhao_geom_paramarena
     input  var logic [7:0]         pv_status_i,
     input  var logic signed [31:0] pv_uow_i,
     input  var logic signed [31:0] pv_vow_i,
-    input  var logic [31:0]        pv_rgba_i,
+    // SCHEMA v2: the three Gouraud channels at full slot width, plus alpha.
+    input  var logic signed [31:0] pv_r_i,
+    input  var logic signed [31:0] pv_g_i,
+    input  var logic signed [31:0] pv_b_i,
+    input  var logic signed [31:0] pv_alpha_i,
 
     input  var logic        td_valid_i,
     output var logic        td_ready_o,
@@ -210,6 +214,12 @@ module tb_zhao_geom_paramarena
     // THE BURST-ALIGNMENT TRIPWIRES, one per block. Named apart because the
     // two answer different questions: the arena's says its own allocator
     // computed a misaligned address, the walker's says it was HANDED one.
+    // SCHEMA v2's s21 refusal, exported so the bench can SEE IT FIRE. This
+    // is the port the console deliberately does NOT export, because there it
+    // could never move -- `zhao_geom_vertid`'s coordinates are already s21,
+    // so no console stimulus reaches the fault. Here the bench drives the
+    // 32-bit input directly, which is the only place it is reachable.
+    output var logic [31:0] arena_pv_narrow_o,
     output var logic [31:0] arena_burst_unaligned_o,
     output var logic [31:0] scr_contend_o,
     output var logic [31:0] retire_underflow_o,
@@ -561,7 +571,10 @@ module tb_zhao_geom_paramarena
       .pv_status_i(pv_status_i),
       .pv_uow_i   (pv_uow_i),
       .pv_vow_i   (pv_vow_i),
-      .pv_rgba_i  (pv_rgba_i),
+      .pv_r_i     (pv_r_i),
+      .pv_g_i     (pv_g_i),
+      .pv_b_i     (pv_b_i),
+      .pv_alpha_i (pv_alpha_i),
 
       .td_valid_i   (td_valid_i),
       .td_ready_o   (td_ready_o),
@@ -646,6 +659,7 @@ module tb_zhao_geom_paramarena
       .view_flip_blocked_o(view_flip_blocked_o),
       .publish_blocked_o  (publish_blocked_o),
       .addr_view_bad_o    (addr_view_bad_o),
+      .pv_narrow_o        (arena_pv_narrow_o),
       .burst_unaligned_o  (arena_burst_unaligned_o),
       .scr_contend_o      (scr_contend_o),
       .retire_underflow_o (retire_underflow_o),

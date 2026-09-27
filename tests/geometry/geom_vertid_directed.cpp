@@ -93,7 +93,9 @@ struct Pub {
   uint32_t invw;
   uint8_t status;
   int32_t uow, vow;
-  uint32_t rgba;
+  // SCHEMA v2: the slots as PUBLISHED, not an 8-bit-per-channel digest of
+  // them. This block no longer quantises on the way in.
+  int32_t r, g, b, alpha;
 };
 
 void ck(bool cond, const char* what);
@@ -168,7 +170,10 @@ struct Env {
       rec.status = v->pv_status_o;
       rec.uow = static_cast<int32_t>(v->pv_uow_o);
       rec.vow = static_cast<int32_t>(v->pv_vow_o);
-      rec.rgba = v->pv_rgba_o;
+      rec.r = static_cast<int32_t>(v->pv_r_o);
+      rec.g = static_cast<int32_t>(v->pv_g_o);
+      rec.b = static_cast<int32_t>(v->pv_b_o);
+      rec.alpha = static_cast<int32_t>(v->pv_alpha_o);
     }
     if (td) {
       ids[0] = v->td_v0_o;
@@ -281,12 +286,12 @@ uint8_t status_of(int domain, bool untex, bool shared) {
   return static_cast<uint8_t>((domain & 3) | (untex ? 4 : 0) | (shared ? 8 : 0));
 }
 
-uint32_t rgba_of(const Attr& a) {
-  return (static_cast<uint32_t>(unit8_from_fx16(static_cast<int32_t>(a.a))) << 24) |
-         (static_cast<uint32_t>(unit8_from_fx16(static_cast<int32_t>(a.b))) << 16) |
-         (static_cast<uint32_t>(unit8_from_fx16(static_cast<int32_t>(a.g))) << 8) |
-         static_cast<uint32_t>(unit8_from_fx16(static_cast<int32_t>(a.r)));
-}
+// `rgba_of` USED TO LIVE HERE and is gone with the quantiser it described.
+// Schema v2's producer publishes the slots unchanged, so there is no 8-bit
+// word at this block's port to predict. The packing law itself is not lost:
+// `zhao_geom_parambuf` derives rgba8 on the way out and
+// `geom_parambuf_directed` asserts it channel for channel, including this
+// file's own Review C2 rail value.
 
 // ===========================================================================
 int checks = 0;
@@ -397,19 +402,34 @@ int main() {
       ck(p.invw == (av[sv].invw & 0xFFFFFFu), "PV field: invw24");
       ck(p.uow == static_cast<int32_t>(av[sv].uow), "PV field: u_over_w");
       ck(p.vow == static_cast<int32_t>(av[sv].vow), "PV field: v_over_w");
-      ck(p.rgba == rgba_of(av[sv]),
-         "PV field: rgba8 == zref::unit8_from_fx16 per channel, r in the low byte");
+      // SCHEMA v2's producer law, and it is the one v1 could not satisfy:
+      // the attribute slots come out EXACTLY as they went in. These are the
+      // words `zhao_geom_attrpack` builds R234 D1's three Gouraud planes
+      // from, so a back end fed from the arena reproduces them bit for bit.
+      ck(p.r == static_cast<int32_t>(av[sv].r) && p.g == static_cast<int32_t>(av[sv].g) &&
+             p.b == static_cast<int32_t>(av[sv].b) && p.alpha == static_cast<int32_t>(av[sv].a),
+         "PV field: the Gouraud slots and alpha are published UNCHANGED at full "
+         "precision -- the quantiser that used to stand here was the arena "
+         "record's precision floor and entry I55's real blocker");
       ck(p.status == status_of(kDomMesh, false, true),
          "PV field: status = {0, shared_capable=1, untex=0, domain=MESH}");
     }
-    // The 0xFF80 channel is the Review C2 rail: (r+128)>>8 == 256 must clamp to
-    // 255 and not wrap to 0. Asserted explicitly so the case cannot silently
-    // stop covering it.
-    ck(unit8_from_fx16(0x0FF80) == 255, "colour: the 0xFF80 rail clamps to 255");
-    ck(((e.pubs[1].rgba >> 0) & 0xFF) == 255,
-       "colour: the RTL clamps the 0xFF80 rail too");
-    ck(((e.pubs[2].rgba >> 0) & 0xFF) == 255,
-       "colour: a channel above 1.0 saturates at 255");
+    // THE RAIL THAT v1 DESTROYED, NOW CARRIED INTACT. 0xFF80 is the Review
+    // C2 case: (r + 128) >> 8 == 256, which had to clamp to 255 rather than
+    // wrap to 0. Under v1 that clamp happened HERE, on the way into the
+    // record, so 0xFF80 and every other near-1.0 weight became the same byte
+    // and the difference was gone for good.
+    //
+    // The clamp is not deleted -- it moved to `zhao_geom_parambuf`, where the
+    // 8-bit view is derived on the way OUT, and `geom_parambuf_directed`
+    // asserts it at this exact value. What this block owes now is the
+    // opposite property: that it does NOT quantise.
+    ck(unit8_from_fx16(0x0FF80) == 255,
+       "colour: the Review C2 rail still clamps to 255 in the oracle");
+    ck(e.pubs[1].r == static_cast<int32_t>(0x0FF80),
+       "colour: and the RTL now CARRIES 0xFF80 whole instead of railing it to 255");
+    ck(e.pubs[2].r == static_cast<int32_t>(0x10001),
+       "colour: a channel above 1.0 survives too -- v1 saturated it at 255");
 
     // The descriptor's per-primitive fields are carried, not invented.
     ck(true, "descriptor fields checked below");

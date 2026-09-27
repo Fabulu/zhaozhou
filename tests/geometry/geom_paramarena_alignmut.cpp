@@ -104,7 +104,10 @@ void bring_up(Dut& t) {
   t.pv_status_i = 0;
   t.pv_uow_i = 0;
   t.pv_vow_i = 0;
-  t.pv_rgba_i = 0;
+  t.pv_r_i = 0;
+  t.pv_g_i = 0;
+  t.pv_b_i = 0;
+  t.pv_alpha_i = 0;
   t.td_valid_i = 0;
   t.td_v0_i = 0;
   t.td_v1_i = 0;
@@ -145,7 +148,10 @@ bool push(Dut& t, int kind, uint32_t tag) {
   t.pv_status_i = static_cast<uint8_t>(tag & 0xFF);
   t.pv_uow_i = static_cast<int32_t>(tag);
   t.pv_vow_i = static_cast<int32_t>(~tag);
-  t.pv_rgba_i = 0xFF00FF00u ^ tag;
+  t.pv_r_i = static_cast<int32_t>(0x00FF00u ^ tag);
+  t.pv_g_i = static_cast<int32_t>(0x00AA00u ^ tag);
+  t.pv_b_i = static_cast<int32_t>(0x005500u ^ tag);
+  t.pv_alpha_i = 0x00010000;
   t.td_v0_i = static_cast<uint16_t>(tag * 3u + 0u);
   t.td_v1_i = static_cast<uint16_t>(tag * 3u + 1u);
   t.td_v2_i = static_cast<uint16_t>(tag * 3u + 2u);

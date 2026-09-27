@@ -305,8 +305,14 @@ module zhao_geom_paramwalk
       // same record with no reader -- an uncashed cheque authored on purpose.
       .pv_valid_i (1'b0),
       .pv_bytes_i ('0),
+      // SCHEMA v2 added the three Gouraud channels at full precision and
+      // alpha. They are left empty for the same reason as the rest of this
+      // arm: nothing here reads a vertex. Named rather than `.*`-swept so a
+      // future field cannot join the tie-off silently.
       .pv_x_o (), .pv_y_o (), .pv_invw_o (), .pv_status_o (),
-      .pv_uow_o (), .pv_vow_o (), .pv_rgba_o (), .pv_illegal_o (),
+      .pv_uow_o (), .pv_vow_o (),
+      .pv_r_o (), .pv_g_o (), .pv_b_o (), .pv_alpha_o (),
+      .pv_rgba_o (), .pv_illegal_o (),
 
       .td_valid_i (dec_td_valid_c),
       .td_bytes_i (td_buf_q),
