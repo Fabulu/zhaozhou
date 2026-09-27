@@ -3881,6 +3881,15 @@ module tb_zhao_console_core_smoke
   localparam logic [7:0]  SGF_TERR_MAT_A_LO_C  = 8'd1;
   localparam logic [7:0]  SGF_TERR_MAT_B_LO_C  = 8'd5;
   localparam int unsigned TERR_MAT_SPAN_C      = 2;      // matA in 1..2, matB in 5..6
+  // The largest tile id the AUTHORED plane can name, DERIVED from the three
+  // knobs above rather than written as 6, so the clause-3 law at the mosaic
+  // moves with them. Added 2026-09-27 (MATFIELD). The max() is not decoration:
+  // nothing forces matB's range to be the higher one, and a swap would silently
+  // weaken every assertion written against this.
+  localparam int unsigned TERR_AUTHORED_TILE_MAX_C =
+      ((int'(SGF_TERR_MAT_A_LO_C) > int'(SGF_TERR_MAT_B_LO_C))
+         ? int'(SGF_TERR_MAT_A_LO_C) : int'(SGF_TERR_MAT_B_LO_C))
+      + TERR_MAT_SPAN_C - 1;
   // The weight varies per cell, which is what makes the PICK vary per cell.
   localparam logic [7:0]  SGF_TERR_WEIGHT_LO_C = 8'h30;
   localparam int unsigned TERR_WEIGHT_SPAN_C   = 160;    // 0x30 .. 0xCF
@@ -8265,18 +8274,48 @@ module tb_zhao_console_core_smoke
     // a routing fault. `zmt_tag_ok` requires `[31:24] == 8'hE1`, and the tag
     // exists precisely so an undecodable word is refused rather than silently
     // composed -- every 24-bit pattern is a LEGAL material (terrain_rules 6.2),
-    // so without it a stuck bus or an unwritten lane would render. The field
-    // program's out-lane 2 IS the token, tag included
-    // (`zref::fieldir::material_token_encode`), so a program whose ordinal 2 is
-    // a plain register value is correctly refused.
+    // so without it a stuck bus or an unwritten lane would render.
+    //
+    // THE DIAGNOSIS THIS MESSAGE USED TO GIVE IS MEASURED FALSE, and it is
+    // corrected here rather than left to send the next reader the wrong way
+    // (2026-09-27, MATFIELD). It said a refusal means "the field PROGRAM is not
+    // emitting a v1 material token on out-lane 2". The staged program DOES emit
+    // one -- `smoke_field_fixture_gen.cpp` interprets it and decodes out-lane 2
+    // with `zref::fieldir::material_token_decode` at every vertex of every
+    // candidate patch lattice, 3,267 of them, and refuses to write this fixture
+    // unless every one is a legal token.
+    //
+    // THE CAUSE IS THAT THE CONSTANT NEVER ARRIVES. `lower()` folds every
+    // literal into the plan's preload rows at physical register
+    // `scalar_base + s`, and `zhao_field_host_v2`'s register-file preload port
+    // (:1250-1256) writes ONLY zeros and the declared IN_LANES. Measured: this
+    // program's token base 0xE1D41ED0 is preload row -> REGISTER 27, and the
+    // host writes registers 0..14. So out-lane 2 arrives as the computed low
+    // byte alone, tag 0x00, and is refused -- correctly. The same hole made
+    // `wave_pool`'s smoothstep read 0 for 1.0/2.0/3.0 and its amplitude 0.
+    // The full finding, and the two candidate repairs, are in the CONSTANT POOL
+    // block of `tests/prod/smoke_field_fixture_gen.cpp`.
     if (terr_mj_field_composed_o == 32'd0)
-      $fatal(1, "SMOKE: terrmat field_composed=0 with a live TerrainField and %0d Earth run(s), token_refused=%0d -- if token_refused is NONZERO the material word REACHED the join and failed `zmt_tag_ok` ([31:24] must be 8'hE1), which means the field PROGRAM is not emitting a v1 material token on out-lane 2, not that the channel is unrouted; if it is ZERO the word never arrived at all",
+      $fatal(1, "SMOKE: terrmat field_composed=0 with a live TerrainField and %0d Earth run(s), token_refused=%0d. NONZERO token_refused means the material word REACHED the join and failed `zmt_tag_ok` ([31:24] must be 8'hE1) -- and the MEASURED cause is NOT the program: the staged program's out-lane 2 is verified a legal v1 token at every vertex by the fixture generator. It is that `lower()` folds literals into preload rows at physical register scalar_base+s and zhao_field_host_v2 never writes those registers (its preload port writes only zeros and IN_LANES), so the token BASE reads zero. See the CONSTANT POOL block in smoke_field_fixture_gen.cpp. If token_refused is ZERO instead, the word never arrived at all and THAT is a routing fault",
              fld_earth_runs_o, terr_mj_token_refused_o);
   `endif
 `endif
+    // CORRECTED 2026-09-27 (MATFIELD). This assertion is OUTSIDE the
+    // `ZHAO_SMOKE_FIELD_ACTIVE` block above and therefore live in EVERY form,
+    // but its message said "with no TerrainField issued at all" -- true only of
+    // the no-field forms. It had never been seen in a field form because the
+    // `field_composed == 0` fatal above it fired first and hid it, which is
+    // NOPROG's "a mode that fatals early leaves its tail unexercised" exactly.
+    // The check is right in both; only the diagnosis was wrong in one.
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+    if (terr_mj_token_refused_o != 32'd0)
+      $fatal(1, "SMOKE: terrmat token_refused=%0d -- a material word REACHED zhao_terrain_matjoin and failed `zmt_tag_ok` ([31:24] must be 8'hE1). The staged program's out-lane 2 is not a v1 material token for every vertex, though the fixture generator verified it for every vertex of every candidate patch with the reference decoder -- so either a different program is staged than the one that was verified, or the word is being corrupted between the adapter and the join",
+             terr_mj_token_refused_o);
+`else
     if (terr_mj_token_refused_o != 32'd0)
       $fatal(1, "SMOKE: terrmat token_refused=%0d -- a material token was offered with no TerrainField issued at all",
              terr_mj_token_refused_o);
+`endif
     // THE POSITIVE HALF, and it is the assertion that earns its place: with
     // patches served, the authored layer-E plane must still be filling. A
     // silent material plane beside working heights is precisely the regression
@@ -10012,24 +10051,37 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: -FieldUncovered wrote %0d pixels and the reference names %0d -- the field covers no vertex in this form, so the frame must be IDENTICAL to the plain run's. A difference here means the install/load/commit path perturbs the scene on its own, which would invalidate -FieldActive's evidence",
              render_pixels_o, SGF_EXP_PIXELS);
   `else
-    // THE POSITIVE FORM'S PIXEL COUNT IS REPORTED, NOT YET PINNED, and this
-    // sentence is deliberately explicit about what that does and does not buy.
+    // THE POSITIVE FORM'S PIXEL COUNT IS NOW PINNED, AND THE REASON IS THE
+    // WHOLE EXPERIMENTAL DESIGN. Changed 2026-09-27 (MATFIELD).
     //
-    // `SGF_EXP_PIXELS` is REFERENCE-DERIVED for the AUTHORED lattice, and this
-    // form's lattice is the authored one PLUS a live field's height output, so
-    // that constant does not describe this frame and asserting it would be
-    // asserting the wrong scene. The honest fix is to teach
-    // `smoke_geom_fixture_gen.cpp` to apply the same field through
-    // `zref::fieldir` / compose_lattice and emit a SECOND expectation --
-    // that is a reference-derived number, and it is the right shape.
+    // It used to be reported and not gated, with this note: "`SGF_EXP_PIXELS`
+    // is REFERENCE-DERIVED for the AUTHORED lattice, and this form's lattice is
+    // the authored one PLUS a live field's height output, so that constant does
+    // not describe this frame ... the honest fix is to teach
+    // `smoke_geom_fixture_gen.cpp` to apply the same field and emit a SECOND
+    // expectation." That was exactly right for `wave_pool`, which is a HEIGHT
+    // spell.
     //
-    // WHAT IS ALREADY ASSERTED and does not depend on this number: nonzero
-    // Earth runs, nonzero host runs, zero `out_incomplete` against a required
-    // mask of 0x0F, nonzero `field_composed`, and the control above returning
-    // to exactly 2816. The pixel count is corroboration; those are the gate.
-    $display("SMOKE: NOTE -FieldActive wrote %0d pixels against the AUTHORED-lattice reference %0d (%0d mesh tiles, %0d terrain). This number is not gated: the reference models the authored lattice and this frame's lattice carries a live field's height. The -FieldUncovered control returns to %0d, which is the comparison that says the difference is the FIELD.",
+    // The staged program is now `scorch_wash`, a MATERIAL field that writes
+    // height ZERO and velocity ZERO. `zhao_terrain_patch.sv:339` composes field
+    // height ADDITIVELY -- `acc_next = cur_covers ? zhao_tp_fx_add_sat(acc,
+    // fld_height_i) : acc` -- so adding zero at every covered vertex leaves the
+    // composed lattice BIT-IDENTICAL to the authored one. The second
+    // expectation FIELDACTIVE asked for therefore exists and is equal to the
+    // first one, by construction rather than by coincidence, and pinning it is
+    // the strongest available statement rather than a relaxation.
+    //
+    // AND IT IS WHAT MAKES THE MOSAIC-TILE EVIDENCE CLEAN. With the geometry
+    // provably unmoved, the tile the texture island fetched cannot have changed
+    // because the terrain deformed under it. There is one variable in this
+    // experiment and it is the material. CLAUDE.md: "compare like with like, or
+    // do not compare."
+    if (render_pixels_o != SGF_EXP_PIXELS)
+      $fatal(1, "SMOKE: -FieldActive wrote %0d pixels and the AUTHORED-lattice reference names %0d. The staged field writes height ZERO and terrain composes height ADDITIVELY, so the composed lattice must be bit-identical to the authored one and this frame must match the plain run exactly. A difference means the field is perturbing GEOMETRY -- which would also confound the mosaic-tile evidence for clauses 3 and 4",
+             render_pixels_o, SGF_EXP_PIXELS);
+    $display("SMOKE: NOTE -FieldActive wrote %0d pixels, EQUAL to the authored-lattice reference %0d (%0d mesh tiles, %0d terrain). The field writes zero height by design, so the geometry is unmoved and the only thing this form changes is the MATERIAL.",
              render_pixels_o, SGF_EXP_PIXELS, SGF_EXP_MESH_TILES,
-             SGF_EXP_TERR_TILES, SGF_EXP_PIXELS);
+             SGF_EXP_TERR_TILES);
   `endif
 `elsif ZHAO_SMOKE_TERRAIN_FLAT
 `else
@@ -10989,6 +11041,72 @@ module tb_zhao_console_core_smoke
       // every tileset fill would land in tile 0 and this would stay at 0.
       if (tsfill_tile_max_q == 32'd0)
         $fatal(1, "SMOKE: every tileset fill landed in TILE 0 -- the mosaic pick is not reaching the binding resolver's displacement");
+
+      // ================================================================
+      // I34 ACCEPTANCE CLAUSES 3 AND 4, AT THE CONSUMER, AS A TWO-SIDED
+      // LAW OVER THE MOSAIC TILE -- added 2026-09-27 (MATFIELD).
+      // ================================================================
+      // The owner's clauses are "the material write produces a value that
+      // CANNOT EQUAL THE AUTHORED BASELINE BY ACCIDENT" and "that composed
+      // material REACHES THE INTENDED PRODUCTION CONSUMER". `tsfill_tile_*`
+      // is the right instrument for both because it is not a cell count and
+      // not a value this bench wrote: it is derived by subtraction from the
+      // ADDRESS the texture island actually issued on its fill requests, so a
+      // tile appearing here was picked by `zhao_texture_mosaic_v2` from a
+      // layer-E triple and displaced by the binding resolver. The bench's own
+      // history at this seam is why that matters -- it records a check that
+      // passed on a constant `MAT_BASE_RGB_C = 24'hFF_FF_FF`, and `mat_cells`
+      // counting cells rather than values.
+      //
+      // THE LAW IS WRITTEN FROM THE TWO LAYOUTS, NOT FROM A MEASURED RUN.
+      // The authored layer-E plane can only ever name ids in
+      // [SGF_TERR_MAT_A_LO_C, +TERR_MAT_SPAN_C) and
+      // [SGF_TERR_MAT_B_LO_C, +TERR_MAT_SPAN_C) -- {1,2} and {5,6} today. The
+      // staged field program can only ever name SFF_MAT_A / SFF_MAT_B, which
+      // the fixture generator emits and VERIFIES by decoding the program's own
+      // out-lane 2 with `zref::fieldir::material_token_decode` at every vertex
+      // of every candidate patch lattice. The two sets are disjoint by
+      // construction, and `compiler/tests/material_program.test.ts` fails if a
+      // later edit to EITHER side destroys that -- so neither half of this law
+      // is a literal somebody copied out of a passing run.
+`ifdef ZHAO_SMOKE_FIELD_ACTIVE
+  `ifdef ZHAO_SMOKE_FIELD_UNCOVERED
+      // CLAUSE 5, AT THIS INSTRUMENT. The capsule installed, the microcode
+      // loaded, the hash committed, the record banked and resolved -- and the
+      // footprint contains no vertex, so every cell must still be AUTHORED.
+      // This is the same number the plain run produces, and it is what makes
+      // the covered form's moved tile attributable to the field.
+      if (tsfill_tile_max_q > 32'(TERR_AUTHORED_TILE_MAX_C))
+        $fatal(1, "SMOKE: -FieldUncovered fetched mosaic tile %0d and the AUTHORED layer-E plane can name at most %0d -- the field covers no vertex in this form, so no field material may reach the mosaic. A tile above the authored range here means coverage is not what gates the material write",
+               tsfill_tile_max_q, 32'(TERR_AUTHORED_TILE_MAX_C));
+  `else
+      // CLAUSE 3, POSITIVE. The tile the island fetched is one the authored
+      // plane CANNOT name. Not "differs from 6" -- strictly above the whole
+      // authored range, which is the statement the layouts support.
+      if (tsfill_tile_max_q <= 32'(TERR_AUTHORED_TILE_MAX_C))
+        $fatal(1, "SMOKE: -FieldActive fetched mosaic tile %0d, which is inside the AUTHORED layer-E range (max %0d). The field's material never displaced the pick: either TERRAIN.MATJOIN did not override the authored triple, or the override did not survive to the mosaic. field_composed=%0d token_refused=%0d",
+               tsfill_tile_max_q, TERR_AUTHORED_TILE_MAX_C,
+               terr_mj_field_composed_o, terr_mj_token_refused_o);
+      // CLAUSE 4. And it is not merely "not authored" -- it is EXACTLY one of
+      // the two candidate ids the staged program emits. A stuck bus, a
+      // truncated token or a displaced-by-garbage pick would land somewhere
+      // else and pass the test above.
+      if ((tsfill_tile_max_q != 32'(SFF_MAT_A)) && (tsfill_tile_max_q != 32'(SFF_MAT_B)))
+        $fatal(1, "SMOKE: -FieldActive fetched mosaic tile %0d and the staged field program can only name %0d or %0d -- the word reaching the mosaic is not this field's material",
+               tsfill_tile_max_q, SFF_MAT_A, SFF_MAT_B);
+      $display("SMOKE: fieldmat CLAUSE 3/4 tile_max=%0d tile_or=%0d (field names %0d/%0d, authored range tops out at %0d) field_composed=%0d token_refused=%0d",
+               tsfill_tile_max_q, tsfill_tile_or_q, SFF_MAT_A, SFF_MAT_B,
+               TERR_AUTHORED_TILE_MAX_C, terr_mj_field_composed_o, terr_mj_token_refused_o);
+  `endif
+`else
+      // CLAUSE 6, AT THIS INSTRUMENT. No field is issued in any other form, so
+      // every tile the mosaic fetches must be an authored one. This is the arm
+      // that makes the positive assertion above mean something: it says the
+      // console does not wander above the authored range on its own.
+      if (tsfill_tile_max_q > 32'(TERR_AUTHORED_TILE_MAX_C))
+        $fatal(1, "SMOKE: mosaic tile %0d exceeds the AUTHORED layer-E maximum %0d with NO field issued in this form -- the pick is reading something other than the authored plane",
+               tsfill_tile_max_q, 32'(TERR_AUTHORED_TILE_MAX_C));
+`endif
     end else if (tsfill_lines_q != 32'd0) begin
       $fatal(1, "SMOKE: %0d cache fill(s) came out of the TILESET row with NO palette lookup -- a CLUT8 row was sampled without its palette",
              tsfill_lines_q);
