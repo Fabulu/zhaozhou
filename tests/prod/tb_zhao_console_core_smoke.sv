@@ -3543,12 +3543,31 @@ module tb_zhao_console_core_smoke
       // body is written, then READY once it is sealed. CMD.SCHEDULER follows
       // the word forward-only and does not take FREE -> READY in one step.
 `ifdef ZHAO_SMOKE_FIELD_ACTIVE
-      // THE FRAME WAITS FOR THE PROGRAM. SW.STREAM stages the plan ahead of
-      // need (doorbell law 1), and this is the bench playing that. Without it
-      // the TerrainField record could reach CMD.EXEC while the capsule was
-      // still in flight over the bridge, resolve `noprog`, and present as a
-      // routing defect that is really a race in the harness.
-      if (pkt_armed_q && reset_released_q && fld_stage_done_q && (ring_writes_q == 0)) begin
+      // THE FRAME WAITS FOR THE PROGRAM TO BE *RESIDENT*, NOT FOR THE POSTS TO
+      // BE *ACCEPTED*, and the difference cost a run.
+      //
+      // The first version of this gate used `fld_stage_done_q`, which is set
+      // when the LAST POST IS TAKEN BY THE MAILBOX. But the doorbell's mailbox
+      // is a QUEUE -- its own law 1 says so, "a real queue so the HPS may stage
+      // a whole program ahead of the fabric going idle" -- so all 45 posts are
+      // accepted within about 45 cycles while the loader is still fetching
+      // 1,536 bytes over the HPS bridge, contending with terrain's page loads.
+      //
+      // The frame therefore started, CMD.EXEC lowered the TerrainField, and
+      // `zhao_terrain_fieldlist` swept the publication port BEFORE the loader
+      // sealed object 0. `pub_ready_i` was all zeros, `sw_unresolved` was true,
+      // the entry was stored with `e_res` LOW, and all 1,089 vertices came back
+      // `noprog` -- with `install_ok=1` sitting beside it, because the RETURN
+      // arrived long after the damage.
+      //
+      // ACCEPTED IS NOT COMPLETED. `fld_commit_ok_q` is latched off the COMMIT
+      // RETURN, which the doorbell only emits after the loader has answered its
+      // FH2 transaction, so it is the first signal in this bench that means the
+      // program is actually resident. Gating on it is not the bench faking a
+      // handshake: a real HPS would not submit a frame naming a program whose
+      // install it had not seen succeed.
+      if (pkt_armed_q && reset_released_q && (fld_install_ok_q != 32'd0) &&
+          (fld_commit_ok_q != 32'd0) && (ring_writes_q == 0)) begin
 `else
       if (pkt_armed_q && reset_released_q && (ring_writes_q == 0)) begin
 `endif
@@ -7778,6 +7797,15 @@ module tb_zhao_console_core_smoke
              fld_uniform_bad_o, fld_grants_o, fld_db_posts_o,
              fld_db_load_words_o, fld_db_fh2_posts_o, fld_db_addr_refused_o,
              fld_db_commits_o, fld_db_commits_refused_o);
+    // TERRAIN.FIELDLIST's OWN VERDICT ON THE RESOLVE, which is the counter that
+    // names the fault the publication-race produced. `unresolved_o` counts a
+    // record whose handle matched NO ready object during the sweep -- so it
+    // separates "the record never arrived" from "the record arrived and the
+    // program was not resident yet", and those two look identical from
+    // `fld_earth_noprog_o` alone.
+    $display("SMOKE: fldlist  records=%0d sealed=%0d unresolved=%0d tail_rejected=%0d",
+             terr_fl_records_o, terr_fl_records_sealed_o, terr_fl_unresolved_o,
+             terr_fl_tail_rejected_o);
     $display("SMOKE: fldpatch tp_add_accept=%0b tp_add_reject=%0b tp_covers=%0b",
              terr_pt_fld_add_accept_o, terr_pt_fld_add_reject_o,
              terr_pt_fld_covers_o);
