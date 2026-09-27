@@ -5430,3 +5430,60 @@ correct."* **Reverted**, and the adapter re-verified at 141/141.
 changes the packet's scope**, and it is now known rather than discovered
 mid-change by whoever picks it up. The packet must decide what becomes of 9b,
 because the property it asserts is one this composition cannot have.
+
+### 2026-09-28 - THE LINT SUITE RAN FOR THE FIRST TIME, AND ONE GATE CANNOT PASS
+
+With `cmake --preset` repaired, `ctest -R "^lint_"` ran: **228 tests, 5 red.**
+
+```
+lint_zhao_console_board
+lint_tb_projshare
+lint_tb_procmat_acceptance
+lint_zhao_field_host
+lint_zhao_field_doorbell_op3_alias_mutant
+```
+
+**None are from today.** `git blame` on the warned lines gives 2026-09-23,
+2026-09-25 and 2026-09-26 -- all before this session's merges.
+
+### `lint_zhao_console_board` IS UNPASSABLE BY CONSTRUCTION
+
+Its diagnostics are `PINCONNECTEMPTY` on lines like
+
+```systemverilog
+.vid_index_oob_o     (),
+.vid_seal_abort_o    (),
+.sweeps_aborted_o    (),
+```
+
+**and that is the form the QUARTUS gate REQUIRES.** An unconnected output
+written as `.port_o ()` is what avoids `PINMISSING`; omitting it is what causes
+one. So the two gates demand opposite things about the same text:
+
+| gate | wants |
+|---|---|
+| Quartus `PINMISSING` (gate 31) | the pin written explicitly, `.port_o ()` |
+| Verilator `-Wall` `PINCONNECTEMPTY` | that exact form NOT written |
+
+And `run_console_board_lint.ps1` does not merely check the exit code -- it
+demands **TOTAL SILENCE**: *"if ($diag) { throw ... was not SILENT }"*. So it
+cannot go green while the console has a single deliberately unconnected output,
+and a 1,038-port generated board will always have some.
+
+**The irony is in the script itself.** Two lines above the check its author
+writes that a gate which always fails *"is how a gate becomes one people learn
+to skip."* Then the check was written so it cannot pass. It also carries a
+second unpassable class, `DECLFILENAME`
+(`zhao_fragment_state_pkg.sv` declares `zhao_fragment_state_guard`).
+
+**NOT CHANGED, deliberately.** Waiving `PINCONNECTEMPTY` and `DECLFILENAME` is
+almost certainly right -- one form is mandated by another gate, the other is
+cosmetic -- but **a gate's strictness is a POLICY choice**, and relaxing one
+unilaterally at the end of a long session is how a real signal gets waived along
+with the noise. It wants the one-line `-Wno-` with its reason recorded beside
+it, by someone awake.
+
+**What this ran at all is the point:** these five have been red since 09-23 at
+the latest and nobody saw them, because `build/` could not configure and every
+green in sight came from a self-contained runner's own workspace. See handover
+15.39.
