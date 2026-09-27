@@ -31008,6 +31008,17 @@ module zhao_console_core
       // it CAN be fired: `tb_zhao_geom_paramarena` drives the 32-bit port
       // directly and `geom_paramarena_directed` presents an out-of-s21
       // coordinate. Left unconnected by decision, not by oversight.
+      //
+      // AND IT IS WRITTEN AS AN EXPLICIT EMPTY CONNECTION, NOT OMITTED.
+      // Omitting the pin is a `PINMISSING`, which `check_console_closure_lint`
+      // refuses structurally and which turned that gate red on this merge --
+      // and rightly, because an OMISSION IS INDISTINGUISHABLE FROM THE
+      // OVERSIGHT this comment says it is not. `.pv_narrow_o ()` states the
+      // same decision in the form the tools can tell apart from a mistake,
+      // exactly as `u_geom_arenabin`'s `.busy_o ()` does above. The decision
+      // itself is unchanged and correct: a counter the console cannot fire is
+      // not evidence about the console.
+      .pv_narrow_o         (),
       .burst_unaligned_o   (geom_pa_unaligned_o),
       .scr_contend_o       (geom_pa_scrcontend_o),
       .retire_underflow_o  (geom_pa_retireunder_o),
