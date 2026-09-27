@@ -137,17 +137,52 @@ export const SCORCH_TOKEN_LO =
 export const SCORCH_TOKEN_HI =
   (materialTokenBase(MAT_SCORCH_A, MAT_SCORCH_B) + SCORCH_WEIGHT_LO + SCORCH_WEIGHT_SPAN) | 0;
 
+/**
+ * THE UNIFORM SET THE COMPOSED CONSOLE STAGES, and why it is centred on the
+ * island datum rather than on a patch.
+ *
+ * `tests/prod/smoke_field_fixture_gen.cpp` preloads these through
+ * `zfield::prepare`. The console places ONE of the geom fixture's terrain
+ * records, and WHICH one is not a constant this module should be asserting: a
+ * centre pinned to one patch would silently stop varying if the placement
+ * moved, which is exactly the quiet vacuity clause 3 exists to exclude.
+ *
+ * So the scorch is centred on the ISLAND DATUM (0,0) -- the origin the bench
+ * envelope law and its particle population both use -- with a 160 m outer
+ * radius and no full-scorch core. Any 32 m patch lying within 160 m of the datum
+ * then samples a MONOTONE, NON-CONSTANT slice of the falloff, so out-lane 2
+ * provably depends on the varying lanes wherever the patch is placed.
+ * `material_program.test.ts` sweeps this exact set and asserts it varies.
+ */
+export const SCORCH_CONSOLE_UNIFORMS = {
+  age: 0,
+  phase: 0,
+  centreX: 0,
+  centreZ: 0,
+  rIn: 0,
+  rOut: 160 * 65536,
+  nav: 2 * 65536,
+};
+
 function earthInputs(): IoLane[] {
   return [
-    { name: 'x', type: 'fx', reg: 0, min: fx(-40), max: fx(40) },
-    { name: 'z', type: 'fx', reg: 1, min: fx(-40), max: fx(40) },
+    // RANGES ARE WIDER THAN wave_pool's +/-40 m ON PURPOSE, and it is not
+    // generosity. The console smoke's terrain patches sit at patch coordinates
+    // (r + SGF_TERR_IX0, r + SGF_TERR_IZ0) with a 32 m edge, so their lattice
+    // vertices carry world coordinates out past 110 m. wave_pool declares +/-40
+    // and is nonetheless driven with those coordinates -- the bounds are
+    // DESCRIPTIVE (they seed the .zvec input generator) and nothing enforces
+    // them at run time, so that mismatch is invisible. Declaring the domain
+    // this program is actually evaluated over is the honest version.
+    { name: 'x', type: 'fx', reg: 0, min: fx(-256), max: fx(256) },
+    { name: 'z', type: 'fx', reg: 1, min: fx(-256), max: fx(256) },
     { name: 'age', type: 'u32', reg: 2, min: 0, max: 65535 },
     { name: 'phase', type: 'fx', reg: 3, min: 0, max: fx(1) },
-    { name: 'p0', type: 'fx', reg: 4, min: fx(-32), max: fx(32) },  // centre x
-    { name: 'p1', type: 'fx', reg: 5, min: fx(-32), max: fx(32) },  // centre z
-    { name: 'p2', type: 'fx', reg: 6, min: 0, max: fx(24) },        // r_in: full scorch
-    { name: 'p3', type: 'fx', reg: 7, min: 0, max: fx(24) },        // r_out: clean ground
-    { name: 'p4', type: 'fx', reg: 8, min: 0, max: fx(4) },         // nav surcharge
+    { name: 'p0', type: 'fx', reg: 4, min: fx(-256), max: fx(256) },  // centre x
+    { name: 'p1', type: 'fx', reg: 5, min: fx(-256), max: fx(256) },  // centre z
+    { name: 'p2', type: 'fx', reg: 6, min: 0, max: fx(256) },         // r_in: full scorch
+    { name: 'p3', type: 'fx', reg: 7, min: 0, max: fx(256) },         // r_out: clean ground
+    { name: 'p4', type: 'fx', reg: 8, min: 0, max: fx(4) },           // nav surcharge
     { name: 'p5', type: 'fx', reg: 9, min: fx(-1), max: fx(1) },    // unused
     { name: 'p6', type: 'fx', reg: 10, min: fx(-1), max: fx(1) },   // unused
     { name: 'p7', type: 'fx', reg: 11, min: fx(-1), max: fx(1) },   // unused

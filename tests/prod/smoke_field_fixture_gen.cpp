@@ -23,7 +23,7 @@
 // beside `smoke_geom_fixture_gen.cpp`, not in the bench." This is that file.
 //
 // ---------------------------------------------------------------------------
-// THE PROGRAM, AND THE MEASUREMENT THAT CHOSE IT
+// THE PROGRAM, AND WHY IT IS NO LONGER wave_pool
 // ---------------------------------------------------------------------------
 // `u_field_host` is composed at `.REGS (32)` (`zhao_console_core.sv:36563`).
 // Entry I34's blocker list says `crater_ring` needs 36 physical registers and
@@ -34,16 +34,41 @@
 //     impact_wave   LOWERS at scalar-base 7, 8, 9
 //     wave_pool     LOWERS at scalar-base 8, 9, 11, 12, 13
 //
-// So REGS=32 does NOT have to move, and no new program has to be authored: the
-// ceiling is a function of `scalar_base`, which is a LowerOptions field the
-// entry's own remedy list omits. `wave_pool` at scalar-base 12 lowers with
-// `register_high_water = 31` -- one register under the composed ceiling.
+// So REGS=32 does NOT have to move: the ceiling is a function of `scalar_base`,
+// which is a LowerOptions field the entry's own remedy list omits.
 //
-// WAVE_POOL IS A REAL SHIPPED SPELL (`spells/membrane.form`), not a fixture
-// program written to pass. It declares FOUR canonical outputs and its required
-// mask is 0x0F -- lanes 0..3, which are exactly I34's four Earth channels:
-// height, velocity, material and nav. That is the reason it is the right
-// program for this mode and not merely a program that fits.
+// BUT wave_pool CANNOT SATISFY THE OWNER'S CLAUSE 3, and that is why this
+// fixture now stages `scorch_wash` instead. wave_pool is a HEIGHT spell whose
+// out-lane 2 is `b.ldc(MAT_SOIL)` -- the BARE id 1. `spec/qformats.md` sec 14.1
+// makes out-lane 2 the 32-bit MATERIAL TOKEN, whose top byte must be 0xE1, so a
+// bare id has tag 0x00 and `zmt_tag_ok` REFUSES it. Measured in this very
+// console by packet NOPROG: `terrmat field_composed=0 token_refused=1024`, one
+// refusal per compose-cache cell. The tag check was doing its job; the program
+// had nothing legal to say. `crater_ring` emits bare ids too, so NO program in
+// the corpus could write a material the fabric would accept.
+//
+// `scorch_wash` (compiler/src/field_ir/scorch_wash.ts, hash 0xFDB4FE21) is the
+// first one that can. It is built from the same builder/alloc/serialize chain --
+// the single sanctioned program source path -- declares the same FOUR canonical
+// outputs so `required_mask` stays 0x0F (I34's four Earth channels), and writes
+// out-lane 2 as a real v1 token.
+//
+// IT WRITES ZERO HEIGHT AND ZERO VELOCITY, WHICH IS THE EXPERIMENTAL DESIGN.
+// `zhao_terrain_patch.sv:339` composes field height ADDITIVELY, so height 0
+// leaves every lattice height bit-identical to the authored terrain. The covered
+// run therefore keeps the plain run's geometry, fragment count and pixel count,
+// and the ONLY thing that moves is the mosaic tile the texture island fetches.
+// A program that both deformed AND painted would move that tile for two possible
+// reasons -- the material landed, or the deformed ground sampled elsewhere -- and
+// CLAUDE.md's rule is "compare like with like, or do not compare".
+//
+// NOTE WHAT THIS FIXTURE THEREFORE NO LONGER DEMONSTRATES, said out loud rather
+// than left for someone to notice: the composed console's HEIGHT channel is no
+// longer exercised with a nonzero write by this mode. That channel's evidence is
+// `composepub_acceptance` case 2 at the leaf, and NOPROG's recorded console run
+// of wave_pool (`fldearth runs=1089 noprog=0 faults=0`). Swapping the program is
+// a deliberate trade of a channel this mode already proved for the one it never
+// could.
 //
 // ---------------------------------------------------------------------------
 // TWO STREAMS, BECAUSE THE CONSOLE HAS TWO DOORS AND THEY ARE NOT THE SAME DOOR
@@ -88,7 +113,9 @@
 #include "zfield/zfield_host_plan.hpp"
 #include "zfield/zfield_plan.hpp"
 
-#include "../../compiler/tests/generated/wave_pool.hpp"
+#include "zref/zref_fieldir.hpp"
+
+#include "../../compiler/tests/generated/scorch_wash.hpp"
 
 namespace hp_ns = zfield::host_plan;
 
@@ -106,10 +133,49 @@ namespace {
 // not cannot silently disagree.
 constexpr int kRegisterCeiling = 32;
 
-// Measured, not guessed -- see the sweep in the header comment. 12 is chosen
-// over 8 because it leaves the most room below the uniform region for the
-// vector writes while still landing the high-water at 31.
-constexpr int kScalarBase = 12;
+// MEASURED, NOT GUESSED, AND RE-MEASURED FOR scorch_wash.
+//
+// It was 12 for wave_pool. `scorch_wash` REFUSES at 12 -- and at every other
+// scalar base -- with "BAD_IMAGE: an output ordinal whose source register lies
+// outside the capture window", which is not a scalar-base problem at all. That
+// cost a sweep to establish and the finding is worth the space:
+//
+// THERE IS A THIRD KNOB AND NOBODY WAS SETTING IT. `LowerOptions::out_base`
+// defaults to 0, so the capture window is registers [0, out_lanes) = [0,7).
+// wave_pool lowers at that default by luck: two of its four ordinals resolve to
+// PREPARED_SCALARs (which are NOT window-checked, by construction) and its
+// VECTOR_REG ordinals land at source registers 3, 4 and 6 -- inside [0,7) with
+// one to spare. `scorch_wash`'s vector ordinals land at 5 and 7, and 7 is one
+// past the window, so it refused for a reason that has nothing to do with
+// register pressure.
+//
+// Entry I34's remedy list for this refusal class says "widen REGS". FIELDACTIVE
+// then found `scalar_base`, which the list omits. `out_base` is a THIRD knob
+// that neither names, and it is the one that mattered here. No REGS widening and
+// no ALM purchase is owed.
+//
+// THE FULL (scalar_base, out_base) GRID at register_ceiling 32, measured with
+// the library built from this tree -- 25 pairs lower AND pass the output
+// contract, and the high-water is a function of scalar_base alone:
+//
+//     scalar_base 8  -> high_water 28    out_base 1..5
+//     scalar_base 9  -> high_water 29    out_base 1..5
+//     scalar_base 10 -> high_water 30    out_base 1..5
+//     scalar_base 11 -> high_water 31    out_base 1..5
+//     scalar_base 12 -> high_water 32    out_base 1..5
+//     everything else refuses
+//
+// 8 is chosen because it is the minimum high-water, FOUR registers under the
+// composed ceiling -- wave_pool ran at 31, one under. out_base 3 is chosen from
+// the five that work because it puts the two vector ordinals at window
+// positions 2 and 4 (mask 0x14), i.e. centred, so a future output landing one
+// register either side still fits.
+constexpr int kScalarBase = 8;
+
+// The base of the CAPTURE WINDOW: physical register `out_base + k` is window
+// position k. Must be set explicitly -- the library default of 0 is a window
+// that this program's outputs fall outside of. See the grid above.
+constexpr int kOutBase = 3;
 
 // Earth's varying lanes: 0 = cx, 1 = cz. `reference/src/zrender/terrain.cpp`
 // compose_lattice puts the vertex world x and z in in[0] and in[1]; everything
@@ -154,6 +220,13 @@ constexpr uint32_t kResourceEpoch = 0xF1E1D000u;
 // ---------------------------------------------------------------------------
 constexpr uint8_t kLdUop = 0;
 constexpr uint8_t kLdHeader = 2;
+// 3 UNIFORM -- the RING SERVICE's scalar-bank write (`fab_sb_*` ->
+// `zhao_field_v3_sbank`, read only by `zhao_field_v3_ring_svc` at slots named
+// in a RING instruction's immediate). Declared for completeness; this fixture
+// emits none, because this program has no RING and because that bank is NOT
+// the constant pool the microcode reads. See the block above `main()`.
+constexpr uint8_t kLdUniform = 3;
+
 constexpr uint8_t kLdOutMap = 4;
 constexpr uint8_t kLdAssoc = 5;
 constexpr uint8_t kLdInitProof = 6;
@@ -163,6 +236,67 @@ constexpr uint8_t kLdPrepared = 7;
 // generation of zero is indistinguishable from a register that was never
 // written, and FH16 makes the generation the checked part of a binding.
 constexpr uint8_t kAssocGen = 1;
+
+// ---------------------------------------------------------------------------
+// THE UNIFORMS, AND WHY THEY ARE NOT ZERO ANY MORE
+// ---------------------------------------------------------------------------
+// This generator used to hand `zfield::prepare` a vector of zeros and say so:
+// "the PRELOAD VALUES here are placeholders ... a zero that looks like data is
+// how a placeholder ships". With wave_pool that was harmless, because its
+// material lane is a constant either way. With `scorch_wash` it is NOT: p2/p3
+// are the falloff radii, and r_in == r_out == 0 is the degenerate footprint --
+// the token stays legal (the smoothstep macro clamps) but the weight goes
+// CONSTANT, and a constant out-lane 2 cannot show that the engine read the
+// VARYING lanes at all. So these are real values.
+//
+// CENTRED ON THE ISLAND DATUM (0,0) rather than on a patch. The console places
+// ONE of the geom fixture's terrain records and this file should not be the
+// place that asserts which: a centre pinned to one patch would silently stop
+// varying if the placement moved. A 160 m falloff from the datum means any 32 m
+// patch within 160 m samples a monotone, non-constant slice of it.
+// `compiler/tests/material_program.test.ts` sweeps this exact set over all
+// three candidate patches and asserts more than one distinct weight in each
+// (measured: 16, 19 and 10 distinct weights).
+constexpr int32_t kFxOne = 65536;
+constexpr int32_t kScorchAge = 0;
+constexpr int32_t kScorchPhase = 0;
+constexpr int32_t kScorchCentreX = 0;            // p0, island datum
+constexpr int32_t kScorchCentreZ = 0;            // p1, island datum
+constexpr int32_t kScorchRIn = 0;                // p2, no full-scorch core
+constexpr int32_t kScorchROut = 160 * kFxOne;    // p3, clean ground 160 m out
+constexpr int32_t kScorchNav = 2 * kFxOne;       // p4, nav surcharge at full scorch
+
+// ---------------------------------------------------------------------------
+// THE MATERIAL THE PROGRAM MUST EMIT -- A CHECKED MIRROR, NOT A DUPLICATE
+// ---------------------------------------------------------------------------
+// These four bytes are `scorch_wash.ts`'s MAT_SCORCH_A / MAT_SCORCH_B /
+// SCORCH_WEIGHT_LO / +SCORCH_WEIGHT_SPAN. They are restated here because C++
+// cannot import TypeScript -- and they are VERIFIED below by interpreting the
+// program and decoding out-lane 2 with `zref::fieldir::material_token_decode`,
+// the REFERENCE decoder. So if the TS side moves and this does not, the
+// generator REFUSES rather than emitting a fixture the bench will then assert
+// the wrong thing about. That is the difference between a mirror that is read
+// and a mirror that is merely written.
+//
+// Why these values: the bench's authored layer-E plane spans matA in {1,2},
+// matB in {5,6} and weight in [0x30,0xCF]
+// (`tb_zhao_console_core_smoke.sv:3881-3886`). None of 0xD4, 0x1E or
+// [0xD0,0xFF] is in that set, so the owner's clause 3 -- "a value that cannot
+// equal the authored baseline by accident" -- holds from the two LAYOUTS rather
+// than from an observation about one run.
+constexpr uint8_t kScorchMatA = 0xD4;
+constexpr uint8_t kScorchMatB = 0x1E;
+constexpr uint8_t kScorchWeightLo = 0xD0;
+constexpr uint8_t kScorchWeightHi = 0xFF;
+
+// The candidate patch envelopes the verification sweeps, from
+// `tb_zhao_console_core_smoke.sv`: record r sits at patch (r + SGF_TERR_IX0,
+// r + SGF_TERR_IZ0) and spans 32 m per side at pitch_log2 0. SGF_TERR_IX0 = 0,
+// SGF_TERR_IZ0 = 1, SGF_TERR_RECORDS = 3 in `smoke_geom_fixture.svh`.
+constexpr int kPatchIx0 = 0;
+constexpr int kPatchIz0 = 1;
+constexpr int kPatchRecords = 3;
+constexpr int kPatchEdgeM = 32;
 
 struct LoadWord {
   uint8_t kind;
@@ -241,8 +375,8 @@ int main(int argc, char** argv) {
   // ---- 1. THE CANONICAL PROGRAM, THROUGH THE CANONICAL DECODER -------------
   // Nothing here second-guesses the validator. A program this refuses is a
   // program the console may not run either.
-  const uint8_t* prog_bytes = zfield_gen::wave_pool::kProgramBytes.data();
-  const size_t prog_len = zfield_gen::wave_pool::kProgramBytesLen;
+  const uint8_t* prog_bytes = zfield_gen::scorch_wash::kProgramBytes.data();
+  const size_t prog_len = zfield_gen::scorch_wash::kProgramBytesLen;
 
   zfield::DecodeResult dr = zfield::decode(prog_bytes, prog_len);
   if (dr.error != zfield::DecodeError::kOk) {
@@ -253,18 +387,118 @@ int main(int argc, char** argv) {
 
   const zfield::Fplan fp = zfield::plan(dr.prog, kVaryingMask);
 
-  // The association's uniform values. A packer run from a bare .zprog has none
-  // and `pack_field_host` says so out loud; this fixture is in the same
-  // position. The PRELOAD VALUES here are placeholders, the maps and the proof
-  // are not -- they depend on WHICH registers are written, never on what is in
-  // them. Said out loud for the same reason the packer says it: a zero that
-  // looks like data is how a placeholder ships.
-  std::vector<int32_t> zero_in(dr.prog.in_lanes.size(), 0);
+  // ---- 1a. THE ASSOCIATION'S UNIFORM VALUES, WHICH ARE REAL NOW ------------
+  // These used to be a vector of zeros with a comment admitting it. See the
+  // knob block above for why that is no longer acceptable: with `scorch_wash`
+  // the radii ARE uniforms, and zero radii make out-lane 2 constant.
+  //
+  // Lane order is the earth profile's own: 0 x, 1 z (both VARYING, overwritten
+  // per lattice vertex, so their preload is irrelevant and left zero), then
+  // 2 age, 3 phase, 4..11 p0..p7.
+  std::vector<int32_t> uni_in(dr.prog.in_lanes.size(), 0);
+  if (uni_in.size() < 12) {
+    std::printf("smoke_field_fixture_gen: program declares %u input lanes, earth owes 12\n",
+                (unsigned)uni_in.size());
+    return 1;
+  }
+  uni_in[2] = kScorchAge;
+  uni_in[3] = kScorchPhase;
+  uni_in[4] = kScorchCentreX;
+  uni_in[5] = kScorchCentreZ;
+  uni_in[6] = kScorchRIn;
+  uni_in[7] = kScorchROut;
+  uni_in[8] = kScorchNav;
   const zfield::Prepared prep =
-      zfield::prepare(fp, dr.prog, zero_in.data(), zero_in.size());
+      zfield::prepare(fp, dr.prog, uni_in.data(), uni_in.size());
+
+  // ---- 1b. OUT-LANE 2 IS A LEGAL TOKEN, CHECKED BY THE REFERENCE DECODER ---
+  // The owner's bar: "a real production Field program is installed and
+  // executed" and "its material write produces a value that cannot equal the
+  // authored baseline by accident". The second half is a property of the
+  // PROGRAM, so it is checked HERE, before a capsule is built -- a fixture that
+  // cannot possibly satisfy clause 3 should never reach the bench.
+  //
+  // This is also the cross-language pin on the TypeScript token packing. The
+  // decode below is `zref::fieldir::material_token_decode`, the C++ view of
+  // sec 14.1; nothing here trusts `material_token.ts`.
+  {
+    int distinct_weights = 0;
+    bool w_seen[256] = {false};
+    uint8_t w_lo = 0xFF, w_hi = 0x00;
+    long long checked = 0;
+
+    for (int r = 0; r < kPatchRecords; ++r) {
+      const int ix = r + kPatchIx0;
+      const int iz = r + kPatchIz0;
+      for (int vi = 0; vi <= kPatchEdgeM; ++vi) {
+        for (int vj = 0; vj <= kPatchEdgeM; ++vj) {
+          std::vector<int32_t> in = uni_in;
+          in[0] = (int32_t)((ix * kPatchEdgeM + vi) * kFxOne);
+          in[1] = (int32_t)((iz * kPatchEdgeM + vj) * kFxOne);
+          int32_t out[8] = {0};
+          const size_t n_out = dr.prog.out_lanes.size() <= 8 ? dr.prog.out_lanes.size() : 8;
+          zfield::interpret(dr.prog, in.data(), in.size(), out, n_out);
+          ++checked;
+
+          const uint32_t tok = (uint32_t)out[2];
+          zref::fieldir::MaterialState ms;
+          if (!zref::fieldir::material_token_decode(tok, &ms)) {
+            std::printf("smoke_field_fixture_gen: out-lane 2 at patch (%d,%d) vertex (%d,%d) "
+                        "is NOT a v1 material token: 0x%08X (tag 0x%02X, want 0xE1). "
+                        "The staged program cannot satisfy I34 clause 3.\n",
+                        ix, iz, vi, vj, tok, (unsigned)(tok >> 24));
+            return 1;
+          }
+          if (ms.mat_a != kScorchMatA || ms.mat_b != kScorchMatB) {
+            std::printf("smoke_field_fixture_gen: out-lane 2 at patch (%d,%d) vertex (%d,%d) "
+                        "decodes to matA=0x%02X matB=0x%02X, this file declares 0x%02X/0x%02X. "
+                        "The TypeScript program and this mirror have diverged.\n",
+                        ix, iz, vi, vj, ms.mat_a, ms.mat_b, kScorchMatA, kScorchMatB);
+            return 1;
+          }
+          if (ms.weight < kScorchWeightLo || ms.weight > kScorchWeightHi) {
+            std::printf("smoke_field_fixture_gen: out-lane 2 weight 0x%02X at patch (%d,%d) "
+                        "vertex (%d,%d) is outside the declared band [0x%02X,0x%02X], which is "
+                        "what clause 3's non-coincidence rests on.\n",
+                        ms.weight, ix, iz, vi, vj, kScorchWeightLo, kScorchWeightHi);
+            return 1;
+          }
+          // height and velocity must be EXACTLY zero, or the covered run stops
+          // being the geometry-invariant experiment the header describes.
+          if (out[0] != 0 || out[1] != 0) {
+            std::printf("smoke_field_fixture_gen: patch (%d,%d) vertex (%d,%d) writes "
+                        "height=%d velocity=%d; this fixture's whole argument is that both "
+                        "are zero so the covered run keeps the authored geometry.\n",
+                        ix, iz, vi, vj, out[0], out[1]);
+            return 1;
+          }
+          if (!w_seen[ms.weight]) { w_seen[ms.weight] = true; ++distinct_weights; }
+          if (ms.weight < w_lo) w_lo = ms.weight;
+          if (ms.weight > w_hi) w_hi = ms.weight;
+        }
+      }
+    }
+
+    // ANTI-VACUITY FOR THIS CHECK ITSELF. Everything above passes on a program
+    // whose out-lane 2 is a single constant, and a constant cannot demonstrate
+    // that the engine consumed the varying lanes. This is the assertion that
+    // says the field is a FIELD.
+    if (distinct_weights < 2) {
+      std::printf("smoke_field_fixture_gen: out-lane 2 is CONSTANT across %lld sampled "
+                  "vertices (weight 0x%02X). The uniforms make the falloff degenerate, so "
+                  "the token cannot show the engine read x/z. Adjust kScorchROut.\n",
+                  checked, w_lo);
+      return 1;
+    }
+    std::printf("smoke_field_fixture_gen: out-lane 2 verified over %lld vertices -- "
+                "every one a v1 token {0x%02X,0x%02X,w}, w in [0x%02X,0x%02X], "
+                "%d distinct weights, height=velocity=0 throughout\n",
+                checked, kScorchMatA, kScorchMatB, w_lo, w_hi, distinct_weights);
+  }
 
   hp_ns::LowerOptions opt;
   opt.scalar_base = kScalarBase;
+  opt.out_base = kOutBase;
   opt.register_ceiling = kRegisterCeiling;
   opt.canonical_program_handle32 = fp.canonical_hash;
   opt.source_id32 = dr.prog.source_id;
@@ -308,14 +542,116 @@ int main(int argc, char** argv) {
   for (size_t i = 0; i < hp.uops.size(); ++i)
     lw.push_back({kLdUop, (uint32_t)i, hp.uops[i].word(), 0});
 
-  // PRELOAD rows become PREPARED scalars. `addr` is the prepared index; the
-  // VALID bit is driven independently of the value so a genuine zero and a
-  // withheld value do not look alike.
+  // =========================================================================
+  // THE CONSTANT POOL IS NEVER DELIVERED, AND NO FIXTURE CAN FIX IT.
+  // Measured 2026-09-27 (MATFIELD). This is the packet's principal finding and
+  // it is a PRODUCTION gap, not a bench one. Read this before changing the
+  // emission below.
+  // =========================================================================
+  // `lower()` folds every uniform-only value -- which includes EVERY LITERAL --
+  // into the plan's PRELOAD ROWS, and places them in the "broadcast uniform
+  // region" at physical register `scalar_base + s`
+  // (`zfield_host_plan.hpp:220-235`, `Translator::reg_of`). The physical uops
+  // then SOURCE those registers.
+  //
+  // `zhao_field_host_v2` never writes them. Its register-file preload port
+  // (`:1250-1256`) writes exactly two things:
+  //
+  //     fab_pre_we  = (state == E_ZERO) || ((state == E_WRITE) &&
+  //                                         (lane_i < IN_LANES));
+  //
+  // zeros on the slow path, and the declared IN_LANES from the point's own
+  // inputs. Registers at or above `IN_LANES` are therefore ALWAYS ZERO, and the
+  // ones below it are overwritten by the point's input lanes every point.
+  //
+  // MEASURED, both programs, at the settings this console composes:
+  //
+  //   scorch_wash  scalar_base 8,  20 preload rows at registers 8..27.
+  //                Its material token base 0xE1D41ED0 is at REGISTER 27.
+  //   wave_pool    scalar_base 12, 19 preload rows at registers 12..30.
+  //                MAT_SOIL is at register 29, the nav quarter 0x4000 at 30,
+  //                and the smoothstep macro's 1.0 / 2.0 / 3.0 at 26 / 27 / 28.
+  //
+  // The host writes registers 0..14. NONE of those constants arrives.
+  //
+  // WHAT IT MEANS, stated plainly: the composed console cannot execute ANY
+  // lowered Field program correctly, because every program has literals. The
+  // engine runs, retires and answers -- `fldearth runs=1089 noprog=0 faults=0`,
+  // `fldhost out_incomplete=0 uniform_bad=0 bad_image=0` -- and computes on
+  // zeros. wave_pool's envelope evaluated smoothstep with 0 for 1.0, 2.0 and
+  // 3.0 and its amplitude p4 was 0, so its height output was ZERO for its whole
+  // recorded life. `run_console_core_smoke.ps1` asserted in prose that "raster
+  // pixels is NOT the plain run's 2816 in this form"; that was never measured
+  // and was false.
+  //
+  // WHY NOTHING SAW IT. Every counter is true and not one looks at a value. The
+  // only value-bearing gate in this mode was the positive form's pixel count,
+  // and it was deliberately left UNPINNED -- correctly, at the time, because the
+  // staged program was a height spell whose composed lattice the oracle does not
+  // model. The one number that could have caught this was the one number nobody
+  // could assert.
+  //
+  // IT TOOK A TAG TO MAKE IT VISIBLE. A height that is silently zero looks like
+  // a field that ran; a MATERIAL that is silently wrong is REFUSED and counted,
+  // because `spec/qformats.md` sec 14.1 gives the token a version byte for
+  // exactly this purpose. `terrmat field_composed=0 token_refused=1024` is that
+  // byte doing its job.
+  //
+  // THE TWO CANDIDATE REPAIRS, BOTH OF WHICH ARE DECISIONS AND NEITHER OF WHICH
+  // BELONGS IN A BENCH:
+  //
+  //   (a) RTL. Give the host a per-slot constant RAM, loaded by the doorbell,
+  //       and extend the preload phase to write registers
+  //       `scalar_base .. scalar_base + n - 1` from it after the input lanes.
+  //       A new doorbell kind, a new RAM, and a change to a production block.
+  //   (b) LIBRARY. Make `lower()` materialise folded constants as LDC uops
+  //       inside the physical program instead of as preload rows. ZERO silicon
+  //       cost; it spends a few uops and a few registers, and the measured
+  //       high-water is 28 against a ceiling of 32. RECOMMENDED for that reason.
+  //
+  // Until one of them lands, this generator emits the PREPARED rows only. They
+  // are correct and they are needed -- an ordinal whose OUTPUT_MAP row says
+  // PREPARED_SCALAR is seeded from `prep_value[]` at point start (:1669) and
+  // never touches the register file, which is why this program's height and
+  // velocity ordinals (both hoisted constants) are the two lanes that DO arrive.
+  //
+  // AND THE INDEX WAS WRONG TOO, which is a real bug this packet did fix. The
+  // old emission passed `addr = physical_register` under a comment reading
+  // "`addr` is the prepared index". `LdPrepared` writes `prep_value[ld_addr_i]`
+  // (:1586-1589) and that file is addressed by the SCALAR INDEX `s` -- the same
+  // space `OutputSource::source_index` carries for a prepared ordinal
+  // (`zfield_host_plan.cpp:423`, `o.source_index = t.idx`). So the rows landed
+  // at `scalar_base + s` instead of `s`. The comment was right about the field
+  // and the code did not do it.
   for (size_t i = 0; i < hp.preload.size(); ++i) {
-    uint64_t w = (uint64_t)(uint32_t)hp.preload[i].value;
-    w |= (1ull << 32);                              // VALID
-    w |= ((uint64_t)kAssocGen) << 40;               // generation
-    lw.push_back({kLdPrepared, (uint32_t)hp.preload[i].physical_register, w, 0});
+    const uint32_t preg
+ = (uint32_t)hp.preload[i].physical_register;
+    const uint32_t val = (uint32_t)hp.preload[i].value;
+
+    // NO `LdUniform` WORD IS EMITTED, AND THAT IS A DELIBERATE NON-REPAIR.
+    //     An earlier version of this packet posted one here, reasoning that
+    //     `LdUniform` writes `fab_sb_*` -> `zhao_field_v3_sbank` and that this
+    //     is "the register file the microcode reads". IT IS NOT. That bank is
+    //     instantiated in `zhao_field_v3_svcpath` and its read address is
+    //     driven solely by `zhao_field_v3_ring_svc`'s `f_slot_r`, which is
+    //     loaded from a RING instruction's IMMEDIATE (`ring_svc:404-407`). It
+    //     is the RING service's four-operand uniform file, not a general
+    //     constant pool, and this program contains no RING. Posting into it
+    //     would have been an inert write shipped under a repair's name.
+    //     See the CONSTANT POOL block above `main()` for what is actually
+    //     wrong and why this fixture cannot fix it.
+    (void)preg;
+
+    // THE PREPARED FILE, indexed by the SCALAR INDEX `s`, which is what
+    //     `OutputSource::source_index` carries for a PREPARED_SCALAR ordinal
+    //     (`zfield_host_plan.cpp:423`, `o.source_index = t.idx` on the scalar
+    //     arm). The VALID bit is driven independently of the value so a genuine
+    //     zero and a withheld value do not look alike, and the generation must
+    //     match the association's or the seed is refused (:1309-1321).
+    uint64_t w = (uint64_t)val;
+    w |= (1ull << 32);                 // VALID
+    w |= ((uint64_t)kAssocGen) << 40;  // generation
+    lw.push_back({kLdPrepared, (uint32_t)i, w, 0});
   }
 
   // OUTPUT_MAP: one row per canonical ordinal. [15:0] source_index [16] kind.
@@ -328,6 +664,22 @@ int main(int argc, char** argv) {
 
   lw.push_back({kLdAssoc, 0, (uint64_t)kAssocGen, 0});
   lw.push_back({kLdInitProof, 0, 1ull, 0});
+
+  // EVERY PREPARED_SCALAR ORDINAL MUST HAVE A ROW WE ACTUALLY POSTED. The
+  // repair above emits one prepared word per preload row, indexed by the row's
+  // scalar index; an ordinal naming an index outside that range would be
+  // unseeded and the point would refuse for a reason pointing at the RTL. This
+  // is cheap and it is the check whose absence let the original defect ship.
+  for (size_t i = 0; i < hp.output_map.size(); ++i) {
+    const hp_ns::OutputSource& o = hp.output_map[i];
+    if (o.source_kind != zfield::host_image::ZFH_SOURCE_KIND_PREPARED_SCALAR) continue;
+    if (o.source_index < 0 || (size_t)o.source_index >= hp.preload.size()) {
+      std::printf("smoke_field_fixture_gen: ordinal %d is a PREPARED_SCALAR at index %d and "
+                  "only %u prepared rows are posted -- it would never be seeded\n",
+                  o.ordinal, o.source_index, (unsigned)hp.preload.size());
+      return 1;
+    }
+  }
 
   const uint8_t win_mask = (uint8_t)hp.window_mask().bits();
   const uint8_t ord_mask = (uint8_t)hp.required_mask.bits();
@@ -344,22 +696,29 @@ int main(int argc, char** argv) {
   line("// Regenerate: build `smoke_field_fixture_gen` and run it with the path of");
   line("// this file. The ctest `smoke_field_fixture_fresh` fails if it is stale.");
   line("//");
-  line("// A REAL Earth program (spells/membrane.form -> wave_pool), lowered by the");
-  line("// REAL production library at the console's OWN composed register ceiling.");
+  line("// A REAL Earth program -- compiler/src/field_ir/scorch_wash.ts, the first in");
+  line("// this tree whose out-lane 2 is a v1 MATERIAL TOKEN (spec/qformats.md 14.1) --");
+  line("// lowered by the REAL production library at the console's OWN composed ceiling.");
+  line("// It writes ZERO height and velocity on purpose: field height composes");
+  line("// additively (zhao_terrain_patch.sv:339), so the covered run keeps the authored");
+  line("// geometry exactly and the only thing that moves is the material.");
   line("// Nothing below is hand-built: directive 13.7 forbids the bench inventing");
   line("// an association, and every byte here is serialize_program_image's or a");
   line("// HostPlan field's.");
   o += "\n";
 
   char buf[256];
-  std::snprintf(buf, sizeof buf, "// lowered: scalar_base=%d register_high_water=%d ceiling=%d",
-                hp.scalar_base, hp.register_high_water, kRegisterCeiling);
+  std::snprintf(buf, sizeof buf,
+                "// lowered: scalar_base=%d out_base=%d register_high_water=%d ceiling=%d",
+                hp.scalar_base, hp.out_base, hp.register_high_water, kRegisterCeiling);
   line(buf);
   std::snprintf(buf, sizeof buf,
                 "// outputs=%d required_mask(ORDINAL)=0x%02X window_mask(POSITION)=0x%02X",
                 hp.output_count, ord_mask, win_mask);
   line(buf);
-  std::snprintf(buf, sizeof buf, "// uops=%u preload_rows=%u image_bytes=%u",
+  std::snprintf(buf, sizeof buf,
+                "// uops=%u preload_rows=%u (each posted TWICE: kind 3 UNIFORM to the scalar "
+                "bank AND kind 7 PREPARED to the prepared file) image_bytes=%u",
                 (unsigned)hp.uops.size(), (unsigned)hp.preload.size(), (unsigned)image.size());
   line(buf);
   o += "\n";
@@ -405,6 +764,28 @@ int main(int argc, char** argv) {
     line("localparam logic [31:0] SFF_BODY_CRC = " + hex32(body_crc) + ";");
   }
   std::snprintf(buf, sizeof buf, "localparam int unsigned SFF_SLOT = %d;", kSlot);
+  line(buf);
+  o += "\n";
+
+  // ---- the material the field will compose, for the bench to assert on ------
+  // Emitted rather than restated in the bench, so the program, this generator
+  // and the bench cannot hold three opinions about one value. Each was verified
+  // above by decoding the program's own out-lane 2 with the reference decoder
+  // over every candidate patch lattice.
+  line("// THE FIELD'S MATERIAL. Verified in the generator by interpreting the");
+  line("// program and decoding out-lane 2 with zref::fieldir::material_token_decode");
+  line("// at every vertex of every candidate patch lattice -- not asserted here.");
+  line("// The mosaic picks between SFF_MAT_A and SFF_MAT_B, so a terrain fill in the");
+  line("// covered run must land in one of those tiles and NOT in an authored one.");
+  std::snprintf(buf, sizeof buf, "localparam logic [7:0] SFF_MAT_A = 8'h%02X;", kScorchMatA);
+  line(buf);
+  std::snprintf(buf, sizeof buf, "localparam logic [7:0] SFF_MAT_B = 8'h%02X;", kScorchMatB);
+  line(buf);
+  std::snprintf(buf, sizeof buf, "localparam logic [7:0] SFF_MAT_W_LO = 8'h%02X;",
+                kScorchWeightLo);
+  line(buf);
+  std::snprintf(buf, sizeof buf, "localparam logic [7:0] SFF_MAT_W_HI = 8'h%02X;",
+                kScorchWeightHi);
   line(buf);
   o += "\n";
 

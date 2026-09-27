@@ -34,6 +34,7 @@ import {
   SCORCH_WEIGHT_SPAN,
   SCORCH_TOKEN_LO,
   SCORCH_TOKEN_HI,
+  SCORCH_CONSOLE_UNIFORMS,
 } from '../src/field_ir/scorch_wash.js';
 import {
   MATERIAL_TOKEN_TAG_V1,
@@ -249,4 +250,60 @@ test('scorch_wash: no byte of the token is a byte the authored plane can author'
     'both candidate ids are authorable');
   console.log(`[scorch_wash] ${fieldBytes.length} field byte values, ` +
     'none of them authorable: clause 3 holds by layout');
+});
+
+// ---------------------------------------------------------------------------
+// THE CONSOLE'S OWN UNIFORM SET, over every patch the fixture could place.
+//
+// `smoke_field_fixture_gen.cpp` preloads `SCORCH_CONSOLE_UNIFORMS`. The console
+// places ONE of the geom fixture's terrain records and this test does not assume
+// which, so it checks EVERY candidate: a centre-on-the-datum falloff has to make
+// out-lane 2 vary over whichever 32 m patch is chosen. A constant material in
+// the console would satisfy clause 3 and still be weak evidence, because a
+// constant cannot demonstrate that the engine consumed the VARYING lanes.
+//
+// Patch geometry, from tb_zhao_console_core_smoke.sv: patch (ix,iz) spans
+// x in [ix*32, (ix+1)*32] m and z in [iz*32, (iz+1)*32] m at pitch_log2 0, with
+// SGF_TERR_IX0 = 0 and SGF_TERR_IZ0 = 1 over SGF_TERR_RECORDS = 3 records.
+// ---------------------------------------------------------------------------
+test('scorch_wash: the console uniform set varies over every candidate patch', () => {
+  const { bytes } = buildScorchWash();
+  const decRes = decodeZprog(bytes);
+  if (!decRes.ok) throw new Error(decRes.errors.join('; '));
+  const prog = decRes.prog;
+  const u = SCORCH_CONSOLE_UNIFORMS;
+  const params = [u.centreX, u.centreZ, u.rIn, u.rOut, u.nav, 0, 0, 0];
+
+  const IX0 = 0, IZ0 = 1, RECORDS = 3, EDGE = 32;
+  for (let r = 0; r < RECORDS; ++r) {
+    const ix = r + IX0, iz = r + IZ0;
+    const weights = new Set<number>();
+    for (let vi = 0; vi <= EDGE; ++vi) {
+      for (let vj = 0; vj <= EDGE; ++vj) {
+        const wx = (ix * EDGE + vi) * 65536;
+        const wz = (iz * EDGE + vj) * 65536;
+        const out = interpret(prog, [wx, wz, u.age, u.phase, ...params]).outputs;
+        const tok = out[2]! | 0;
+        assert.ok(materialTokenTagOk(tok),
+          `patch (${ix},${iz}) vertex (${vi},${vj}) produced a non-token`);
+        const d = materialTokenDecode(tok)!;
+        assert.equal(d.matA, MAT_SCORCH_A, `patch (${ix},${iz}): matA moved`);
+        assert.equal(d.matB, MAT_SCORCH_B, `patch (${ix},${iz}): matB moved`);
+        assert.ok(d.weight >= SCORCH_WEIGHT_LO &&
+                  d.weight <= SCORCH_WEIGHT_LO + SCORCH_WEIGHT_SPAN,
+          `patch (${ix},${iz}): weight ${d.weight} outside the declared band`);
+        weights.add(d.weight);
+        assert.equal(out[0], 0, `patch (${ix},${iz}): height is not zero`);
+        assert.equal(out[1], 0, `patch (${ix},${iz}): velocity is not zero`);
+      }
+    }
+    // THE ANTI-VACUITY ASSERTION FOR THE CONSOLE'S ACTUAL STIMULUS.
+    assert.ok(weights.size > 1,
+      `patch (${ix},${iz}): the console uniform set makes out-lane 2 CONSTANT ` +
+      `(${[...weights]}) -- it cannot then show the engine read the varying lanes. ` +
+      'Move SCORCH_CONSOLE_UNIFORMS.rOut so the falloff crosses this patch.');
+    const lo = Math.min(...weights), hi = Math.max(...weights);
+    console.log(`[scorch_wash] patch (${ix},${iz}): ${weights.size} distinct weights, ` +
+      `0x${lo.toString(16)}..0x${hi.toString(16)} over its 33x33 lattice`);
+  }
 });
