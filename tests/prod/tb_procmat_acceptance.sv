@@ -287,8 +287,10 @@ module tb_procmat_acceptance #(
   // created for a `.*` connection, which is how this file failed to
   // elaborate the moment the ports landed. Declared and unread here: this
   // bench is about the 2-D compositor chain and has no terrain arm.
+  /* verilator lint_off UNUSEDSIGNAL */
   logic [31:0] env_terr_mat_set_o;
   logic [15:0] env_terr_mat_id_o;
+  /* verilator lint_on UNUSEDSIGNAL */
   assign env_ready_i      = 1'b1;
   assign pop_ready_i      = 1'b1;
   assign tfld_ready_i     = 1'b1;

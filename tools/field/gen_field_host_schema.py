@@ -1163,6 +1163,13 @@ def emit_sv():
     L.append("// OUTPUT_MAP is the translation between them, not a direct "
              "wire.")
     L.append("")
+    # A GENERATED CONSTANT PACKAGE declares the whole envelope; no single
+    # consumer reads every offset, so Verilator -Wall reports UNUSEDPARAM
+    # for the remainder -- 209 of them, which drowned 27 REAL warnings in
+    # `lint_zhao_console_board` until this was waived. Emitted from the
+    # GENERATOR rather than edited into the output, because the output says
+    # DO NOT EDIT and a `--check` freshness gate would revert it.
+    L.append("/* verilator lint_off UNUSEDPARAM */")
     L.append("package zhao_field_host_image_pkg;")
     L.append("")
 
@@ -1235,6 +1242,7 @@ def emit_sv():
                  % (pname.upper(), pout))
     L.append("")
     L.append("endpackage : zhao_field_host_image_pkg")
+    L.append("/* verilator lint_on UNUSEDPARAM */")
     return "\n".join(L).rstrip() + "\n"
 
 

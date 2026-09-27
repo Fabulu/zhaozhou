@@ -19,6 +19,7 @@
 // WIDTH diagnostic under `-Wall`, not a silent truncation.
 // OUTPUT_MAP is the translation between them, not a direct wire.
 
+/* verilator lint_off UNUSEDPARAM */
 package zhao_field_host_image_pkg;
 
   // ---------------------------------------------- constants ---
@@ -359,3 +360,4 @@ package zhao_field_host_image_pkg;
   localparam int unsigned ZFH_PROFILE_STAMP_OUTPUTS = 3;
 
 endpackage : zhao_field_host_image_pkg
+/* verilator lint_on UNUSEDPARAM */

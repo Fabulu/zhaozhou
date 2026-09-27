@@ -86,7 +86,25 @@ $srcs += "$repoFwd/fpga/rtl/prod/zhao_console_board.sv"
 Write-Host "closure: $($srcRel.Count) console sources from fit_targets.yml + SYS.PLL + SYS.RESET + the board"
 
 $ErrorActionPreference = 'Continue'
-$out = & $vl --lint-only -Wall --top-module zhao_console_board @srcs 2>&1
+# TWO WAIVERS, AND THE SILENCE RULE BELOW IS WHY THEY ARE HERE RATHER THAN
+# SOMEWHERE ELSE. This check demands NO diagnostic at all, so a warning class
+# that fires on correct, deliberate code makes the gate unpassable -- which the
+# comment below rightly calls how a gate becomes one people learn to skip.
+#
+#   PINCONNECTEMPTY -- an unconnected output MUST be written `.port_o ()` or
+#     Quartus reports PINMISSING hours into a fit. Verilator flags that exact
+#     form. Two gates, opposite demands; this one yields. A 1,038-port generated
+#     board will always have some deliberately unconnected outputs.
+#   DECLFILENAME -- `zhao_fragment_state_pkg.sv` also declares
+#     `zhao_fragment_state_guard`, deliberately: Quartus 17.0 will not take a
+#     bare module-scope elaboration check, so the guard needs its own module and
+#     belongs beside the package whose contract it guards. Its own comment says
+#     so.
+#
+# Every other -Wall class stays ON, which is the point: the gate checks 1,038
+# generated port connections for IMPLICIT, UNDRIVEN and UNUSEDSIGNAL, and those
+# are what catch a mistyped port in seconds instead of a PINMISSING hours in.
+$out = & $vl --lint-only -Wall -Wno-PINCONNECTEMPTY -Wno-DECLFILENAME --top-module zhao_console_board @srcs 2>&1
 $rc = $LASTEXITCODE
 $ErrorActionPreference = 'Stop'
 

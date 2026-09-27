@@ -17728,8 +17728,14 @@ verilate(test_procmat_acceptance
 add_test(NAME procmat_acceptance COMMAND test_procmat_acceptance)
 set_tests_properties(procmat_acceptance PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+# -Wno-PINCONNECTEMPTY for the reason recorded at lint_zhao_field_host: an
+# unconnected output MUST be written `.port_o ()` or Quartus reports PINMISSING,
+# and Verilator flags that exact form. Two gates, opposite demands; this one
+# yields. Ten instances here, all deliberate. UNUSEDSIGNAL stays ON -- the two
+# cases in this bench are waived AT THE DECLARATION instead, where the comment
+# explaining them already lives.
 add_test(NAME lint_tb_procmat_acceptance
-  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall -Wno-PINCONNECTEMPTY
     --top-module tb_procmat_acceptance
     -I${CMAKE_SOURCE_DIR}/fpga/rtl/common
     -I${CMAKE_SOURCE_DIR}/fpga/rtl/generated
