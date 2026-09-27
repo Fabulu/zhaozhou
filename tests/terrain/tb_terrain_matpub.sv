@@ -161,7 +161,14 @@ module tb_terrain_matpub
   logic [31:0] g_addr_q;
   logic [3:0]  g_beat_q;
 
-  wire [31:0] req_off_c   = guard_req.addr - RBASE[ZHAO_VRAM_ADDR_BITS-1:0];
+  // Both operands are ZHAO_VRAM_ADDR_BITS (27) wide, so the SUB produced 27
+  // bits into a 32-bit wire and -Wall failed the verilate -- which failed
+  // cmake --preset outright, so NO test in the tree could configure. Widened
+  // the same way the comparison on the next line already does. Behaviour is
+  // unchanged: `req_inreg_c` also requires addr >= RBASE, so the borrow case
+  // is excluded by the AND either way.
+  wire [31:0] req_off_c   = {5'd0, guard_req.addr}
+                          - {5'd0, RBASE[ZHAO_VRAM_ADDR_BITS-1:0]};
   wire        req_inreg_c = ({5'd0, guard_req.addr} >= RBASE) &&
                             (req_off_c < RSPAN);
 
