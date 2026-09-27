@@ -901,3 +901,117 @@ The constant travels in the ABI (`spec/commands.zidl`, `const u16
 QFMT_VERSION` — emitted into all three generated languages) so capture replay
 can refuse mismatched numerics. Editorial changes (prose, citations,
 provisional extents re-ratified per Q4) do not bump.
+
+## 14. Material identity and state
+
+**NEW 2026-09-27 (MATERIALPATH).** `design/ops.yml` has cited
+`spec/qformats.md §material-ids` and `spec/qformats.md §material-state` as
+`FIELD.WRITE.MATERIAL`'s operand and result formats since before either section
+existed. This section is those two anchors. It is the same defect already
+recorded one op below for `FIELD.WRITE.NAV`'s non-existent `§nav-layer`, which
+was repaired by pointing that citation at §2; this one needed the section
+written rather than re-aimed, because the format it names is real, is used by
+composed blocks, and had never been stated in one place.
+
+**NO `QFMT_VERSION` BUMP, and the reason is checked against §13's own terms
+rather than asserted.** §13 bumps on a change to a type's width or format, a
+rounding or saturation law, a frozen constant or table, a golden-vector layout,
+or the fixgen output set. This section changes none of them: the 24-bit triple
+below is **transcribed from two composed blocks that already ship it**, so no
+existing capture decodes differently, and the 32-bit token it describes was
+**previously unspecified in every bit** -- there was nothing to be incompatible
+with. The token additionally carries its **own** version byte in band (below),
+which is a stronger guarantee for this word than a global counter: a decoder
+can refuse a token it does not understand, which `QFMT_VERSION` cannot do
+per-value.
+
+### material-ids
+
+A material **id** is a `u8` tile identifier, as used by layer E of a terrain
+patch. Two of them name the candidates a cell blends between.
+
+| name | type | range | meaning |
+|---|---|---|---|
+| `matA` | u8 | 0-255 | the first candidate tile id |
+| `matB` | u8 | 0-255 | the second candidate tile id |
+
+Ids are **identifiers, never interpolated**. They are selected between, and the
+selection is the mosaic's (`spec/terrain_rules.md` §6.2). Any u8 is a legal id;
+there is no reserved value and in particular **0 is a real tile, not "absent"**.
+
+### material-state
+
+A material **state** is the triple a single terrain cell carries:
+
+| name | type | range | meaning |
+|---|---|---|---|
+| `matA` | u8 | 0-255 | candidate tile id A |
+| `matB` | u8 | 0-255 | candidate tile id B |
+| `weight` | unit8 | 0-255 | the A/B blend, `spec/terrain_rules.md` §6.2 |
+
+`weight` is a **unit8** (§2): 0 and 255 are the exact endpoints. Per
+`terrain_rules` §6.2, weight 0 selects `matB` everywhere and 255 selects `matA`
+everywhere, so **every one of the 2^24 triples is a legal material state.** That
+fact is what forces the tag in §14.1 -- a bare triple cannot report its own
+absence.
+
+The composition law over states is `zref::fieldir::compose_material`: start from
+the authored layer-E state, and **the last ENABLED writer wins, in accepted
+command order.** Hardware does not invent a material hierarchy; software
+expresses precedence by the order it submits (`docs/OWNER_DOCKET.md` 2026-08-24
+item 6).
+
+#### 14.1 The 32-bit material token, v1
+
+`FIELD.WRITE.MATERIAL`'s result leaves the Earth engine on **out-lane 2, which
+is a flat 32-bit word** -- `zhao_field_earth_adapter`'s `material_o` and
+`zhao_terrain_patch_acc`'s `out_mat_0..3_o` are `[31:0]` at every hop. The token
+is how a `material-state` triple travels on that word.
+
+```
+ 31        24 23        16 15         8 7          0
++------------+------------+------------+------------+
+|    TAG     |    matA    |    matB    |   weight   |
++------------+------------+------------+------------+
+```
+
+| field | bits | value |
+|---|---|---|
+| `TAG` | `[31:24]` | `0xE1` for v1. Any other value is **not a v1 token**. |
+| `matA` | `[23:16]` | `material-ids` above |
+| `matB` | `[15:8]` | `material-ids` above |
+| `weight` | `[7:0]` | unit8 |
+
+**The low 24 bits are not a new choice.** They are transcribed from the two
+composed blocks that already commit to this order:
+`zhao_terrain_compcache_front.sv` packs its layer-E plane
+`{mat_w_a_i, mat_w_b_i, mat_w_weight_i}` and unpacks `[23:16]/[15:8]/[7:0]`, and
+`zhao_texture_island_v3_top.sv` takes the mosaic's candidates from
+`base_rgb[23:16]` and `base_rgb[15:8]`. Stating a different byte order here
+would have created a rival law for a settled layout.
+
+**The tag is what makes a refusal possible, and that is its whole purpose.**
+Because every 24-bit pattern is a legal material state, a decoder without a tag
+cannot distinguish a real field result from a lane that was never written, a
+short record, or a held bus -- it would compose whatever arrived and the picture
+would be wrong in silence. The ratified presence rule is that **an absent output
+is not a write of zero** (`reports/OWNER-DECISION-20260926-I34-NAV.md` §3), and
+`0x0000_0000` has tag `0x00`, so the additive zero an adapter parks on an absent
+lane is **refused by construction** rather than decoding as `{0, 0, 0}` -- which
+is itself a perfectly legal "matB everywhere" triple.
+
+**A refused token is counted, never substituted.** A consumer that refuses a
+token keeps the state it already had -- on the terrain path that is the authored
+layer-E triple -- and increments a counter. Substituting a default would be
+exactly the "hole as a value" conflation the Earth contract forbids.
+
+**Implementations, and they are two views of this section, not three laws:**
+
+* `fpga/rtl/common/zhao_material_token_pkg.sv` -- `zmt_encode`, `zmt_tag_ok`,
+  `zmt_mat_a`/`_b`/`zmt_weight`.
+* `reference/include/zref/zref_fieldir.hpp` -- `material_token_encode`,
+  `material_token_tag_ok`, `material_token_decode`.
+
+`tests/differential/material_token_directed.cpp` exercises both directions
+against an **asymmetric** value (`matA=0x2A, matB=0x7C, weight=0xB3`), chosen so
+that a swapped, rotated or truncated layout cannot pass.

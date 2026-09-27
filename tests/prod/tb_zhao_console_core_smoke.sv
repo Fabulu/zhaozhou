@@ -940,6 +940,10 @@ module tb_zhao_console_core_smoke
   // `compcache_front_rtl_directed` fires both on its 9 x 9 instance.
   logic [31:0]             terr_cc_mat_oob_o;
   logic [31:0]             terr_cc_mat_cells_o;
+  // TERRAIN.MATJOIN, composed 2026-09-27 (MATERIALPATH).
+  logic [31:0]             terr_mj_field_composed_o;
+  logic [31:0]             terr_mj_token_refused_o;
+  logic [31:0]             terr_mj_held_overrun_o;
 
   // (`terr_dm_*` LEFT THE CORE's EDGE 2026-09-21, core entry I27's first half:
   // `zhao_terrain_pageio` holds the slot, generation and epoch the patch was
@@ -7213,6 +7217,61 @@ module tb_zhao_console_core_smoke
     // entry this closes spent five packets on.
     if ((terr_cc_patches_served_o != 32'd0) && (terr_vj_sweeps_started_o == 32'd0))
       $fatal(1, "SMOKE: terrvel patches were served but no velocity sweep ever started");
+    // ---- TERRAIN.MATJOIN, composed 2026-09-27 (MATERIALPATH) ---------------
+    //
+    // WHAT THIS SMOKE CAN AND CANNOT SAY, and the limit is the same one the
+    // velocity paragraph above states: this bench issues NO TerrainField, so
+    // `fields_active_o` is 0 at every patch, no Earth answer lane ever fires,
+    // and `field_composed` is therefore EXPECTED TO BE ZERO. That zero is NOT
+    // evidence that a field material write reaches the compose cache -- that
+    // is `terrain_matjoin_directed`'s job, against
+    // `zref::fieldir::compose_material`, and case 12 of
+    // `composepub_acceptance` through the real adapter.
+    //
+    // WHAT IT IS EVIDENCE OF is the half that no directed test can give: that
+    // inserting the join between TERRAIN.PAGESTREAM and the compose cache did
+    // not disturb the AUTHORED path in the composed machine. `mat_cells`
+    // counts the layer-E writes the cache actually accepted, and it is read
+    // above; the assertion below is the one that would catch a join that
+    // elaborated and swallowed the plane.
+    //
+    // THE TWO ZEROES ARE ASSERTED AND BOTH HAVE BEEN SEEN TO FIRE ELSEWHERE,
+    // because a detector reading zero is a claim:
+    //   token_refused  fired by terrain_matjoin_directed section 3, which
+    //                  offers a legal-looking triple under a wrong tag and the
+    //                  adapter's own additive zero.
+    //   held_overrun   fired by the same file's section 5, which presents two
+    //                  page-stream accepts with no state publish between them.
+    //                  It is UNREACHABLE here by construction -- TERRAIN.PATCH
+    //                  holds one vertex at a time -- which is exactly why it
+    //                  is fired at the block's own ports instead.
+    $display("SMOKE: terrmat  field_composed=%0d token_refused=%0d held_overrun=%0d | cc_mat_cells=%0d",
+             terr_mj_field_composed_o, terr_mj_token_refused_o,
+             terr_mj_held_overrun_o, terr_cc_mat_cells_o);
+    if (terr_mj_held_overrun_o != 32'd0)
+      $fatal(1, "SMOKE: terrmat held_overrun=%0d -- a page-stream cell beat arrived while the join still held one, so TERRAIN.PATCH is no longer one-vertex-at-a-time",
+             terr_mj_held_overrun_o);
+    if (terr_mj_token_refused_o != 32'd0)
+      $fatal(1, "SMOKE: terrmat token_refused=%0d -- a material token was offered with no TerrainField issued at all",
+             terr_mj_token_refused_o);
+    // THE POSITIVE HALF, and it is the assertion that earns its place: with
+    // patches served, the authored layer-E plane must still be filling. A
+    // silent material plane beside working heights is precisely the regression
+    // that composing this join could have introduced, and it would otherwise
+    // be invisible -- every height correct, every counter balanced, and the
+    // ground textured with whatever the previous patch left behind.
+    if ((terr_cc_patches_served_o != 32'd0) && (terr_cc_mat_cells_o == 32'd0))
+      $fatal(1, "SMOKE: terrmat patches were served but NO layer-E material cell was written -- TERRAIN.MATJOIN swallowed the authored plane");
+    // AND THE FILL IS EXACTLY ONE PATCH'S WORTH, which is the assertion the
+    // compose cache's own header asks for and nobody had written:
+    // "a patch owes exactly (LAT_W-1)*(LAT_H-1) = 1,024 cells". Before the
+    // `tpc_placed` gate this read 8,192 -- eight DISCARDED lattices writing
+    // their layer E into the placed patch's parity while every other counter
+    // balanced. An upper bound alone would not have caught it either way
+    // round, so it is asserted as an equality.
+    if ((terr_cc_patches_filled_o != 32'd0) && (terr_cc_mat_cells_o != 32'd1024))
+      $fatal(1, "SMOKE: terrmat mat_cells=%0d -- a completed layer-E fill owes exactly 1,024 cells; anything else means beats from an unplaced lattice reached the plane",
+             terr_cc_mat_cells_o);
     if ((terr_vj_sweeps_started_o != 32'd0) && (terr_tv_samples_o == 32'd0))
       $fatal(1, "SMOKE: terrvel a sweep started but TERRAIN.VELOCITY evaluated no samples");
 

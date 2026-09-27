@@ -6098,6 +6098,221 @@
 //      composing the terrain compose engine (connected item 10).
 //
 //      =====================================================================
+//      READ THIS BLOCK FIRST -- IT IS THE NEWEST. MATERIALPATH, 2026-09-27:
+//      THE MATERIAL CHANNEL IS BUILT, COMPOSED AND MEETS THE OWNER'S TEST.
+//      Register 2 -> 2, measured BARE. I34 DOES NOT CLOSE, and the reason is
+//      named in (M7): the composed triple still has no reader past
+//      `tcf_tri_mat_*_w`, which is I13's seam.
+//
+//      (M1) THE BLOCKER WAS AN ASYMMETRY, AND NAMING IT THAT WAY IS WHAT MADE
+//           IT A SMALL BUILD. (P3) below is right that material's blocker is an
+//           absent encoding rather than a missing port, and it stops one step
+//           short of the structural reason. In this file the two halves of a
+//           terrain cell reached TERRAIN.COMPCACHE by DIFFERENT ROUTES:
+//
+//             heights  : pagestream -> u_terrain_patch (field lane composed
+//                        in) -> u_terrain_compcache
+//             material : pagestream ---------------------> u_terrain_compcache
+//
+//           Height went THROUGH the composer. Material went AROUND it. That is
+//           why `zhao_terrain_compcache_front`'s layer-E write face had exactly
+//           one driver and why a field result had nowhere to arrive -- and it
+//           is a ONE-BLOCK gap, not a subsystem.
+//
+//      (M2) WHAT WAS BUILT. `fpga/rtl/terrain/zhao_terrain_matjoin.sv`, the
+//           out-lane 2 sibling of TERRVEL's `zhao_terrain_veljoin`: it rides
+//           the same per-vertex lane stream, takes this file's
+//           `terr_pt_fld_covers_o` rather than re-deciding section 9.1, decodes
+//           the token, composes per `zref::fieldir::compose_material` and
+//           writes the compose cache's layer-E plane. Composed here; the face
+//           that used to take `tps_v_mat_*` directly now takes `tmj_*`.
+//           `efa_material` and `efa_present` were DRIVEN wires that nothing
+//           read; they are read now.
+//
+//           THE ENCODING is `fpga/rtl/common/zhao_material_token_pkg.sv` plus
+//           `zref::fieldir::material_token_encode/_decode`, with
+//           `spec/qformats.md` section 14 -- which is literally the two anchors
+//           `design/ops.yml` has cited since before they existed,
+//           `material-ids` and `material-state`. (P6)(a) asked for exactly
+//           this and it is done.
+//           THE LOW 24 BITS ARE TRANSCRIBED, NOT CHOSEN: three composed sites
+//           already commit to {matA[23:16], matB[15:8], weight[7:0]} --
+//           compcache_front :587/:701-703, `zhao_terrain_project.sv:177-181`,
+//           and `zhao_texture_island_v3_top.sv:1314-1315`. The top byte is a
+//           v1 TAG, which is the directive's "versioned extension" rather than
+//           stolen bits, and it exists so a token can be REFUSED: every 24-bit
+//           pattern is a legal material state under terrain_rules 6.2, so
+//           without it the adapter's additive zero on an absent lane decodes as
+//           the legal triple {0,0,0} AND RENDERS.
+//
+//      (M3) THE ARBITRATION IS AT THE COMPOSE POINT AND NOT AT THE PAGE, and
+//           the brief that commissioned this packet asked for it in the wrong
+//           place. It says to find "the second writer and its arbitration" on
+//           `compcache_front`'s material write face. A second writer INTO THE
+//           AUTHORED PLANE is the specific thing `zref_fieldir.hpp`'s sinks
+//           header forbids -- "ALL THREE ARE LIVE COMPOSITION, NEVER PERSISTENT
+//           MUTATION ... a field evaluated every frame must never rewrite a
+//           VRAM page every frame, which is the failure this separation exists
+//           to prevent." So the arbitration belongs exactly where HEIGHT's
+//           already is: at the compose point, once per frame, leaving the
+//           authored value untouched. The law is ratified and not invented
+//           here -- last ENABLED writer wins in accepted command order -- and
+//           because this file's own chosen law 1 already delivers lane words
+//           IN LIST ORDER, the list order IS the command order and the
+//           implementation is an overwrite with no hierarchy in silicon.
+//
+//      (M4) THE OWNER'S TEST, MET, AND MEASURED AT THE CONSUMER RATHER THAN AT
+//           THE PRODUCER. "Verify that a Field material write changes the
+//           intended consumer."
+//           `composepub_acceptance` case 12, through the REAL
+//           `zhao_field_earth_adapter`, reading the compose cache's own SERVE
+//           port -- 154 checks, 0 failures (was 122):
+//             12a no field          -> authored {9D,EA,B4}, field_composed 0
+//             12b live field        -> SERVED {2A,7C,B3}, field_composed 1024,
+//                                      lane_no_cell 65, height lane unmoved
+//             12c wrong-tag token   -> refused on 1024 cells, authored kept
+//             12d ordinal-2 ABSENT  -> authored survived, nothing composed
+//           The value is ASYMMETRIC on purpose and the authored triples come
+//           from the shared `layere_fixture.hpp`, so a swapped or truncated
+//           layout and "one material for the whole patch" both fail.
+//           `terrain_matjoin_directed`, 50 checks, adds both command orders and
+//           600 pseudo-random vertices differenced against compose_material
+//           with 247 enabled and 51 refused words ASSERTED -- so the sweep is
+//           shown to have REACHED both paths instead of passing vacuously.
+//
+//      (M5) THE GUARD FIRED ON ITS AUTHOR, WHICH IS THE PART WORTH KEEPING.
+//           The join's header claimed accept(V+1) is strictly after the state
+//           publish of V. IT IS NOT. `zhao_terrain_patch.sv:285` reads
+//           `out_free = !r_valid || st_ready_i`, so `vtx_ready_o` rises on the
+//           SAME CYCLE the held record retires and an accept coincides with a
+//           publish routinely. `held_overrun_o` therefore fired 992 times per
+//           patch on a correct walk, and 10,239 times in the console smoke.
+//           The DATA was never wrong -- the emit is lossless either way -- but
+//           the alarm was, and the wrong sentence was reached by confident
+//           reasoning about RTL I had read. It was found by RUNNING case 12
+//           against the real patch. The guard now carries `!st_fire_i`; the
+//           corrected paragraph is in the block header and in
+//           `design/contracts/TERRAIN.MATJOIN.md`.
+//
+//      (M6) AN INSTRUMENT DEFECT IN A TEST THIS ENTRY'S OWN FENCE QUOTES.
+//           `tests/terrain/terrain_veljoin_directed.cpp` ended with a HARDCODED
+//           `"%d checks, 0 failures"` and `zhao::exit_hard(0)`. `zhao::check`
+//           does not abort, it counts; `exit_hard(0)` exits zero
+//           unconditionally. So that test printed a clean verdict and RETURNED
+//           SUCCESS with checks failing, and ctest could never see it -- while
+//           its "19/0" was being quoted as the evidence that velocity still
+//           reaches `zhao_part_collide`. It was a literal, not a measurement.
+//           Repaired to `zhao::report_and_exit`; it passes honestly, 19 checks,
+//           rc 0, so nothing was being hidden -- but nothing was being WATCHED
+//           either. A tree-wide sweep found this was the only instance.
+//
+//      (M7) WHAT DID NOT CLOSE, STATED PLAINLY SO NOBODY INHERITS A HALF
+//           CLOSURE. The composed triple reaches the compose cache and is
+//           served to TERRAIN.TESS, which forwards it per triangle to
+//           `tcf_tri_mat_a_w`/`_mat_b_w`/`_weight_w` in this file -- WHERE IT
+//           STILL HAS NO READER. (P3)'s measurement of that stands, with the
+//           line numbers moved to :21511 (declaration) and :21648-21650 (the
+//           projector's write) by the blocks added since.
+//           The route onward is MEASURED and is NOT a mystery:
+//             * the 32 bits already have complete live carriage --
+//               `base_rgb[23:8]` plus `recipe_weight` ride `tri_flat_request_c`
+//               per triangle into the shell, through `zhao_geom_binner_v2`'s
+//               metadata bank, to `zhao_texture_mosaic_v2`. NO texture or
+//               raster file needs to change.
+//             * what is missing is a PER-TRIANGLE SOURCE. `MAT_BASE_RGB_C` is a
+//               named constant white and `mw_pub_recipe_weight` is per SPAN.
+//             * and the real obstacle is ALIGNMENT AT THE SHELL'S DOOR, which
+//               no document had named: `tri_flat_request_c` escapes it only
+//               because it is a LEVEL held constant for a whole span. A
+//               per-triangle value must survive GEOM.SETUP and GEOM.ATTRPACK,
+//               where the only per-triangle sideband is a 16-bit source id
+//               (`zhao_geom_setup.sv:150/:179/:260`, no parameter).
+//             * the DRAIN price that made this route look unaffordable is NOT
+//               owed -- `zhao_material_window.sv:486-492`'s `match_c` has five
+//               terms and neither `base_rgb` nor `recipe_weight` is one.
+//           That seam is I13's and it is GEOM's files, so it is not taken here.
+//
+//      (M8) AND TWO CLAIMS IN (P3) BELOW ARE NOW FALSE AT THIS TREE, both
+//           because TERRAINMAT landed after that measurement was taken.
+//           "`zhao_terrain_clipfeed` HAS NO MATERIAL INPUT PORT AT ALL. Its
+//           material outputs are ... driven from constants at that file's
+//           :695-697." BOTH HALVES ARE FALSE: that block has `mat_set_i[31:0]`
+//           and `mat_id_i[15:0]` (:354-355) and drives `o_material_set_o`/
+//           `o_material_id_o` from registers at :810-812, with the mode
+//           DERIVED. :695-697 is a comment about tint ports. And the blocker
+//           four separate refusals in this entry rest on -- "`material_set`/
+//           `material_id` under `fpga/rtl/terrain/` return ZERO hits" -- is
+//           RETIRED: four code hits today, all in `zhao_terrain_clipfeed.sv`.
+//           `FINDINGS-MATERIALPATH.md` carries the full list.
+//
+//      (M9) AND A PRE-EXISTING DEFECT IN THE AUTHORED LAYER-E PATH, FOUND BY
+//           BEING BLOCKED BY IT, REPAIRED HERE BECAUSE THIS PACKET NOW OWNS
+//           THAT WRITE FACE. It is not a material-CHANNEL defect and has
+//           nothing to do with fields. It has been live in the composed
+//           console and no test looked at it.
+//
+//           THE MEASUREMENT. The console smoke streams ELEVEN lattices and
+//           PLACES ONE:
+//             ps_lattices=11  ps_vertices=11979  ps_cells=11264
+//             place_patches=1  pt_samples=1089  cc_records=1089
+//             mat_cells=8192
+//           TERRAIN.PATCH composes 1,089 vertices; the layer-E plane took
+//           8,192 writes in that one fill.
+//           `zhao_terrain_compcache_front.sv:729-733` states the contract AND
+//           why the counter exists: "`mat_cells_o` is NOT a tautology of the
+//           write enable and is the one number that says the layer-E fill is
+//           COMPLETE rather than merely happening: a patch owes exactly
+//           (LAT_W-1)*(LAT_H-1) = 1,024 cells". IT READ EIGHT TIMES THE
+//           CONTRACT and nothing had ever read it.
+//
+//           ATTRIBUTION SETTLED TWO WAYS, because one would not have been
+//           enough. By SOURCE: at `62d8b6a7`, :27814 is `assign
+//           tps_v_cell_fire_c = tpsx_v_valid && tpsx_v_ready && tps_v_cell;`
+//           and :28412 is `.mat_we_i (tps_v_cell_fire_c),`. By MEASUREMENT: a
+//           throwaway worktree at that commit reports the IDENTICAL
+//           `mat_cells=8192` and PASSES. The defect is PRE-EXISTING; this
+//           packet inherited it exactly by preserving the old key one-for-one.
+//
+//           THE MECHANISM, and it is NOT the one I reached for first.
+//           `tps_v_cell_fire_c` is the DEMUXED PAGE STREAM beat -- every cell
+//           the streamer hands out, to either arm of `u_terrain_psmux`, for
+//           lattices this console never places. IT IS NOT TERRAIN.PATCH'S
+//           ACCEPT BEAT, and the two differ by 8x in one fill.
+//
+//           I GOT THIS WRONG ONCE BEFORE FIXING IT, AND THE WRONG FIX IS
+//           RECORDED BECAUSE IT IS THE INSTRUCTIVE HALF. My first repair
+//           gated the old key on `tpc_placed` -- reasoning from :27662's
+//           `tps_v_ready = tpc_placed ? ... : 1'b1`, which does discard
+//           unplaced lattices. It moved `held_overrun` 10,239 -> 8,191 AND
+//           LEFT `mat_cells` AT 8,192, which is the tell: a number that did
+//           not move after a change that must have moved it. `tpc_placed` is
+//           not a per-lattice gate on that beat. THE EVIDENCE WAS ALREADY ON
+//           SCREEN -- `pt_samples=1089` against `ps_cells=11264` -- and I
+//           reasoned about handshakes instead of differencing the two counts.
+//
+//           THE FIX IS TO KEY THE JOIN ON THE BLOCK WHOSE VERTICES IT
+//           COMPOSES: `tpt_vtx_valid && tpt_vtx_ready && tps_v_cell`. That is
+//           TERRAIN.PATCH accepting a vertex -- the same block and the same
+//           handshake whose field-lane beat this join already pairs against --
+//           so the pairing is correct BY CONSTRUCTION rather than by an
+//           argument about two handshakes that turned out not to be the same
+//           one. The smoke now ASSERTS `mat_cells == 1,024` on a completed
+//           fill rather than printing it; an upper bound would not have caught
+//           this in either direction.
+//
+//           NOTE THE DIRECTION, because it decides whether this is a reduction
+//           in function: it removes writes that describe lattices the console
+//           DECIDED NOT TO COMPOSE. It narrows nothing the console renders.
+//
+//           AND THE KNOWLEDGE WAS ALREADY IN THIS FILE. :7650, inside this
+//           very entry: "The composer discards an entire unplaced patch
+//           (`tps_v_ready = tpc_placed ? ... : 1'b1`)". Written down correctly,
+//           in a DEADLOCK argument, and never carried across to the layer-E
+//           write enable. That is this tree's own law about knowledge nothing
+//           reads back, arriving inside the entry that states it.
+//      =====================================================================
+//
+//      =====================================================================
 //      READ THIS BLOCK FIRST -- BEFORE THE GATHERFRONT BLOCK BELOW, WHOSE ONE
 //      OPEN QUESTION IT ANSWERS. LANESCOST, 2026-09-27: THE GATHERING FRONT
 //      IS PRICED. COMPOSING IT COSTS +11,979 ALUTs -- 14.3% OF THE SHIPPING
@@ -13555,6 +13770,25 @@ module zhao_console_core
   output logic [31:0]             terr_cc_cs_oob_o,
   output logic [31:0]             terr_cc_mat_oob_o,
   output logic [31:0]             terr_cc_mat_cells_o,
+
+  // ---- TERRAIN.MATJOIN, entry I34's material channel (MATERIALPATH) -------
+  // Three of the block's five counters reach this edge. The two left inside
+  // are CENSUSES -- `cells_written_o` restates `terr_cc_mat_cells_o` one hop
+  // up, and `lane_no_cell_o` counts the 65 lattice vertices per patch that own
+  // no cell, which is arithmetic rather than news. Both are asserted in
+  // `terrain_matjoin_directed`. Exporting a port for a number nobody reads is
+  // the uncashed cheque this tree keeps finding, so they are not exported.
+  //
+  // `terr_mj_held_overrun_o` IS exported although it is structurally zero in
+  // this arrangement, and that is the point: it is the guard on the sequencing
+  // assumption the join rests on -- that TERRAIN.PATCH holds ONE vertex at a
+  // time -- and a fault counter the console cannot read is exactly the shape
+  // `CLAUDE.md` records as unauditable. It is seen to FIRE at the block's own
+  // ports in `terrain_matjoin_directed`, so its zero here is a measurement and
+  // not an unproven claim.
+  output logic [31:0]             terr_mj_field_composed_o,
+  output logic [31:0]             terr_mj_token_refused_o,
+  output logic [31:0]             terr_mj_held_overrun_o,
 
   // ---- TERRAIN PAGING evidence -------------------------------------------
   // Events, never cycles, except where the name says otherwise. These are the
@@ -28509,6 +28743,130 @@ module zhao_console_core
     .idle_o              (fld_earth_idle_o)
   );
 
+  // ---------------------------------------------------------------------
+  // TERRAIN.MATJOIN -- entry I34's MATERIAL channel, out-lane 2.
+  // COMPOSED 2026-09-27 (MATERIALPATH).
+  // ---------------------------------------------------------------------
+  // THE ASYMMETRY THIS REMOVES. Until this instantiation the two halves of a
+  // terrain cell reached the compose cache by different routes:
+  //
+  //   heights  : u_terrain_pagestream -> u_terrain_patch (composed with the
+  //              field lane) -> u_terrain_compcache
+  //   material : u_terrain_pagestream ---------------------> u_terrain_compcache
+  //
+  // Height went THROUGH the composer; material went AROUND it. `mat_w_*_i`
+  // below had exactly ONE driver -- `tps_v_mat_*`, the authored layer E -- so
+  // a field material result had no port to arrive on, and `efa_material` and
+  // `efa_present` were driven wires that nothing read. That, and not a missing
+  // owner or a missing destination, is what I34 (P3) records as material's
+  // blocker.
+  //
+  // WHY A JOIN AND NOT A PORT ON `u_terrain_patch`. Identical reasoning to
+  // TERRVEL's, three paragraphs up: out-lane 2 rides the SAME per-vertex lane
+  // stream as out-lane 0, and the section 9.1 answer is decided ONCE by the
+  // block that owns the list. A material port on TERRAIN.PATCH would have cost
+  // its whole instantiation chain plus every bench, to re-decide a law that is
+  // already answered on a wire.
+  //
+  // AND WHY THE ARBITRATION IS HERE AND NOT AT THE PAGE. `zref_fieldir.hpp`'s
+  // sinks header: "ALL THREE ARE LIVE COMPOSITION, NEVER PERSISTENT MUTATION
+  // ... a field evaluated every frame must never rewrite a VRAM page every
+  // frame." So a field result must not become a second writer of the authored
+  // page; it composes once per frame into the COMPOSE CACHE, exactly where
+  // TERRAIN.PATCH already deposits field-composed heights.
+  //
+  // DEFAULT IS BIT-FOR-BIT THE OLD BEHAVIOUR. With no field covering a cell,
+  // or no ordinal-2 presence, or a token that is not v1, the block emits the
+  // authored bytes unchanged -- so `fields_active_o == 0` leaves this console's
+  // material plane exactly as it was before this commit.
+  wire       tmj_we;
+  wire [4:0] tmj_ci, tmj_cj;
+  wire [7:0] tmj_mat_a, tmj_mat_b, tmj_weight;
+
+  zhao_terrain_matjoin u_terrain_matjoin (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    // THE AUTHORED LAYER-E WRITE FACE, KEYED ON TERRAIN.PATCH'S OWN VERTEX
+    // ACCEPT -- which is NOT the page stream's cell beat, and that distinction
+    // is the whole of a defect this packet found by being blocked by it.
+    //
+    // WHAT THE OLD KEY WAS AND WHY IT IS WRONG HERE. The compose cache's
+    // `mat_we_i` took `tps_v_cell_fire_c` directly, and that is
+    //     tpsx_v_valid && tpsx_v_ready && tps_v_cell
+    // -- the DEMUXED STREAM beat, fired for every cell the page streamer
+    // hands out, to either arm of `u_terrain_psmux` and for lattices this
+    // console never places. Measured in the console smoke, which streams
+    // ELEVEN lattices and PLACES ONE:
+    //
+    //     ps_lattices=11  ps_cells=11264  place_patches=1
+    //     pt_samples=1089  cc_records=1089  mat_cells=8192
+    //
+    // The patch composes 1,089 vertices; the plane took 8,192 material writes
+    // in that one fill. `zhao_terrain_compcache_front.sv:729-733` states the
+    // contract and states why that counter exists: "`mat_cells_o` is NOT a
+    // tautology of the write enable and is the one number that says the
+    // layer-E fill is COMPLETE rather than merely happening: a patch owes
+    // exactly (LAT_W-1)*(LAT_H-1) = 1,024 cells". IT READ EIGHT TIMES THE
+    // CONTRACT, and nothing had ever read it.
+    //
+    // MEASURED AT THE BASE COMMIT TOO, so the attribution is not guesswork:
+    // `62d8b6a7` reports the identical `mat_cells=8192` and PASSES. The defect
+    // is pre-existing; this packet did not introduce it and inherited it
+    // exactly by preserving the old key one-for-one.
+    //
+    // THE FIX IS TO KEY THE JOIN ON THE BLOCK WHOSE VERTICES IT COMPOSES.
+    // `tpt_vtx_valid && tpt_vtx_ready` is TERRAIN.PATCH accepting a vertex --
+    // the same block, and the same handshake, whose field-lane beat
+    // (`tvj_p_valid && tvj_p_ready`) this join pairs against. `tps_v_cell`
+    // keeps the last lattice column and row out, exactly as before. So the
+    // pairing is correct BY CONSTRUCTION rather than by an argument about two
+    // handshakes that turned out not to be the same one -- and the write face
+    // now carries exactly the cells the composer composes.
+    //
+    // A NOTE ON DIRECTION, because it decides whether this narrows function:
+    // it removes writes that describe lattices the console DECIDED NOT TO
+    // COMPOSE. It narrows nothing the console renders, and it moves the
+    // counter ONTO its documented contract rather than away from it.
+    .a_we_i    (tpt_vtx_valid && tpt_vtx_ready && tps_v_cell),
+    .a_ci_i    (tps_v_vi[4:0]),
+    .a_cj_i    (tps_v_vj[4:0]),
+    .a_mat_a_i (tps_v_mat_a),
+    .a_mat_b_i (tps_v_mat_b),
+    .a_weight_i(tps_v_weight),
+
+    // The Earth answer lane, forked at the same point TERRAIN.VELJOIN forks
+    // it: `tvj_p_valid && tvj_p_ready` is the beat `u_terrain_patch` accepts a
+    // field word on, and `terr_pt_fld_covers_o` is that block's own section
+    // 9.1 answer for the word being offered -- taken, never re-decided.
+    .f_fire_i    (tvj_p_valid && tvj_p_ready),
+    .f_covers_i  (terr_pt_fld_covers_o),
+    .f_present_i (efa_present[2]),
+    .f_material_i(efa_material),
+
+    // The emit beat: TERRAIN.PATCH publishing the held vertex's state record.
+    // Pinning the material write to the SAME record as its height is what keeps
+    // it from ever being outstanding when `fill_done_o` -- which counts height
+    // records -- declares the parity full.
+    .st_fire_i(tpt_st_valid && tcc_st_ready),
+
+    .o_we_o    (tmj_we),
+    .o_ci_o    (tmj_ci),
+    .o_cj_o    (tmj_cj),
+    .o_mat_a_o (tmj_mat_a),
+    .o_mat_b_o (tmj_mat_b),
+    .o_weight_o(tmj_weight),
+
+    // Two censuses and the idle stay inside this module; the port block's own
+    // note says why, and `terrain_matjoin_directed` asserts all three.
+    .cells_written_o (),
+    .field_composed_o(terr_mj_field_composed_o),
+    .token_refused_o (terr_mj_token_refused_o),
+    .lane_no_cell_o  (),
+    .held_overrun_o  (terr_mj_held_overrun_o),
+    .idle_o          ()
+  );
+
   // ---- TERRAIN.COMPCACHE (the front) --------------------------------------
   zhao_terrain_compcache_front #(
     .LAT_W(33),
@@ -28569,12 +28927,22 @@ module zhao_console_core
     //
     // 1,024 of the 1,089 beats carry a cell; `tps_v_cell` says which, and the
     // last lattice column and row correctly write nothing.
-    .mat_we_i      (tps_v_cell_fire_c),
-    .mat_w_ci_i    (tps_v_vi[4:0]),
-    .mat_w_cj_i    (tps_v_vj[4:0]),
-    .mat_w_a_i     (tps_v_mat_a),
-    .mat_w_b_i     (tps_v_mat_b),
-    .mat_w_weight_i(tps_v_weight),
+    // COMPOSED THROUGH TERRAIN.MATJOIN FROM 2026-09-27 (MATERIALPATH). This
+    // face used to take `tps_v_*` directly -- the authored layer E, with no
+    // composer between the page and the plane. It now takes the SAME triple
+    // composed against Earth out-lane 2 per `zref::fieldir::compose_material`.
+    // The address still travels with the data, so the one-record retiming the
+    // join introduces is invisible to this fire-and-forget port.
+    //
+    // WITH NO FIELD THIS IS BIT-FOR-BIT WHAT IT WAS: the join's default output
+    // is the authored triple unchanged, asserted as the first case of
+    // `terrain_matjoin_directed`.
+    .mat_we_i      (tmj_we),
+    .mat_w_ci_i    (tmj_ci),
+    .mat_w_cj_i    (tmj_cj),
+    .mat_w_a_i     (tmj_mat_a),
+    .mat_w_b_i     (tmj_mat_b),
+    .mat_w_weight_i(tmj_weight),
 
     // TERRVEL: the 4.2 velocity lattice, straight off TERRAIN.VELOCITY's
     // sweep. `vv_ready_i` on that block is tied high because this is one RAM

@@ -279,7 +279,40 @@ module tb_terrain_composepub #(
     output var logic signed [15:0] rsp_v10_o,
     output var logic signed [15:0] rsp_v01_o,
     output var logic signed [15:0] rsp_v11_o,
-    output var logic               rsp_vel_present_o
+    output var logic               rsp_vel_present_o,
+
+    // ---- TERRAIN.MATJOIN, entry I34's MATERIAL channel (MATERIALPATH) ------
+    // The layer-E material plane was tied to zero here with the note "TEXMAT's
+    // seam, not this bench's subject". It IS this bench's subject now: out-lane
+    // 2 of the same evaluation whose out-lane 0 the height case already drives.
+    // Wired exactly the way TERRVEL un-tied the velocity plane immediately
+    // above -- through the real block, not by injecting a composed triple.
+    //
+    // The authored triple the C++ presents for the vertex being offered. In
+    // zhao_console_core this rides TERRAIN.PAGESTREAM's cell beat; here the
+    // driver presents it beside `base_i`/`scar_i` on the same vertex offer, so
+    // the seam is the same one.
+    input  var logic [7:0]         auth_mat_a_i,
+    input  var logic [7:0]         auth_mat_b_i,
+    input  var logic [7:0]         auth_weight_i,
+
+    // The serve side, so a case can READ BACK what the plane holds. This is
+    // the whole point: "verify that a Field material write changes the
+    // intended consumer" is answered by reading the consumer, not by reading
+    // the producer's own output wire.
+    input  var logic               mat_req_i,
+    input  var logic [4:0]         mat_ci_i,
+    input  var logic [4:0]         mat_cj_i,
+    output var logic [7:0]         mat_a_o,
+    output var logic [7:0]         mat_b_o,
+    output var logic [7:0]         mat_weight_o,
+    output var logic               mat_valid_o,
+
+    output var logic [31:0]        mj_cells_written_o,
+    output var logic [31:0]        mj_field_composed_o,
+    output var logic [31:0]        mj_token_refused_o,
+    output var logic [31:0]        mj_lane_no_cell_o,
+    output var logic [31:0]        mj_held_overrun_o
 );
 
   // ==========================================================================
@@ -453,6 +486,57 @@ module tb_terrain_composepub #(
   // ==========================================================================
   // TERRAIN.COMPCACHE -- the on-chip front. PATCH's `st_*` IS its fill port.
   // ==========================================================================
+  // ---- TERRAIN.MATJOIN, wired as zhao_console_core wires it ----------------
+  // `a_we_i` reproduces the console's `tps_v_cell_fire_c`: the ACCEPTED vertex
+  // beat, gated on the vertex owning a cell. The lattice is 33x33 vertices over
+  // a 32x32 cell plane, so the last column and row own none -- the console's
+  // page stream applies the identical test and this bench must not be kinder
+  // than production about it.
+  wire mj_cell_fire_c = vtx_valid_i && vtx_ready_o && (vi_i < 6'd32) && (vj_i < 6'd32);
+
+  wire       mj_we_c;
+  wire [4:0] mj_ci_c, mj_cj_c;
+  wire [7:0] mj_mat_a_c, mj_mat_b_c, mj_weight_c;
+
+  zhao_terrain_matjoin u_matjoin (
+      .clk  (clk),
+      .rst_n(rst_n),
+
+      .a_we_i    (mj_cell_fire_c),
+      .a_ci_i    (vi_i[4:0]),
+      .a_cj_i    (vj_i[4:0]),
+      .a_mat_a_i (auth_mat_a_i),
+      .a_mat_b_i (auth_mat_b_i),
+      .a_weight_i(auth_weight_i),
+
+      // THE SAME LANE BEAT THE HEIGHT COMPOSITION TAKES. `efa_ans_valid` and
+      // the patch's ready are the console's `tvj_p_valid`/`tvj_p_ready` here;
+      // `fld_covers_o` is TERRAIN.PATCH's own section 9.1 answer, taken and
+      // never re-decided. Out-lane 2 and its presence bit come off the REAL
+      // zhao_field_earth_adapter, which is what makes this case evidence about
+      // the composed path rather than about an injected triple.
+      .f_fire_i    (efa_ans_valid && efa_ans_ready),
+      .f_covers_i  (fld_covers_o),
+      .f_present_i (efa_present_o[2]),
+      .f_material_i(efa_material_o),
+
+      .st_fire_i(st_valid_o && st_ready_o),
+
+      .o_we_o    (mj_we_c),
+      .o_ci_o    (mj_ci_c),
+      .o_cj_o    (mj_cj_c),
+      .o_mat_a_o (mj_mat_a_c),
+      .o_mat_b_o (mj_mat_b_c),
+      .o_weight_o(mj_weight_c),
+
+      .cells_written_o (mj_cells_written_o),
+      .field_composed_o(mj_field_composed_o),
+      .token_refused_o (mj_token_refused_o),
+      .lane_no_cell_o  (mj_lane_no_cell_o),
+      .held_overrun_o  (mj_held_overrun_o),
+      .idle_o          ()
+  );
+
   zhao_terrain_compcache_front #(
       .LAT_W(LAT_W),
       .LAT_H(LAT_H)
@@ -480,13 +564,17 @@ module tb_terrain_composepub #(
       .cs_w_cj_i       (cs_w_cj_i),
       .cs_w_substance_i(cs_w_substance_i),
 
-      // the layer-E material plane is TEXMAT's seam, not this bench's subject
-      .mat_we_i      (1'b0),
-      .mat_w_ci_i    (5'd0),
-      .mat_w_cj_i    (5'd0),
-      .mat_w_a_i     (8'd0),
-      .mat_w_b_i     (8'd0),
-      .mat_w_weight_i(8'd0),
+      // THE LAYER-E MATERIAL PLANE, REAL FROM 2026-09-27 (MATERIALPATH). It was
+      // tied to zero with the note "TEXMAT's seam, not this bench's subject";
+      // it is the subject now. The triple arrives through TERRAIN.MATJOIN, so
+      // what lands here is the AUTHORED triple composed against Earth
+      // out-lane 2 -- never an injected value.
+      .mat_we_i      (mj_we_c),
+      .mat_w_ci_i    (mj_ci_c),
+      .mat_w_cj_i    (mj_cj_c),
+      .mat_w_a_i     (mj_mat_a_c),
+      .mat_w_b_i     (mj_mat_b_c),
+      .mat_w_weight_i(mj_weight_c),
 
       // TERRVEL: the 4.2 velocity plane's fill face, driven by the C++.
       .vel_we_i   (vel_we_i),
@@ -519,13 +607,17 @@ module tb_terrain_composepub #(
       .cs_cj_i      (t_c_cs_cj),
       .cs_substance_o(c_cs_substance),
 
-      .mat_req_i  (1'b0),
-      .mat_ci_i   (5'd0),
-      .mat_cj_i   (5'd0),
-      .mat_a_o    (),
-      .mat_b_o    (),
-      .mat_weight_o(),
-      .mat_valid_o(),
+      // THE SERVE SIDE IS NOW READ. A case that only watched the producer
+      // would be asserting that a wire carries a value; the owner's sentence
+      // is about the CONSUMER, so the plane is read back through the cache's
+      // own port at the cache's own parity.
+      .mat_req_i  (mat_req_i),
+      .mat_ci_i   (mat_ci_i),
+      .mat_cj_i   (mat_cj_i),
+      .mat_a_o    (mat_a_o),
+      .mat_b_o    (mat_b_o),
+      .mat_weight_o(mat_weight_o),
+      .mat_valid_o(mat_valid_o),
 
       .fill_records_o  (cc_fill_records_o),
       .patches_filled_o(cc_patches_filled_o),

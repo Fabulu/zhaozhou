@@ -3577,6 +3577,15 @@ targets:
       # a source list are three different acts; this is the third.
       - fpga/rtl/terrain/zhao_terrain_veljoin.sv
       - fpga/rtl/terrain/zhao_terrain_velocity.sv
+      # TERRAIN.MATJOIN + its encoding package, 2026-09-27 (MATERIALPATH).
+      # The out-lane 2 sibling of the two lines above: it decodes the v1
+      # material token and composes it onto the authored layer-E triple per
+      # zref::fieldir::compose_material before the compose cache's material
+      # plane is written. The PACKAGE is listed too and not only the module --
+      # G2 fails a file the console elaborates and the source list omits, and
+      # a package is exactly the file people forget.
+      - fpga/rtl/common/zhao_material_token_pkg.sv
+      - fpga/rtl/terrain/zhao_terrain_matjoin.sv
       - fpga/rtl/terrain/zhao_terrain_compcache_front.sv
       # TERRAIN.HEIGHTTAP, 2026-09-19 (item 14): the pass-through tap in front
       # of the compose cache's read ports. Its normaliser is FIELD's

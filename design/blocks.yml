@@ -3462,6 +3462,54 @@ blocks:
       the section-9.1 covers answer exported on TERRAIN.PATCH's new
       `fld_covers_o`. Argued in the contract.
 
+  - id: TERRAIN.MATJOIN
+    name: Earth material join
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: >-
+      Compose Earth out-lane 2 onto the AUTHORED layer-E material triple, per
+      cell, before TERRAIN.COMPCACHE's material plane is written. The out-lane 2
+      sibling of TERRAIN.VELJOIN. Closes the asymmetry entry I34 (P3) records as
+      material's blocker -- heights reached the compose cache THROUGH the
+      composer with the field lane composed in, while material went AROUND it
+      straight from the page stream, so a field result had no port to arrive on.
+      The arbitration sits at the COMPOSE point and not at the page, because
+      zref_fieldir.hpp's sinks header makes the three sinks live composition and
+      never persistent mutation.
+    contract: design/contracts/TERRAIN.MATJOIN.md
+    phase: 7
+    owner_issue: ZH-039
+    inputs: [layer_e_material, earth_out_lane_2]
+    outputs: [composed_material]
+    upstream: [TERRAIN.PAGESTREAM, FIELD.SEQ.EARTH, TERRAIN.PATCH]
+    downstream: [TERRAIN.COMPCACHE]
+    backpressure: none
+    latency: 1 record
+    target_throughput: 1 cell per page-stream vertex beat
+    reference_model: zref::fieldir::compose_material
+    tests:
+      directed: tests/terrain/terrain_matjoin_directed.cpp
+    counters:
+      [terrain_matjoin_field_composed, terrain_matjoin_token_refused,
+       terrain_matjoin_held_overrun]
+    counter_ports:
+      terrain_matjoin_field_composed: field_composed_o
+      terrain_matjoin_token_refused: token_refused_o
+      terrain_matjoin_held_overrun: held_overrun_o
+    budget_group: geometry_mantle
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: UNIT_VERIFIED
+        date: "2026-09-27"
+        note: >-
+          terrain_matjoin_directed, 50 checks 0 failures, differenced against
+          zref::fieldir::compose_material over 600 pseudo-random vertices with
+          247 enabled and 51 refused words -- so both paths are shown to have
+          been REACHED rather than passing vacuously. Both guards seen to fire
+          against negative controls on identical stimulus, and the test itself
+          fire-tested: a planted failure returns rc 1 and prints
+          "1/51 checks FAILED".
   - id: TERRAIN.BAKE
     name: Persistent scar bake
     kind: rtl
