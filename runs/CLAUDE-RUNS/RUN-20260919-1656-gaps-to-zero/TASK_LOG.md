@@ -5318,3 +5318,57 @@ artefacts of an instrument; only a per-item size check turns one into work.
 is needed**, via the projector-consolidation pattern this tree has already run
 to completion once -- verified standalone with `-MapOnly`, because **the console
 fit cannot run at all** until the design is smaller.
+
+### 2026-09-28 - PHASE 3, THE PART THAT NEEDED NO DECISION
+
+Four pieces executed, each one committed and pushed.
+
+**1. `lane_desync_o` IS ARM (a), MEASURED.** My diagnosis was STRUCTURAL and I
+said arms (b) and (c) were not excluded. Now they are:
+
+```
+desyncarm total=1  a[vtx_live!=ans_ready]=1  b[...]=0  c[...]=0
+```
+
+The probe's total agrees with the adapter's own `desync=1`, which is what makes
+the split evidence rather than three new numbers. The probe is **bench-only and
+hierarchical** -- no production port, no wrapper mutants, no gate-31 exposure,
+because an output added to answer a diagnostic question puts the question inside
+the thing it is asking about.
+
+**DECIDED** (`reports/DECISION-20260928-LANE-DESYNC-ARM-A.md`): arm (a) is a
+FALSE POSITIVE -- it asserts `vtx_live != ans_ready_i` on the ground that
+`zhao_terrain_patch` raises a `busy`, and **that module has no `busy` output**
+while the console wires a downstream READY (`fork_open && both_ready`). Remove
+and replace with a consumer-side property; retain (b) and (c); **never gate**
+(the file's own words: gating "would have made it blind to the one direction
+that matters most").
+
+**AND THE OBVIOUS REPAIR IS THE WRONG ONE, which I nearly made.** Wiring a
+`busy` into `ans_ready_i` would change **load-bearing FLOW CONTROL** for the
+answer handshake -- a functional change made to satisfy a detector. Caught only
+by asking what else reads that port.
+
+**2. LEDGER: 112 -> 96 schema errors**, repairing the two entries THIS campaign
+created (`TERRAIN.MATJOIN`, `TERRAIN.MATPUB`). Illegal `latency` vocabulary, a
+forbidden `note` key where `commit`/`evidence` are required, missing
+`deferred`/`superseded_by`. **Left red deliberately:** `source_ids: false`,
+because the schema demands `true` for rtl blocks and both modules have **ZERO
+source-id ports** against 1,708 across `fpga/rtl` -- `true` would assert a
+capability that does not exist.
+
+**3. NINE MATURITY PINS ARE NOT COMMITS** (handover 15.38): packet names, branch
+names, one literal `pending`. The schema catches all nine, so this is a
+**DETECTED** defect nobody looked at -- `ledger:check` had been red long enough
+that its output stopped being read. **A gate red for one reason gives cover to
+every other red inside it.** NOT fixed: my first resolution attempt returned
+confidently wrong hashes by matching those words in unrelated commit bodies, and
+**a plausible-but-wrong hash is worse than a visibly-wrong placeholder.**
+
+**4. WORKTREE CLEANUP**, listed as decided in the directive. **164 worktrees**
+existed, not the ~15 I had assumed; **160 of 162 branches are fully merged**.
+Removing **146** that are clean AND merged, at ~1.1 GB each -- about **160 GB**.
+Reversible in the way that matters: `git worktree remove` refuses a dirty tree
+and does not delete branches, so no work is lost and any checkout can be
+recreated. The 15 dirty ones (including `gz-tagphase`, which holds its raw run
+logs) and the 2 unmerged branches are untouched.
