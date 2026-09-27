@@ -5269,3 +5269,52 @@ which is exactly what my stale-baseline correction predicted would happen.
 The three remaining ZERO-MEMORY holders are `geom_ladderbank` (5,951),
 `terrain_devstore` (4,418) and `field_v3_dispatch` (4,108): **14,477 registers in
 blocks with no block memory at all**, and the next place the same trade points.
+
+### 2026-09-28 - PHASE 3 EXECUTED AS FAR AS IT GOES, AND IT ENDS IN AN ESCALATION
+
+Two reports: `reports/PHASE2-IS-BLOCKED-ON-PHASE3-20260928.md` and
+`reports/PHASE3-THE-LEVER-IS-DUPLICATION-20260928.md` (read its correction
+block FIRST -- the title is wrong and the body is superseded by it).
+
+**THE MEASURED CONFLICT.** The console is **293,886 combinational ALUTs**
+against a **227,120** ceiling on the largest die this installation has (only
+`cyclonev` is installed). It must shed **66,766 ALUTs, 23%**, before a placed
+fit yields a single ALM or Fmax number. **Four candidate classes were checked
+against the current map and all four are spent or unavailable:**
+
+| class | verdict |
+|---|---|
+| deep arrays in flops | **EXHAUSTED** -- every one already infers |
+| small arrays | correctly in flops (`ladderbank` is 32 entries deep) |
+| ROMs | `field_rcp24_rom` needs a PIPELINE STAGE at 13 call sites |
+| duplicated instances | **~4,000 ALUTs**, not the 40,091 I first claimed |
+
+**There is no identified path to 23% that does not touch capability.** The
+vacation directive is explicit that delegated authority does not extend to
+cutting lanes, deleting features or calling reduced work equivalent to fit a
+device -- and that a measured conflict of this kind is **escalated, not resolved
+locally**. This is that conflict.
+
+**SIX INFLATIONS CAUGHT AND CORRECTED IN ONE ANALYSIS**, every one pointing
+toward more opportunity than exists:
+
+1. tree-wide bit totals -- **1.9x**, from files the console never elaborates;
+2. 584 scan findings read as 584 opportunities -- most are two-entry arrays;
+3. the scan's flags themselves -- **5 of 7** already infer as memory;
+4. a stale baseline -- my top two targets were repaired **30 minutes after**
+   the map I was reading (`@post-palram` 05:21, FLOPARRAY 05:51);
+5. `zhao_terrain_devstore`, top of the zero-memory list, declares **no unpacked
+   arrays** at all;
+6. `n=4` and `n=2` read as "n copies" -- `vertex_arena` is **98% one instance**
+   and `field_v3_mulbank` **100%**, together 11,022 of the claimed 40,091.
+
+**The pattern is worth naming: COUNTING ARTEFACTS READS AS COUNTING
+OPPORTUNITIES, and it never is.** Files, findings, flags and instances are all
+artefacts of an instrument; only a per-item size check turns one into work.
+
+**WHAT IS ACTUALLY AVAILABLE**, measured per instance and cross-subsystem only
+(lanes excluded on directive grounds): `zhao_field_v3_normalize` ~2,624,
+`zhao_field_isqrt` ~776, `zhao_geom_mat3x4_mul` ~581. **~4,000 ALUTs, 6% of what
+is needed**, via the projector-consolidation pattern this tree has already run
+to completion once -- verified standalone with `-MapOnly`, because **the console
+fit cannot run at all** until the design is smaller.
