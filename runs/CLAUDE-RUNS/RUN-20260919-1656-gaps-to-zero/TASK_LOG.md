@@ -4923,3 +4923,107 @@ one 64-bit constant covering colour AND tag, and the tile store has **no byte
 enables by design** -- a cleared pixel's tag is zero **by construction**. Those
 pixels were WRITTEN, not cleared. The number that decided it was
 `plan_accepted=1213`: three fragments never got a plan.
+
+### 2026-09-27 - **I34 IS CLOSED. THE REGISTER READS ZERO.**
+
+```
+MANDATORY GAPS REMAINING : 0        RC 0, measured BARE
+```
+
+Declared at `83c63661` by the coordinator **after measuring the assembled
+console personally**, not from a packet's report. All six owner clauses
+answered separately and in the positive direction; the numbers are in the
+entry at `zhao_console_core.sv:6115` and in the commit message.
+
+**`register == 0` DOES NOT MEAN THE CONSOLE IS CORRECT.** It means no mandatory
+function is a tie-off, a stub, disconnected or unbuilt. The live reds are named
+below and inside the entry.
+
+---
+
+### THE TOP OPEN DEFECT: `lane_desync_o` ASSERTS AN INVARIANT THE CONSOLE DOES NOT SUPPLY
+
+Both field forms exit 1 on `fld_earth_lane_desync_o`. Diagnosed **structurally**
+this session; the repair is NOT made and the arm is NOT confirmed by
+instrumentation -- see the honesty note at the end.
+
+**Arm (a) of the counter is deliberately UNGATED** and fires on any cycle where
+`vtx_live != ans_ready_i` (`zhao_field_earth_adapter.sv:1171`). Its written
+justification is:
+
+> *"`zhao_terrain_patch` raises `busy` on the same vertex accept this module
+> raises `vtx_live` on, and clears it on the same last-lane handshake ... so the
+> two are equal at EVERY cycle if and only if the shadow is right."*
+
+**Two things are wrong with that sentence, and both are checkable in one grep
+each:**
+
+1. **`zhao_terrain_patch` HAS NO `busy` OUTPUT.** The justification names a port
+   that does not exist on the module it names.
+2. **The console does not wire a busy to that port.**
+   `zhao_console_core.sv:30337` connects `.ans_ready_i(tvj_a_ready)`, and
+   `zhao_terrain_veljoin.sv:278` drives it `a_ready_o = fork_open && both_ready`
+   -- a DOWNSTREAM FLOW-CONTROL READY, which has no reason to track `vtx_live`
+   cycle by cycle.
+
+**AND THE UNIT TEST CANNOT SEE THIS, BY CONSTRUCTION.**
+`tests/field/field_earth_adapter_directed.cpp:178-189` drives the port with the
+semantic the block assumes -- `d.ans_ready_i = lanes > 0 ? 1 : 0` -- and says so
+in its own comment:
+
+> *"`ans_ready_i` is that `busy` ... which is what the block under test expects
+> and WHAT MAKES `lane_desync_o` SILENT."*
+
+**A DIRECTED TEST THAT *DRIVES* A PORT WITH THE SEMANTIC THE BLOCK ASSUMES CAN
+NEVER DISCOVER THAT THE COMPOSITION DRIVES A DIFFERENT ONE.** That is the new
+catalogue shape, and it is not the usual one: the test is not wrong about the
+BLOCK, it is wrong about the WORLD. Note the signs -- **the unit test shows a
+false GREEN and the console a false RED, from one root.** Every other instrument
+in this campaign's catalogue errs in a single direction; this one errs in both
+at once depending on where you stand, which is exactly why it survived a
+directed suite, a composed smoke and four packets.
+
+**It is consistent with every number measured:** it reads **1 in BOTH field
+forms** -- identically whether the field runs 1,089 times or **zero** -- because
+a single cycle of divergence between a `vtx_live` register and a downstream
+ready is a property of the composition, not of the workload.
+
+**WHAT I HAVE NOT DONE, stated so nobody inherits it as settled:** I have not
+instrumented WHICH of the three arms fires. Arm (b) (`vtx_fire_i && rep_idx !=
+lanes_i`) and arm (c) (`state == E_REQ && cap_a != lane_a`) are not excluded by
+anything above. The structural case for (a) is strong and it is still a
+hypothesis. **Split the counter three ways before repairing it** -- this
+repository's own rule is that a detector must be shown to fire on the fault it
+is being blamed for.
+
+**And the repair is a DECISION, not just a build**, so it does not get made in
+passing: either `ans_ready_i` is miswired and wants a real busy-like signal
+(which `zhao_terrain_patch` would have to grow), or the console's consumer is
+legitimately the veljoin and **arm (a)'s invariant is simply the wrong law for
+this composition**. Those need different repairs and only one of them is honest.
+
+---
+
+### THE FULL CONSOLE FIT: A CORRECTION TO THE PLAN
+
+`run_block_fit.ps1`'s own header: **a design that overflows 41,910 ALM produces
+NO ALM NUMBER -- the fitter stops.** The standing estimate puts the console at
+~293,352 ALUTs against **227,120 present on the SIZING part**, so a fit stops on
+the truth device AND on `5CEBA9F31C7`, and returns nothing either way.
+
+So the first instrument is **`quartus_map` on `zhao_console_core`, which has
+NEVER BEEN RUN.** Analysis & Synthesis yields DSP, registers and estimated ALMs
+without placing -- it is the only thing that returns a number regardless of how
+far over we are, and "how far over" IS the owner's question. Running now.
+
+**`zhao_walk_meta_hold` measured through the same instrument**, closing the
+caveat TAGPHASE correctly declared rather than hid: `status ok`, 34.5 s,
+**`registers 211` EXACTLY the hand count**, `DSP 0`, `membits 0`, `errors 0`,
+plus the figure nobody had -- **`estimatedAlms 301`**, 0.7% of the device.
+
+**And the console's parse blocker is closed WITH EVIDENCE.** The two
+`Error (10170)` -- *"near text: `import`; expecting `;`"*, an illegal SECOND
+`import` keyword in a module header -- were repaired by PHASEFIX at `8e1ab9f6`,
+and `zhao_post_lease` mapped **ok twice AT THAT COMMIT**, from the source list
+that reported both errors. Stated with its limit: **those rows prove the two
+files PARSE, not that the console synthesizes.**
