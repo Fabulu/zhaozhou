@@ -442,7 +442,20 @@ Not merged to the integration branch.**
 |---|---|
 | `d91e91af` | `decide(MUXBUILD)`: TriangleDescriptor v2 carries 2A and the scan box |
 | `6a5f8a0d` | `feat(MUXBUILD)`: the ProjectedVertex fetch arm, and the cheque is cashed |
-| (this commit) | entry `I55` amended, two stale arena comments corrected, these FINDINGS |
+| `5ab05d6c` | `docs(MUXBUILD)`: entry `I55` amended -- the blocker is that `job_*` is not a port -- plus the two stale arena comments and these FINDINGS |
+| `373e6357` | `test(MUXBUILD)`: the three arena mutant copies refreshed and all six re-fired |
+
+**`mutant_copy_drift.py` went RED at `5ab05d6c` and it was right and it was
+MINE.** The signal is PROVENANCE, not similarity: a comment-only correction to
+`zhao_geom_paramarena.sv` made production newer than its three copies, and a
+copy that predates production cannot contain what production gained. That the
+change was *only comments* is exactly the reasoning the tool refuses to accept,
+and it is correct to refuse it. Refreshed with the committed command
+`tools/rtl/gen_paramarena_mutants.py`, then **re-fired** -- because PVSCHEMA'''s
+headline finding was a mutant with perfect provenance and an intact mutation
+that had silently become a no-op. `ctest -R paramarena`: **7/7**, three
+`_fires` firing and three `_silent` silent, on the refreshed copies. Drift is
+RC 0 at `373e6357`, measured after the commit.
 
 ### Gate state
 
