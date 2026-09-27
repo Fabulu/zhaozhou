@@ -1,3 +1,45 @@
+> ## CORRECTION, SAME DAY, BEFORE ANYONE ACTS ON THIS
+>
+> **The static scan OVER-PREDICTS, and this note originally leaned on it as the
+> lever. Measured against the map, it is wrong more often than it is right.**
+>
+> `--rank` (which already existed -- I proposed building it before finding it)
+> classifies 24 arrays as `[MECHANICAL]`, the generate-for-loop killer with a
+> known remedy. Seven of those are actually ELABORATED in the console. Reading
+> the map's own per-entity columns for those seven:
+>
+> ```
+> zhao_terrain_residency_v2   reg=1029    mem=150528   flagged 41,984 bits
+> zhao_geom_binner_v2         reg=2713    mem=277824   flagged  5,120 bits
+> zhao_field_v3_rf            reg=6       mem=24576    flagged    384 bits
+> zhao_texture_island_v3_top  reg=17408   mem=136344   flagged  7,680 bits
+> zhao_light_stream           reg=7070    mem=5016     flagged  4,096 bits
+> ```
+>
+> **FIVE OF THE SEVEN ALREADY INFER AS MEMORY.** `zhao_terrain_residency_v2`
+> holds 150,528 memory bits against 1,029 registers; if its three flagged arrays
+> were really in flip-flops it would show ~42,000. The prediction is refuted by
+> the measurement, in the flattering direction for anyone planning work from it.
+>
+> **So: do not plan phase 3 from the static scan.** It is a source-text
+> heuristic about what Quartus 17.0.2 MIGHT refuse; the `.map.rpt` is what
+> Quartus actually did. The scan stays useful for DIAGNOSING a module already
+> known to be flop-heavy, because it names the offending construct -- but it must
+> not be used to FIND them.
+>
+> **The reliable instrument is the map's `reg` against `mem` per entity**, which
+> `console_entity_attrib_shipping.md` already ranks, and which the table under
+> "Where to point it first" below is drawn from. High registers with ZERO memory
+> bits is a measurement; "will not infer" is a guess. The section headed "What
+> the scan says" is kept because its arithmetic is right, but its 584/455 counts
+> are counts of FLAGS -- not of opportunities, and now demonstrably not of
+> defects either.
+>
+> Three separate inflations caught in one sitting, every one pointing the same
+> way: the tree-wide bit total (1.9x, from files the console never elaborates),
+> the finding count (two-entry arrays that belong in flops), and now the flags
+> themselves.
+
 # The dominant RAM-inference blocker is an INIT LOOP acting as a second write port
 
 Coordinator, 2026-09-28, for the standing goal's phase 3 (damage control and
