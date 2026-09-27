@@ -7394,6 +7394,32 @@ module tb_zhao_console_core_smoke
              `PC_SHELL.u_render_bin.u_tile.abort_now_w,
              `PC_SHELL.u_render_bin.u_tile.sequence_abort_o,
              `PC_SHELL.u_render_bin.u_tile.sequence_mismatch_o);
+    // ---- AND THE LEVEL BELOW, BECAUSE THE FIRST ONE ANSWERED (METASIDE) ---
+    // `walkwedge` read `rs_state=3` -- RS_SWAP -- with `empty=1` and every one
+    // of the eight terms of `ordinary_pipe_empty_w` satisfied. So the pipe DID
+    // empty, the tile DID reach the swap, and the wedge is in the handshake
+    // that resolves it:
+    //
+    //     assign resolve_start_w = (rs_state_q == RS_SWAP) && !abort_now_w;
+    //     assign ts_swap_w       = resolve_start_w && resolve_ready_w;
+    //     ... if (ts_swap_w && ts_swap_ready_w) rs_state_q <= RS_IDLE;
+    //
+    // Three candidates and no way to choose between them from outside:
+    // `resolve_ready_w` low (RASTER.RESOLVE busy), `ts_swap_ready_w` low (the
+    // tile store busy), or the resolve started and stalled writing out --
+    // `fb_valid_o` high against `fb_ready_i` low, which is what a walk running
+    // AFTER the frame's pixel sink has closed would look like, and is the same
+    // family as TERRAINVISIBLE's stimulus-ORDER fault.
+    $display("SMOKE: walkswap resolve_ready=%0d ts_swap=%0d ts_swap_ready=%0d | fb_valid=%0d fb_ready=%0d fb_last=%0d tr_valid=%0d tr_ready=%0d tr_data_valid=%0d",
+             `PC_SHELL.u_render_bin.u_tile.resolve_ready_w,
+             `PC_SHELL.u_render_bin.u_tile.ts_swap_w,
+             `PC_SHELL.u_render_bin.u_tile.ts_swap_ready_w,
+             `PC_SHELL.u_render_bin.u_tile.fb_valid_o,
+             `PC_SHELL.u_render_bin.u_tile.fb_ready_i,
+             `PC_SHELL.u_render_bin.u_tile.fb_last_o,
+             `PC_SHELL.u_render_bin.u_tile.tr_valid_w,
+             `PC_SHELL.u_render_bin.u_tile.tr_ready_w,
+             `PC_SHELL.u_render_bin.u_tile.tr_data_valid_w);
     $display("SMOKE: renderlease leases_granted=%0d refused=%0d clears=%0d frames_admitted=%0d",
              v2_leases_granted_o, v2_leases_refused_o,
              v2_clear_handshakes_o, v2_frames_admitted_o);

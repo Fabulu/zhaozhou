@@ -21129,6 +21129,9 @@ module zhao_console_core
   wire [31:0]        pw_t_raster_w, pw_t_source_w;
   wire signed [47:0] pw_t_area2_w;
   wire signed [11:0] pw_t_min_x_w, pw_t_max_x_w, pw_t_min_y_w, pw_t_max_y_w;
+  wire [ZHAO_TD_MATSTATE_W-1:0] pw_t_matstate_w;
+  wire [17:0]        pw_t_arena_id_w;
+  wire [31:0]        pw_tri_id_wide_w;
   wire signed [20:0] pw_t_a_x_w, pw_t_a_y_w, pw_t_b_x_w, pw_t_b_y_w,
                      pw_t_c_x_w, pw_t_c_y_w;
   wire        [23:0] pw_t_a_invw_w, pw_t_b_invw_w, pw_t_c_invw_w;
@@ -21218,6 +21221,9 @@ module zhao_console_core
   wire signed [47:0]  vid_td_area2;
   wire signed [11:0]  vid_td_min_x, vid_td_max_x, vid_td_min_y, vid_td_max_y;
   wire [17:0]         vid_td_id;
+  // SCHEMA v3. Opaque here: the layout lives in one place and this file's
+  // pack/unpack pair is it.
+  wire [ZHAO_TD_MATSTATE_W-1:0] vid_td_matstate;
   wire                pa_seal_fire;
   wire         ap_tri_ready_w, ap_o_valid_w;
   wire [239:0] ap_invw_plane_w, ap_u_over_w_plane_w, ap_v_over_w_plane_w;
@@ -21552,6 +21558,12 @@ module zhao_console_core
     .tri_max_x_i    (cl_o_max_x),
     .tri_min_y_i    (cl_o_min_y),
     .tri_max_y_i    (cl_o_max_y),
+    // SCHEMA v3's capture. `live_matstate_c`, NOT the muxed
+    // `tri_matstate_c`: GEOM.VERTID is deliberately not one of the walk's
+    // consumers (its job is to WRITE the arena and it finished when the
+    // frame sealed), so the only state it may ever record is the live
+    // path's own.
+    .tri_matstate_i (live_matstate_c),
 
     // REAL: GEOM.PARAMARENA's ProjectedVertex intake -- entry I53's tie-off.
     .pv_valid_o  (vid_pv_valid),
@@ -21583,6 +21595,7 @@ module zhao_console_core
     .td_max_x_o    (vid_td_max_x),
     .td_min_y_o    (vid_td_min_y),
     .td_max_y_o    (vid_td_max_y),
+    .td_matstate_o (vid_td_matstate),
     .td_accept_i   (vid_td_accept),
     .td_id_i       (vid_td_id),
     // I54's half: the triangle's own arena index at the moment it lands.
@@ -31978,6 +31991,7 @@ module zhao_console_core
       .td_max_x_i    (vid_td_max_x),
       .td_min_y_i    (vid_td_min_y),
       .td_max_y_i    (vid_td_max_y),
+      .td_matstate_i (vid_td_matstate),
       .td_accept_o   (vid_td_accept),
       .td_id_o       (vid_td_id),
       .seal_fire_o   (pa_seal_fire),
@@ -32141,6 +32155,13 @@ module zhao_console_core
       // RESOLVES it (`rs_state_q <= last_q ? RS_SWAP : RS_IDLE`).
       .t_first_o    (pw_t_first_w),
       .t_last_o     (pw_t_last_w),
+      .t_matstate_o (pw_t_matstate_w),
+      .t_arena_id_o (pw_t_arena_id_w),
+      // COUNTED, NOT TRUNCATED. A chunk id wider than the tail's 18-bit
+      // arena field is a malformed record, not a value to quietly cut.
+      // It has no console port because nothing outside reads it yet; the
+      // walker's directed test fires it with legal stimulus.
+      .tri_id_wide_o (pw_tri_id_wide_w),
 
       // ---- THE FETCH ARM'S VERTEX FIELDS: TIED, SAME DECLARATION ---------
       // MUXBUILD built the ProjectedVertex fetch arm and PROVED it (550
@@ -33044,19 +33065,34 @@ module zhao_console_core
   // non-zero and asserts every terrain triangle declares it, so the gate is
   // open there; a frame that names no terrain material keeps the named
   // constants, which is the correct behaviour and not a fallback.
-  wire st_mat_token_live_c = zmt_tag_ok(st_mat_token) &&
-                             (st_domain == GEOM_VID_DOM_TERR) &&
-                             (mw_pub_sample_count != 2'd0);
+  // ONE RULE, TWO CALL SITES -- see THE PACK'S TWO CALL SITES above. The
+  // three conjuncts and their reasoning are unchanged and are documented in
+  // the paragraph above this block; what changed is that they are now a
+  // function so the capture site cannot drift from the door site.
+  function automatic logic zhao_ms_mosaic_live(
+      input logic [31:0] tok, input logic [1:0] dom);
+    zhao_ms_mosaic_live = zmt_tag_ok(tok) && (dom == GEOM_VID_DOM_TERR) &&
+                          (mw_pub_sample_count != 2'd0);
+  endfunction
+  function automatic logic [23:0] zhao_ms_base_rgb(
+      input logic [31:0] tok, input logic [1:0] dom);
+    zhao_ms_base_rgb = zhao_ms_mosaic_live(tok, dom)
+        ? {zmt_mat_a(tok), zmt_mat_b(tok), MAT_BASE_RGB_C[7:0]}
+        : MAT_BASE_RGB_C;
+  endfunction
+  function automatic logic [7:0] zhao_ms_weight(
+      input logic [31:0] tok, input logic [1:0] dom);
+    zhao_ms_weight = zhao_ms_mosaic_live(tok, dom) ? zmt_weight(tok)
+                                                   : mw_pub_recipe_weight;
+  endfunction
+
+  wire st_mat_token_live_c = zhao_ms_mosaic_live(st_mat_token, st_domain);
   // Only the sixteen bits the mosaic reads are replaced. `base_rgb[7:0]` has
   // no mosaic meaning, so it keeps its named constant rather than being
   // silently redefined -- the decision record names "base_rgb[23:8] plus
   // recipe_weight" and this is exactly that and no more.
-  wire [23:0] mat_base_rgb_c =
-      st_mat_token_live_c ? {zmt_mat_a(st_mat_token), zmt_mat_b(st_mat_token),
-                             MAT_BASE_RGB_C[7:0]}
-                          : MAT_BASE_RGB_C;
-  wire [ 7:0] mat_recipe_weight_c =
-      st_mat_token_live_c ? zmt_weight(st_mat_token) : mw_pub_recipe_weight;
+  wire [23:0] mat_base_rgb_c      = zhao_ms_base_rgb(st_mat_token, st_domain);
+  wire [ 7:0] mat_recipe_weight_c = zhao_ms_weight  (st_mat_token, st_domain);
 
   wire [297:0] mat_flat_request_c = {
       mw_pub_sample_count,                      // [297:296]
@@ -33073,11 +33109,12 @@ module zhao_console_core
       mw_pub_palette_gen                        // [7:0]
   };
 
-  // Before anything is published the request is ALL ZERO, which is the legal
-  // "this surface takes no texture sample" profile -- the same value the port
-  // carried when it was a boundary. So the retirement of the port changes what
-  // the console does only once a material has actually been resolved.
-  wire [297:0] tri_flat_request_c = mw_pub_valid ? mat_flat_request_c : 298'd0;
+  // `tri_flat_request_c` USED TO BE DEFINED HERE and is now built by
+  // `zhao_ms_flat_request` beside the other two fields of the same 378 bits --
+  // see THE MATERIAL STATE below. `mat_flat_request_c` above is kept because
+  // it is the composition's readable form and the ONE place the field order is
+  // written; the function reproduces that order from the stored fields and the
+  // elaboration guard below differences the two, per triangle, in simulation.
 
   // --------------------------------------------------------------------------
   // ENTRY I20's OTHER TWO FIELDS -- `tri_continuation_tail_i`'s `vertex_alpha`
@@ -33224,6 +33261,145 @@ module zhao_console_core
   // removed, black is a visible fault and white is a convincing wrong answer.
   localparam logic [23:0] TAIL_VERTEX_RGB_UNUSED_C    = 24'h00_0000;
 
+  // =========================================================================
+  // THE MATERIAL STATE: ONE LAYOUT, ONE EXPRESSION, BOTH PATHS (METASIDE,
+  // 2026-09-27, owner directive section 4)
+  // =========================================================================
+  // `zhao_geom_bin_pipe_v2` takes 378 bits -- the 298-bit flat request, the
+  // 48-bit continuation tail and the 32-bit fragment state -- that
+  // `zhao_geom_setup` mentions ZERO times and `zhao_geom_attrpack` once, in a
+  // comment disclaiming one of them. They arrive HERE, on console wires from
+  // `u_material_window`, which means the "second setup and attrpack back end"
+  // entry I55 demanded for seven packets could have been built flawlessly and
+  // the walk would still have had no producer for them. HANDOVER section 15.35
+  // is that chapter; `reports/DECISION-20260927-TRIANGLEDESCRIPTOR-V3.md` is
+  // this repair.
+  //
+  // WHY THE LIVE PATH GOES THROUGH THE PACK TOO, which is the whole design.
+  // The obvious arrangement composes the request as it always did and ALSO
+  // writes a copy into the record. That is two expressions of one layout, and
+  // this repository's chapter on a stale copy is what happens next. Instead
+  // there is ONE road: the live path packs and immediately unpacks, and the
+  // walk path unpacks what the arena stored. A field that is not in
+  // `ZHAO_MS_*` cannot reach the binner on EITHER path -- so a future field
+  // that forgets this record FAILS TO RENDER rather than rendering wrong, and
+  // "the walk silently got a convenient zero" is not an available outcome.
+  //
+  // THAT IS DELIBERATELY NOT A CHECKER. The natural check -- compare the
+  // walk's reconstruction against the live composition -- would build both
+  // sides from the same fields with the same code, which is exactly
+  // CLAUDE.md's detector wired to two operands that move together: blind to
+  // the one fault it exists to catch. A missing road cannot go blind.
+  //
+  // THE COST OF THE PACK IS ZERO LOGIC on the live path: it is a
+  // concatenation followed by its own inverse, which collapses.
+
+  function automatic logic [ZHAO_TD_MATSTATE_W-1:0] zhao_ms_pack(
+      input logic        v,
+      input logic        detail,
+      input logic [ 7:0] vtx_alpha,
+      input logic [ 7:0] eff_tag,
+      input logic [ 7:0] sten_ref,
+      input logic [31:0] frag_state,
+      input logic [ 1:0] samp_cnt,
+      input logic [ 7:0] base_bind,
+      input logic [ 2:0] recipe,
+      input logic [ 7:0] weight,
+      input logic [23:0] base_rgb,
+      input logic [ 1:0] resp_cls,
+      input logic [ 1:0] pal_slot,
+      input logic [ 7:0] pal_gen);
+    zhao_ms_pack = '0;                                   // the reserve, written zero
+    zhao_ms_pack[ZHAO_MS_VALID_LO    +: ZHAO_MS_VALID_W]    = v;
+    zhao_ms_pack[ZHAO_MS_DETAIL_LO   +: ZHAO_MS_DETAIL_W]   = detail;
+    zhao_ms_pack[ZHAO_MS_VTXALPHA_LO +: ZHAO_MS_VTXALPHA_W] = vtx_alpha;
+    zhao_ms_pack[ZHAO_MS_EFFTAG_LO   +: ZHAO_MS_EFFTAG_W]   = eff_tag;
+    zhao_ms_pack[ZHAO_MS_STENREF_LO  +: ZHAO_MS_STENREF_W]  = sten_ref;
+    zhao_ms_pack[ZHAO_MS_FRAGST_LO   +: ZHAO_MS_FRAGST_W]   = frag_state;
+    zhao_ms_pack[ZHAO_MS_SAMPCNT_LO  +: ZHAO_MS_SAMPCNT_W]  = samp_cnt;
+    zhao_ms_pack[ZHAO_MS_BASEBIND_LO +: ZHAO_MS_BASEBIND_W] = base_bind;
+    zhao_ms_pack[ZHAO_MS_RECIPE_LO   +: ZHAO_MS_RECIPE_W]   = recipe;
+    zhao_ms_pack[ZHAO_MS_WEIGHT_LO   +: ZHAO_MS_WEIGHT_W]   = weight;
+    zhao_ms_pack[ZHAO_MS_BASERGB_LO  +: ZHAO_MS_BASERGB_W]  = base_rgb;
+    zhao_ms_pack[ZHAO_MS_RESPCLS_LO  +: ZHAO_MS_RESPCLS_W]  = resp_cls;
+    zhao_ms_pack[ZHAO_MS_PALSLOT_LO  +: ZHAO_MS_PALSLOT_W]  = pal_slot;
+    zhao_ms_pack[ZHAO_MS_PALGEN_LO   +: ZHAO_MS_PALGEN_W]   = pal_gen;
+  endfunction
+
+  // THE FLAT REQUEST, REBUILT. The four constants below are the SAME named
+  // localparams the composition has always used, in the same positions -- they
+  // are not stored because they are not variable, and re-reading a localparam
+  // is not "substituting a convenient zero": the value is the console's own
+  // declared one and the SINGLE place it is written is this function.
+  //
+  // `aux_required` is `1'b0` and `aux_surface_ctx` is `224'd0` in this console
+  // because the AUX response has no producer -- and this file already says of
+  // that: "a fragment that asked would never retire". Those 225 bits are a
+  // structural zero of the DESIGN, identical on both paths, and the day AUX
+  // gains a producer they become fields of this state word and the layout
+  // moves. Said here rather than left to be discovered.
+  function automatic logic [297:0] zhao_ms_flat_request(
+      input logic [ZHAO_TD_MATSTATE_W-1:0] ms);
+    zhao_ms_flat_request = ms[ZHAO_MS_VALID_LO] ? {
+        ms[ZHAO_MS_SAMPCNT_LO  +: ZHAO_MS_SAMPCNT_W],    // [297:296]
+        ms[ZHAO_MS_BASEBIND_LO +: ZHAO_MS_BASEBIND_W],   // [295:288]
+        MAT_LOD_Q4_4_C,                                  // [287:280]
+        ms[ZHAO_MS_RECIPE_LO   +: ZHAO_MS_RECIPE_W],     // [279:277]
+        ms[ZHAO_MS_WEIGHT_LO   +: ZHAO_MS_WEIGHT_W],     // [276:269]
+        1'b0,                                            // [268]     aux_required
+        224'd0,                                          // [267:44]  aux_surface_ctx
+        ms[ZHAO_MS_BASERGB_LO  +: ZHAO_MS_BASERGB_W],    // [43:20]
+        MAT_BASE_ALPHA_C,                                // [19:12]
+        ms[ZHAO_MS_RESPCLS_LO  +: ZHAO_MS_RESPCLS_W],    // [11:10]
+        ms[ZHAO_MS_PALSLOT_LO  +: ZHAO_MS_PALSLOT_W],    // [9:8]
+        ms[ZHAO_MS_PALGEN_LO   +: ZHAO_MS_PALGEN_W]      // [7:0]
+      } : 298'd0;
+    // The all-zero request is the legal "this surface takes no texture sample"
+    // profile, and it is what the port carried before a material resolved. It
+    // is reproduced from the STORED `valid` bit rather than from the window's
+    // CURRENT one, which is the entire difference between a walked triangle
+    // getting its own state and getting the last span's.
+  endfunction
+
+  function automatic logic [31:0] zhao_ms_frag_state(
+      input logic [ZHAO_TD_MATSTATE_W-1:0] ms);
+    zhao_ms_frag_state = ms[ZHAO_MS_FRAGST_LO +: ZHAO_MS_FRAGST_W];
+  endfunction
+
+  // THE TAIL. The arena id is an ARGUMENT and not a stored field, because it
+  // is the record's own address: `u_geom_tidq`'s on the live path, and on the
+  // walk the id the chunk named and the walker fetched the descriptor with.
+  function automatic logic [47:0] zhao_ms_tail(
+      input logic [ZHAO_TD_MATSTATE_W-1:0] ms,
+      input logic [17:0]                   arena_id);
+    zhao_ms_tail = {
+        ms[ZHAO_MS_DETAIL_LO],                           // [47]
+        TAIL_VERTEX_RGB_UNUSED_C[22:18], arena_id,       // [46:24]
+        ms[ZHAO_MS_VTXALPHA_LO +: ZHAO_MS_VTXALPHA_W],   // [23:16]
+        ms[ZHAO_MS_EFFTAG_LO   +: ZHAO_MS_EFFTAG_W],     // [15:8]
+        ms[ZHAO_MS_STENREF_LO  +: ZHAO_MS_STENREF_W]     // [7:0]
+      };
+  endfunction
+
+  // ---- THE PACK'S TWO CALL SITES, AND WHY THERE ARE TWO -------------------
+  // A SECOND INSTANCE OF ONE LAW IS NOT A SECOND LAW; a second EXPRESSION of
+  // it would be (`zhao_forge_assemble.sv:62-66`). These are two CALLS of one
+  // function, each handed the triangle identity as it stands AT ITS OWN STAGE:
+  //
+  //   * the CAPTURE site feeds `u_geom_vertid`, which consumes GEOM.CLIP's
+  //     output, so it is handed `cl_o_ident`;
+  //   * the DOOR site feeds `zhao_geom_bin_pipe_v2`, several stages later
+  //     through GEOM.SETUP's pipeline, so it is handed `st_ident`.
+  //
+  // Every OTHER input is `mw_pub_*`, which is SPAN-INVARIANT by the material
+  // window's interlock (`d_enter_i` = GEOM.CLIP's input, `d_leave_i` = the
+  // door) -- so the two calls differ only in the field that genuinely moves
+  // with the triangle, and that is the field each is given at its own stage.
+  // This is the same relationship `a_attrpack_setup_same_triangle` already
+  // asserts between `st_ident` and `ap_ident_w`.
+  wire [31:0] cl_mat_token_w = cl_o_ident[GEOM_TRI_MATTOK_LO +: 32];
+  wire [ 1:0] cl_domain_w    = cl_o_ident[GEOM_TRI_DOMAIN_LO +: 2];
+
   // AND THE PAIRING IS STRUCTURAL, NOT ARGUED. The owner directive requires
   // that the stencil reference, the alpha, the blend and the tag "remain paired
   // with the primitive under stalls, clipping, replay, binning and
@@ -33265,7 +33441,10 @@ module zhao_console_core
   // alpha blend before a material resolved; the new one is simply correct.
   wire mat_declares_frag_c = mw_pub_valid && mw_pub_frag_declared;
 
-  wire [31:0] tri_fragment_state_c =
+  // THE SELECTION IS UNCHANGED and now happens ONCE, at the pack. What the
+  // consumer reads is the stored result, so the walk cannot re-run the
+  // selection against a window that has moved on -- which is the whole defect.
+  wire [31:0] mat_fragment_state_c =
         mat_declares_frag_c ? mw_pub_mat_frag_state   // the MATERIAL's, whole
       : mw_pub_valid        ? mw_pub_frag_state       // the PRODUCER's, whole
                             : FRAG_STATE_UNPUBLISHED_C;
@@ -33314,7 +33493,11 @@ module zhao_console_core
   // carrier must move before `vertex_rgb` becomes live again. Said here rather
   // than left to be discovered, because a reused dead field is exactly the kind
   // of thing that reads as harmless until it is not.
-  wire [47:0] tri_continuation_tail_c = {
+  // AND THE SAME, FOR THE TAIL'S THREE SELECTED FIELDS. The composition and
+  // every word of reasoning below are unchanged; what moved is that the RESULT
+  // is stored per triangle instead of being recomposed from a held publication
+  // at whatever time the consumer happens to read it.
+  wire [47:0] mat_continuation_tail_c = {
       // [47] TERRAIN.NORMALMAP's DETAIL DECLARATION (NORMALMAP, 2026-09-26).
       // The SECOND field to take up residence in the dead `vertex_rgb` bits,
       // after I54's arena index at [41:24]. The bargain is the one stated for
@@ -33341,6 +33524,99 @@ module zhao_console_core
       mat_declares_frag_c ? mw_pub_stencil_ref
                           : TAIL_STENCIL_REF_DEFAULT_C // [7:0]   the MATERIAL's
   };
+
+  // =========================================================================
+  // THE MATERIAL STATE: THE TWO PACKS, THE SELECT, AND THE THREE UNPACKS
+  // =========================================================================
+  // THE CAPTURE. `u_geom_vertid` consumes GEOM.CLIP's OUTPUT, which is
+  // strictly between `u_material_window`'s `d_enter_i` (GEOM.CLIP's input) and
+  // its `d_leave_i` (the door) -- so by that block's own interlock the
+  // publication sampled here is THIS TRIANGLE's. The mosaic token is taken
+  // from `cl_o_ident`, the identity at THIS stage, because `st_ident` at this
+  // instant belongs to an earlier triangle: the two call sites differ in
+  // exactly the one input that moves with the triangle, and in nothing else.
+  wire [ZHAO_TD_MATSTATE_W-1:0] live_matstate_c = zhao_ms_pack(
+      mw_pub_valid,
+      mw_pub_valid && mw_pub_detail,
+      mw_pub_valid ? mw_pub_vertex_alpha : TAIL_VERTEX_ALPHA_DEFAULT_C,
+      mat_declares_frag_c ? mw_pub_effect_tag  : TAIL_EFFECT_TAG_DEFAULT_C,
+      mat_declares_frag_c ? mw_pub_stencil_ref : TAIL_STENCIL_REF_DEFAULT_C,
+      mat_fragment_state_c,
+      mw_pub_sample_count,
+      mw_pub_base_binding,
+      mw_pub_material_recipe,
+      zhao_ms_weight  (cl_mat_token_w, cl_domain_w),
+      zhao_ms_base_rgb(cl_mat_token_w, cl_domain_w),
+      mw_pub_response_class,
+      mw_pub_palette_slot,
+      mw_pub_palette_gen);
+
+  // THE DOOR's OWN PACK, from `st_ident`. On the live path this is what the
+  // binner reads; it is bit-identical to what the composition above this block
+  // produced before SCHEMA v3, and the assertion below says so rather than
+  // asking anyone to take it on trust.
+  wire [ZHAO_TD_MATSTATE_W-1:0] door_matstate_c = zhao_ms_pack(
+      mw_pub_valid,
+      mw_pub_valid && mw_pub_detail,
+      mw_pub_valid ? mw_pub_vertex_alpha : TAIL_VERTEX_ALPHA_DEFAULT_C,
+      mat_declares_frag_c ? mw_pub_effect_tag  : TAIL_EFFECT_TAG_DEFAULT_C,
+      mat_declares_frag_c ? mw_pub_stencil_ref : TAIL_STENCIL_REF_DEFAULT_C,
+      mat_fragment_state_c,
+      mw_pub_sample_count,
+      mw_pub_base_binding,
+      mw_pub_material_recipe,
+      mat_recipe_weight_c,
+      mat_base_rgb_c,
+      mw_pub_response_class,
+      mw_pub_palette_slot,
+      mw_pub_palette_gen);
+
+  // THE SELECT, on the SAME `tw_active_w` that selects the triangle record
+  // itself upstream of the three-way fork. One triangle, one source, for the
+  // geometry AND for the state that describes it -- a state selected on a
+  // different condition from the record it belongs to is this repository's own
+  // metadata-swap defect, and it is not one here.
+  wire [ZHAO_TD_MATSTATE_W-1:0] tri_matstate_c =
+      tw_active_w ? pw_t_matstate_w : door_matstate_c;
+  wire [17:0] tri_arena_id_c = tw_active_w ? pw_t_arena_id_w : tidq_id_w;
+
+  wire [297:0] tri_flat_request_c      = zhao_ms_flat_request(tri_matstate_c);
+  wire [ 31:0] tri_fragment_state_c    = zhao_ms_frag_state  (tri_matstate_c);
+  wire [ 47:0] tri_continuation_tail_c = zhao_ms_tail(tri_matstate_c, tri_arena_id_c);
+
+  // ---- THE ROUND TRIP IS ASSERTED, NOT ARGUED ----------------------------
+  // On the LIVE path the same three quantities are reachable two ways: the
+  // readable composition above (`mat_flat_request_c`, `mat_continuation_tail_c`,
+  // `mat_fragment_state_c`) and the pack/unpack pair. They must agree bit for
+  // bit, and if a field is ever added to the composition and not to the
+  // layout, THIS is what says so -- loudly, on the first triangle, rather than
+  // silently on the walk path where nothing would be looking.
+  //
+  // IT IS NOT A DETECTOR WIRED TO TWO OPERANDS THAT MOVE TOGETHER. The two
+  // sides are built by DIFFERENT code from the same inputs: one is a literal
+  // concatenation in field order, the other is fourteen indexed writes
+  // followed by fourteen indexed reads. A layout error moves exactly one of
+  // them. What it cannot catch is a wrong VALUE fed to both, which is what the
+  // window's interlock and `err_unpublished_o` are for -- two instruments, two
+  // faults, stated so neither is quoted for the other's job.
+  // synthesis translate_off
+  // verilator lint_off  INITIALDLY
+  always_ff @(posedge gpu_clk) begin
+    if (rst_n && !tw_active_w) begin
+      a_ms_flat_roundtrip : assert (
+          zhao_ms_flat_request(door_matstate_c) ==
+          (mw_pub_valid ? mat_flat_request_c : 298'd0))
+        else $fatal(1, "zhao_console_core: MATSTATE does not reproduce the flat request");
+      a_ms_tail_roundtrip : assert (
+          zhao_ms_tail(door_matstate_c, tidq_id_w) == mat_continuation_tail_c)
+        else $fatal(1, "zhao_console_core: MATSTATE does not reproduce the continuation tail");
+      a_ms_frag_roundtrip : assert (
+          zhao_ms_frag_state(door_matstate_c) == mat_fragment_state_c)
+        else $fatal(1, "zhao_console_core: MATSTATE does not reproduce the fragment state");
+    end
+  end
+  // verilator lint_on   INITIALDLY
+  // synthesis translate_on
 
 
   // --------------------------------------------------------------------------

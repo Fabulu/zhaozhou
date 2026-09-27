@@ -104,7 +104,7 @@ constexpr uint32_t SCRATCH_BASE = 0x06800000u;
 // been amended under owner directive section 4. A dead constant with an
 // authoritative comment is a document that cannot go stale loudly.
 constexpr uint32_t PV_B = 32;
-constexpr uint32_t TD_B = 32;
+constexpr uint32_t TD_B = 48;   // SCHEMA v3 (METASIDE) -- was 32, was 16
 constexpr uint32_t CK_B = 64;
 
 // THE BURST-ALIGNMENT QUANTUM AND THE VERTEX ALLOCATION STRIDE, 2026-09-23.
@@ -134,7 +134,7 @@ constexpr uint32_t align_up(uint32_t v) {
 }
 
 constexpr uint32_t TRI_OFF_B   = align_up(MAX_VERTS * PV_SLOT_B);          // 2,097,120
-constexpr uint32_t CHUNK_OFF_B = align_up(TRI_OFF_B + MAX_TRIS * TD_B);    // 2,621,408
+constexpr uint32_t CHUNK_OFF_B = align_up(TRI_OFF_B + MAX_TRIS * TD_B);    // 2,883,552
 
 uint32_t view_base(int view) { return view ? VIEW1_BASE : VIEW0_BASE; }
 

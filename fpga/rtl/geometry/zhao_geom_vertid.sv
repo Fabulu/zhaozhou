@@ -302,6 +302,34 @@ module zhao_geom_vertid #(
     input  var logic signed [11:0]      tri_min_y_i,
     input  var logic signed [11:0]      tri_max_y_i,
 
+    // ---- WHAT SCHEMA v3 ADDED (METASIDE, 2026-09-27, directive section 4) --
+    // THE MATERIAL STATE, 128 bits, captured HERE because this is the only
+    // place in the console where it is simultaneously (a) the triangle's own
+    // and (b) about to become a record.
+    //
+    // WHY IT IS THE TRIANGLE'S OWN AT THIS BEAT, and it is structural rather
+    // than a latency coincidence. `zhao_material_window`'s interlock is
+    // `d_enter_i = GEOM.CLIP's INPUT accept` and `d_leave_i = the door`, and
+    // its header states the consequence: "the window never changes what it
+    // publishes while ANY triangle is between GEOM.CLIP's input and the door
+    // ... the span downstream of this block is, at every instant, occupied by
+    // triangles of ONE material, and that material is the published one."
+    // This block consumes at GEOM.CLIP's OUTPUT -- strictly between those two
+    // events -- so what it samples is what the door would have sampled.
+    // `mat_win_err_unpublished_o` is the composed counter that watches the one
+    // thing which would falsify that, and it is read.
+    //
+    // WHY THE WALK NEEDED IT AT ALL. `zhao_geom_bin_pipe_v2` builds
+    // `job_meta_w` from `tri_flat_request_i` (298), `tri_continuation_tail_i`
+    // (48) and `tri_fragment_state_i` (32) among others -- 378 bits that
+    // `zhao_geom_setup` mentions ZERO times and `zhao_geom_attrpack` once, in a
+    // comment disclaiming one of them. They arrive on CONSOLE WIRES. So the
+    // "second setup and attrpack back end" entry I55 demanded for seven packets
+    // could have been built perfectly and these bits would still have had no
+    // producer on the walk side. See
+    // `reports/DECISION-20260927-TRIANGLEDESCRIPTOR-V3.md`.
+    input  var logic [127:0]            tri_matstate_i,
+
     // ---- GEOM.PARAMARENA's ProjectedVertex intake --------------------------
     output var logic                    pv_valid_o,
     input  var logic                    pv_ready_i,
@@ -350,6 +378,9 @@ module zhao_geom_vertid #(
     output var logic signed [11:0]      td_max_x_o,
     output var logic signed [11:0]      td_min_y_o,
     output var logic signed [11:0]      td_max_y_o,
+    // SCHEMA v3's third sixteen bytes. Held in the same registers'
+    // company and loaded by the same event as every other field.
+    output var logic [127:0]            td_matstate_o,
     // The triangle's own arena index, for I54's chunk serialisation. Valid
     // with `td_accept_i` and meaningless otherwise, exactly like `pv_id_i`.
     input  var logic                    td_accept_i,
@@ -461,6 +492,33 @@ module zhao_geom_vertid #(
   // the record it belongs to is this repository's own metadata-swap defect.
   logic signed [47:0]  area2_q;
   logic signed [11:0]  minx_q, maxx_q, miny_q, maxy_q;
+  // SCHEMA v3, and the comment above it applies with force: this field is
+  // the one the metadata-swap defect would corrupt if it were latched on a
+  // different condition, because it is the ONLY field whose producer sits
+  // outside the triangle packet.
+  logic [127:0]        matstate_q;
+  // ---- THE PORT WIDTH IS A LITERAL AND THE LAW IS THIS GUARD (METASIDE) ---
+  // `tools/quartus/gen_prod_top.py` resolves a packed port width by evaluating
+  // the expression against MODULE parameters only; a PACKAGE constant is not
+  // in that table, so `[ZHAO_TD_MATSTATE_W-1:0]` made it SKIP this block -- and
+  // a skipped block is silently absent from the generated production top,
+  // which is a regression no gate spells out. The tell is the instance COUNT
+  // moving: 89 -> 86, in a line nobody reads. So the port carries a literal and
+  // the package stays authoritative through the check below, which fails
+  // ELABORATION rather than letting the two drift.
+  //
+  // AND THE GUARD IS NOT IN THIS BLOCK, deliberately. `zhao_geom_vertid` does
+  // NOT `import zhao_pkg::*` -- it is the one of the four SCHEMA v3 blocks that
+  // never indexes the layout, because to it the state is an opaque 128-bit word
+  // captured in `S_IDLE` and handed on. Importing a package to assert a
+  // constant this block does not use would be adding a dependency to hold an
+  // instrument, and the instrument already exists one hop away:
+  // `zhao_geom_paramarena` carries `p_matstate_width` on the port this one
+  // drives, so a package that moved and a literal that did not is caught at
+  // that block's elaboration AND as a width mismatch on this connection.
+  // Written down rather than left as an omission, because "there is no guard
+  // here" and "the guard is next door" look identical to a reader.
+
   logic [KEYW-1:0]     key_q  [0:2];
   logic signed [20:0]  cx_q   [0:2];
   logic signed [20:0]  cy_q   [0:2];
@@ -561,6 +619,7 @@ module zhao_geom_vertid #(
   assign td_max_x_o    = maxx_q;
   assign td_min_y_o    = miny_q;
   assign td_max_y_o    = maxy_q;
+  assign td_matstate_o = matstate_q;
 
   assign tri_id_valid_o = td_valid_o && td_ready_i && td_accept_i;
   assign tri_id_o       = td_id_i;
@@ -609,6 +668,7 @@ module zhao_geom_vertid #(
       maxx_q      <= 12'sd0;
       miny_q      <= 12'sd0;
       maxy_q      <= 12'sd0;
+      matstate_q  <= '0;
       map_valid_q <= '0;
       map_hitv_q  <= 1'b0;
       eff_epoch_q <= '0;
@@ -679,6 +739,7 @@ module zhao_geom_vertid #(
               maxx_q   <= tri_max_x_i;
               miny_q   <= tri_min_y_i;
               maxy_q   <= tri_max_y_i;
+              matstate_q <= tri_matstate_i;
               key_q[0] <= tri_key_a_i;
               key_q[1] <= tri_key_b_i;
               key_q[2] <= tri_key_c_i;

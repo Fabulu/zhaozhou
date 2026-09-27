@@ -197,6 +197,32 @@ module zhao_geom_paramwalk
     // buffer and a deadlock; this is a wire off a decision already made.
     output var logic        t_first_o,
     output var logic        t_last_o,
+    // ---- SCHEMA v3's MATERIAL STATE (METASIDE, 2026-09-27) ---------------
+    // The 115 live bits of the 378 that `zhao_geom_bin_pipe_v2` takes as
+    // `tri_flat_request_i`, `tri_continuation_tail_i` and
+    // `tri_fragment_state_i`. `zhao_geom_setup` mentions all three ZERO times
+    // and `zhao_geom_attrpack` once, disclaiming one -- so no back end fed
+    // from this walk could ever have produced them, however faithfully it was
+    // built. Opaque here; `zhao_console_core` owns the field layout because
+    // that is where the LIVE path composes it, and one layout with two
+    // expressions is how two copies come to disagree.
+    output var logic [127:0] t_matstate_o,
+    // ---- THE KEY, WHICH IS THE ADDRESS THIS RECORD WAS FETCHED AT --------
+    // I54's arena triangle index rides `tri_continuation_tail_i[41:24]`. On
+    // the live path it comes from `u_geom_tidq`; on this path it is the id the
+    // chunk named and this walk addressed the descriptor with
+    // (`w_tri_base_q + id * TD_B`). It is emitted rather than stored INSIDE
+    // the record because a record does not carry its own address -- that is
+    // SCHEMA v2's own reasoning for keeping `untex` out, one fact one place.
+    output var logic [17:0] t_arena_id_o,
+    // AND THE HANDLE IS NOT TRUNCATED SILENTLY. A chunk id is 23 bits wide in
+    // the serialised record and the tail's field is 18, so the top five are
+    // structurally zero for every chunk this console writes -- and "the ids
+    // are small in practice" is precisely the kind of premise directive
+    // section 4 refuses ("do not ... truncate a full handle"). This counts the
+    // records where it is not true instead of asserting that it always is.
+    // Fireable with legal stimulus: offer a chunk holding an id >= 2^18.
+    output var logic [31:0] tri_id_wide_o,
 
     // ---- THE THREE PROJECTED VERTICES THE DESCRIPTOR NAMES ------------------
     // THIS IS THE ARM THE BLOCK DELIBERATELY DID NOT DRIVE, and the comment
@@ -308,7 +334,7 @@ module zhao_geom_paramwalk
 );
 
   localparam int unsigned CK_B  = ZHAO_PARAMBUF_CK_BYTES;  // w=64 bytes
-  localparam int unsigned TD_B  = ZHAO_PARAMBUF_TD_BYTES;  // w=32 bytes
+  localparam int unsigned TD_B  = ZHAO_PARAMBUF_TD_BYTES;  // w=48 bytes
   localparam int unsigned CKW   = CK_B * 8;                // w=512 bits
   // The low bits an aligned address must have clear.
   localparam int unsigned ALIGN_LSB = $clog2(BURST_ALIGN_B);  // w=4 bits
@@ -372,6 +398,10 @@ module zhao_geom_paramwalk
   // these and never against the live pub_* inputs.
   logic [15:0] w_gen_q;
   logic [26:0] w_tri_base_q, w_chunk_base_q;
+  // THE ID THAT ADDRESSED THE DESCRIPTOR IN HAND. Loaded by the SAME two
+  // assignments that load `m_addr_q` from it, so the id and the bytes it
+  // fetched cannot separate.
+  logic [22:0] w_tri_id_q;
   // THE VERTEX REGION'S BASE. `pub_vert_base_i` has been a port of this block
   // since it was written and was used at exactly ONE site -- the directory
   // round-trip compare -- because nothing here addressed a vertex. It is
@@ -523,6 +553,28 @@ module zhao_geom_paramwalk
   logic        td_illegal_c;
   logic signed [47:0] td_area2_c;
   logic signed [11:0] td_min_x_c, td_max_x_c, td_min_y_c, td_max_y_c;
+  logic [127:0] td_matstate_c;
+  // ---- THE PORT WIDTH IS A LITERAL AND THE LAW IS THIS GUARD (METASIDE) ---
+  // `tools/quartus/gen_prod_top.py` resolves a packed port width by evaluating
+  // the expression against MODULE parameters only; a PACKAGE constant is not
+  // in that table, so `[ZHAO_TD_MATSTATE_W-1:0]` made it SKIP this block -- and
+  // a skipped block is silently absent from the generated production top,
+  // which is a regression no gate spells out. The tell is the instance COUNT
+  // moving: 89 -> 86, in a line nobody reads. So the port carries a literal and
+  // the package stays authoritative through the check below, which fails
+  // ELABORATION rather than letting the two drift.
+  //
+  // CLAUDE.md: `--lint-only` does NOT run `initial` blocks, so a clean lint is
+  // not evidence about this guard; elaboration in a Verilator test binary and
+  // quartus_map are. And Quartus 17.0 rejects a bare module-scope `if`, which
+  // is why it is inside `initial begin`.
+  // synthesis translate_off
+  initial begin : p_matstate_width
+    if (ZHAO_TD_MATSTATE_W != 128)
+      $fatal(1, "zhao_geom_paramwalk: ZHAO_TD_MATSTATE_W moved; the literal port width did not");
+  end
+  // synthesis translate_on
+
 
   assign dec_ck_valid_c = (wstate_q == W_CK_CHECK);
   // THE DESCRIPTOR'S DECODE IS HELD ACROSS THE VERTEX FETCH. `td_valid_i` used
@@ -569,6 +621,7 @@ module zhao_geom_paramwalk
 
       .td_valid_i (dec_td_valid_c),
       .td_bytes_i (td_buf_q),
+      .td_matstate_o (td_matstate_c),
       // THE SEALED COUNT IS THE ONE THIS WALK STARTED UNDER. A live
       // `pub_tris_i` here would let a descriptor from the old frame be
       // validated against the new frame's seal.
@@ -696,6 +749,13 @@ module zhao_geom_paramwalk
   assign t_max_x_o    = td_max_x_c;
   assign t_min_y_o    = td_min_y_c;
   assign t_max_y_o    = td_max_y_c;
+  assign t_matstate_o = td_matstate_c;
+  // The id the CURRENT descriptor was fetched with, latched beside the
+  // address that used it -- the same enable, which is the whole of why it
+  // cannot be one behind. `u_geom_tidq` was one behind and mis-attributed
+  // 74 of 75 triangles with every range guard passing; that defect is a
+  // separate register loaded by a separate event, and this is not one.
+  assign t_arena_id_o = w_tri_id_q[17:0];
 
   // THE BRACKETS. `t_last_c` is written as the NEGATION OF THE TWO CONTINUE
   // CONDITIONS rather than as a third copy of the end condition, so it cannot
@@ -781,6 +841,8 @@ module zhao_geom_paramwalk
       wstate_q       <= W_IDLE;
       w_gen_q        <= 16'd0;
       w_tri_base_q   <= 27'd0;
+      w_tri_id_q     <= 23'd0;
+      tri_id_wide_o  <= 32'd0;
       w_chunk_base_q <= 27'd0;
       w_verts_q      <= 18'd0;
       w_chunk_q      <= 23'd0;
@@ -1032,6 +1094,8 @@ module zhao_geom_paramwalk
               // same clock, so `id_c` here would name the PREVIOUS chunk's
               // last index. See the wire's own comment.
               m_addr_q  <= 27'(w_tri_base_q + 27'(id0_c * 23'(TD_B)));
+              w_tri_id_q <= id0_c;
+              if (id0_c[22:18] != 5'd0) tri_id_wide_o <= tri_id_wide_o + 32'd1;
               m_len_q   <= 7'(TD_B);
               r_beats_q <= 4'(TD_BEATS);
               r_beat_q  <= 4'd0;
@@ -1191,6 +1255,8 @@ module zhao_geom_paramwalk
             // comes straight out of the buffer with no re-read.
             id_idx_q  <= id_idx_q + 4'd1;
             m_addr_q  <= 27'(w_tri_base_q + 27'(nxt_id_c * 23'(TD_B)));
+            w_tri_id_q <= nxt_id_c;
+            if (nxt_id_c[22:18] != 5'd0) tri_id_wide_o <= tri_id_wide_o + 32'd1;
             m_len_q   <= 7'(TD_B);
             r_beats_q <= 4'(TD_BEATS);
             r_beat_q  <= 4'd0;
