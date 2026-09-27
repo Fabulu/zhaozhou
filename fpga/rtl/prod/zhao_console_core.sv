@@ -10237,13 +10237,90 @@
 //      job -- 13 issued, 13 taken, counted in two modules on two register
 //      enables -- and every fetched vertex record is legal.
 //
-//      WHERE IT STOPS, AND IT IS ONE PLACE. `frags[covered/blended] = [149 0]`:
-//      fragments are generated and NONE EVER BLEND, so the tile pipe never
-//      empties, never reaches RS_SWAP, `resolved_tiles` is 0 and `job_ready_o`
-//      -- `(rs_state_q == RS_IDLE) && !frame_fault_clear_valid_i` -- never
-//      returns. The door shuts after job 13. `be_stall_clocks_o = 168` rules
-//      out the geometry back end: the sequencer is not waiting on
-//      setup/attrpack, it is waiting on the raster.
+//      WHERE IT STOPS -- CORRECTED 2026-09-27 BY METASIDE, AND THE OLD
+//      ACCOUNT WAS WRONG IN EVERY CLAUSE.
+//
+//      THIS ENTRY USED TO SAY: "`frags[covered/blended] = [149 0]`: fragments
+//      are generated and NONE EVER BLEND, so the tile pipe never empties,
+//      never reaches RS_SWAP, `resolved_tiles` is 0 and `job_ready_o` never
+//      returns." Three claims, and all three are false.
+//
+//      (1) `blended = 0` IS WHAT SUCCESS LOOKS LIKE.
+//      `zhao_raster_fragment.sv:671` counts only a write that is NOT
+//      `BL_REPLACE`, and says so in its own comment: "A REPLACE write is not a
+//      blend." Every span in this fixture is REPLACE. A HEALTHY frame -- 2,816
+//      pixels, ELEVEN tiles resolved, 101 jobs -- reads
+//      `frags[covered/blended] = [1216 0]`, and that measurement was on disk in
+//      this repository before the claim was written:
+//      `reports/synthesis/arenabin/smoke_plain_arenainfer.log:75`. It is a
+//      COUNTER; it gates nothing, and nothing in `ordinary_pipe_empty_w` reads
+//      it.
+//
+//      (2) THE PIPE DOES EMPTY and (3) THE TILE DOES REACH RS_SWAP. Measured
+//      at `GEOM_WALK_RASTER = 1` by `SMOKE: walkwedge`, which prints all eight
+//      terms of `ordinary_pipe_empty_w` and the four of `producer_quiet_w`
+//      inside it rather than inferring them from a counter:
+//
+//        walkwedge rs_state=3 last=1 job_ready=0 | empty=1 <- ew_done=1
+//                  prodquiet=1 ezcand=0 skid=0 stgcand=0 texquiet=1
+//                  stgfrag=0 fragidle=1
+//        walkquiet ew_job_ready=1 rowhold=0 attr_idle=63 attr_qv=0
+//                  attr_bundle=0 | abort=0 seqabort=0 seqmis=0
+//
+//      `rs_state = 3` is RS_SWAP. `empty = 1`. `last = 1`. No abort. So the
+//      tile pipe did everything correctly and is stuck in the TILE-STORE /
+//      RASTER.RESOLVE SWAP HANDSHAKE:
+//
+//        assign resolve_start_w = (rs_state_q == RS_SWAP) && !abort_now_w;
+//        assign ts_swap_w       = resolve_start_w && resolve_ready_w;
+//        ...  if (ts_swap_w && ts_swap_ready_w) rs_state_q <= RS_IDLE;
+//
+//      -- which the flat request, the continuation tail and the fragment state
+//      do not gate at all. `be_stall_clocks_o = 168` still rules out the
+//      geometry back end, and that part of the old paragraph was right.
+//
+//      AND THE SECOND PROBE NAMES THE ROOT CAUSE TO ONE LINE. `SMOKE: walkswap`
+//      separates the three candidates and the answer is the third:
+//
+//        walkswap resolve_ready=0 ts_swap=0 ts_swap_ready=1
+//                 | fb_valid=1 fb_ready=0 fb_last=0
+//                   tr_valid=0 tr_ready=1 tr_data_valid=0
+//
+//      `ts_swap_ready = 1` -- THE TILE STORE IS READY. `resolve_ready = 0` with
+//      `fb_valid = 1` against `fb_ready = 0` -- RASTER.RESOLVE started, has a
+//      pixel in hand, and THE FRAMEBUFFER SINK IS NOT ACCEPTING. It never will:
+//
+//        zhao_shell_top_v2.sv:1653
+//          assign rpx_ready = !post_phase_w && fbw_px_ready;
+//
+//      The shell muxes ONE framebuffer writer between the raster and the post
+//      pass to save ~300 ALM, and `post_phase_w` (`u_phase.phase_post_o`,
+//      `:1753`) hands it to POST. The walk runs during the DRAIN -- after the
+//      frame's geometry has sealed -- by which time the post phase has opened
+//      and `rpx_ready` is a structural zero. So the walk-arranged console
+//      produces its pixels correctly and has nowhere to put them.
+//
+//      THIS IS A SCHEDULING FAULT, NOT A DATAPATH ONE, and it is the same
+//      family as TERRAINVISIBLE's: "terrain's 65 references were pushed into
+//      the binner's arena AFTER the frame had been serialised, so they were
+//      never turned into raster jobs at all. That is a stimulus ORDER fault and
+//      not a console one." Here it IS a console one -- the drain window and the
+//      post window overlap, and the on-chip drain never noticed because it runs
+//      BEFORE the seal.
+//
+//      WHAT IT MEANS FOR I55: the remaining work is to give the walk a window
+//      in which `rpx_ready` can be high -- either by running the sweep before
+//      the post phase opens, or by deferring the post phase until the sweep has
+//      drained. That is a PHASE question in `zhao_shell_top_v2`, and it is a
+//      different subsystem from everything eight packets have worked on. It is
+//      NOT a second framebuffer writer: the mux was chosen to save ~300 ALM on
+//      a console already measured at 350% of the shipping part.
+//
+//      NOTE THE SHAPE, because it is this file's own law arriving from the
+//      unusual side. CLAUDE.md says "a number that is exactly zero is a broken
+//      instrument until proven otherwise". Here the ZERO WAS SOUND and the
+//      READING of it was not -- and the reading pointed at exactly the work
+//      that had already been assigned, which is the direction nobody audits.
 //
 //      ---- THE CLAIM THIS ENTRY HAS CARRIED SINCE WALKSWAP IS SHORT BY 378
 //      ---- BITS, AND THAT IS WHY -----------------------------------------
@@ -10264,16 +10341,24 @@
 //      ... so the planes are RECOMPUTABLE". PVSCHEMA corrected the COLOUR half.
 //      The half nobody corrected is that `job_meta` IS NOT ALL PLANES.
 //
-//      AND IT IS WHY THE FRAGMENTS HANG, on the evidence available. The flat
-//      request on the walk path is whatever `zhao_material_window` LAST
-//      published -- `pub_valid_q` is a held register -- not the triangle's. The
-//      flat-request block in this file says of `aux_surface_ctx`: "The
-//      console's AUX response (`pg_*` inside the shell) has no producer either,
-//      so A FRAGMENT THAT ASKED WOULD NEVER RETIRE." 149 fragments never
-//      retired. CONSISTENT WITH THE EVIDENCE AND NOT PROVEN: the texture
-//      counters sit below two further bench assertions and were not reached.
-//      The measurement that settles it is `SMOKE: texture fragments=/samples=`
-//      on arrangement 1 with those two checks relocated.
+//      AND THE AUX EXPLANATION IS REFUTED, 2026-09-27 (METASIDE). This entry
+//      used to offer it "on the evidence available", correctly labelled
+//      CONSISTENT WITH THE EVIDENCE AND NOT PROVEN -- and was then quoted
+//      twice WITHOUT the label, which is how a hypothesis becomes a cause.
+//
+//      It is refutable by reading, and the refutation is two lines of this
+//      file: `mat_flat_request_c` drives `aux_required` from the literal `1'b0`
+//      and `aux_surface_ctx` from `224'd0`, on BOTH paths, published or not. A
+//      fragment on the walk path CANNOT ask for AUX, so "a fragment that asked
+//      would never retire" cannot be why those 149 did not retire -- and in
+//      fact they did: `fragidle = 1` and `stgfrag = 0` above.
+//
+//      The 378 bits were still missing and are still mandatory under directive
+//      section 4; what was wrong was the causal story attached to them. They
+//      are now carried -- see TriangleDescriptor SCHEMA v3 and
+//      `reports/DECISION-20260927-TRIANGLEDESCRIPTOR-V3.md` -- and the frame
+//      still does not resolve a tile, which is the cleanest possible
+//      demonstration that the two were separate problems all along.
 //
 //      ---- SO THE CONSOLE SHIPS PARKED, AND THAT IS ONE CONSTANT ----------
 //
@@ -10296,18 +10381,38 @@
 //      on the parked arrangement would be a gate that cannot reach the state it
 //      checks, and its silence would read exactly like a pass.
 //
-//      WHAT REMAINS, AND IT IS NO LONGER A WIRING JOB: the 378 bits need a home
-//      keyed to the triangle. Directive section 4 authorises the mechanism BY
-//      NAME -- "a versioned extension or immutable sidecar keyed by the same
-//      identity" -- so it needs no ruling, and it forbids the shortcut in the
-//      same breath. "The span had one material, so reuse the last publication"
-//      is the convenient zero in disguise: true in this fixture, false in
-//      general, and it would pass every gate. The fields do not decompose
-//      cleanly either -- the flat request and the material's fragment state are
-//      per-MATERIAL and the descriptor already carries `material_id`, but
-//      `vertex_alpha` is the span's (R89), `detail` is terrain's per-primitive
-//      declaration and I54's arena id rides in the same tail. `zhao_material_
-//      window` is in `fpga/rtl/texture/`, which this packet was fenced out of.
+//      THE 378 BITS ARE CARRIED, 2026-09-27 (METASIDE). TriangleDescriptor
+//      SCHEMA v3 is 48 bytes; the third sixteen hold a 128-bit MATSTATE, and
+//      the console composes the LIVE path through the SAME unpack functions the
+//      walk uses -- so a field not in the layout cannot reach the binner on
+//      EITHER path, and a future field that forgets this record fails to render
+//      rather than rendering wrong. There is no KEY and therefore nothing to
+//      mis-key: the state is IN the record, at a fixed offset, in the same
+//      burst, which is how section 4's "prove eviction/reuse cannot change a
+//      still-referenced identity" is met structurally rather than argued.
+//      115 bits vary; the other 263 are named constants and the record's own
+//      ADDRESS. It fits at full R7 capacity with 256 KiB spare.
+//
+//      A NOTE ON THE MECHANISM THAT WAS PROPOSED AND CANNOT WORK, because it
+//      will be proposed again: "re-ask the window per triangle".
+//      `zhao_material_window` resolves by {material_set, material_id}, and
+//      THREE of these fields are not functions of the material --
+//      `vertex_alpha` is per-CASTER under R89 (`zhao_forge_shadow.sv:295`),
+//      `detail` is `zhao_terrain_clipfeed`'s per-primitive declaration, and the
+//      mosaic's `base_rgb`/`recipe_weight` are TERRAIN's per-CELL triple. The
+//      document that proposed it says so three paragraphs later.
+//
+//      AND THE FORBIDDEN SHORTCUT IS NOW A COMMITTED MUTANT rather than a
+//      sentence: `tests/mutants/zhao_geom_paramwalk_holdstate_mutant.sv` drives
+//      `t_matstate_o` from the PREVIOUS triangle's decode -- "the span had one
+//      material, so reuse the last publication", implemented -- and
+//      `geom_paramarena_directed` case 1c's SUBSTITUTION check must fail
+//      against it. An equality check cannot see that defect at all, because on
+//      a fixture where adjacent triangles share a material the right answer and
+//      the wrong one are the same bits.
+//
+//      WHAT REMAINS FOR I55 IS THE TILE-STORE SWAP, above, and it is a
+//      different subsystem from everything this entry has been about.
 //
 //      THREE DEFECTS FOUND BY READING, NONE VISIBLE TO ANY GATE, AND TWO OF
 //      THEM ARE THE SAME SHAPE. (a) The tile coordinate is the tile's top-left
