@@ -20787,6 +20787,16 @@ module zhao_console_core
   wire                vid_td_valid, vid_td_ready, vid_td_accept;
   wire [15:0]         vid_td_v0, vid_td_v1, vid_td_v2, vid_td_material;
   wire [31:0]         vid_td_raster, vid_td_source;
+  // TriangleDescriptor SCHEMA v2's second sixteen bytes (SWAPCLOSE,
+  // 2026-09-27). GEOM.CLIP already computes all five and GEOM.SETUP already
+  // consumes all five; what was missing was the RECORD between them, so a back
+  // end reading the arena had nothing to put on those ports. Carried at
+  // GEOM.SETUP's own widths -- s48 and s12 -- and never recomputed, because
+  // `zhao_geom_clip`'s area is winding-flipped and its box is scissored, and a
+  // second site computing either would be a second EXPRESSION of a ratified
+  // law rather than a second instance of one.
+  wire signed [47:0]  vid_td_area2;
+  wire signed [11:0]  vid_td_min_x, vid_td_max_x, vid_td_min_y, vid_td_max_y;
   wire [17:0]         vid_td_id;
   wire                pa_seal_fire;
   wire         ap_tri_ready_w, ap_o_valid_w;
@@ -21077,6 +21087,16 @@ module zhao_console_core
     .tri_material_i (cl_o_rider[49:34]),
     .tri_raster_i   (cl_o_rider[33:2]),
     .tri_src_id_i   (cl_o_src_id),
+    // SCHEMA v2: the area and the scissored box, off the SAME accepted packet
+    // the corners come from. `u_geom_setup` two hundred lines above takes these
+    // five identical wires -- `cl_o_area2`, `cl_o_min_x`, `cl_o_max_x`,
+    // `cl_o_min_y`, `cl_o_max_y` -- so the record now carries exactly what the
+    // live back end consumes, from one producer, with no second expression.
+    .tri_area2_i    (cl_o_area2),
+    .tri_min_x_i    (cl_o_min_x),
+    .tri_max_x_i    (cl_o_max_x),
+    .tri_min_y_i    (cl_o_min_y),
+    .tri_max_y_i    (cl_o_max_y),
 
     // REAL: GEOM.PARAMARENA's ProjectedVertex intake -- entry I53's tie-off.
     .pv_valid_o  (vid_pv_valid),
@@ -21103,6 +21123,11 @@ module zhao_console_core
     .td_material_o (vid_td_material),
     .td_raster_o   (vid_td_raster),
     .td_source_o   (vid_td_source),
+    .td_area2_o    (vid_td_area2),
+    .td_min_x_o    (vid_td_min_x),
+    .td_max_x_o    (vid_td_max_x),
+    .td_min_y_o    (vid_td_min_y),
+    .td_max_y_o    (vid_td_max_y),
     .td_accept_i   (vid_td_accept),
     .td_id_i       (vid_td_id),
     // I54's half: the triangle's own arena index at the moment it lands.
@@ -31419,6 +31444,11 @@ module zhao_console_core
       .td_material_i (vid_td_material),
       .td_raster_i   (vid_td_raster),
       .td_source_i   (vid_td_source),
+      .td_area2_i    (vid_td_area2),
+      .td_min_x_i    (vid_td_min_x),
+      .td_max_x_i    (vid_td_max_x),
+      .td_min_y_i    (vid_td_min_y),
+      .td_max_y_i    (vid_td_max_y),
       .td_accept_o   (vid_td_accept),
       .td_id_o       (vid_td_id),
       .seal_fire_o   (pa_seal_fire),
@@ -31562,6 +31592,18 @@ module zhao_console_core
       .t_raster_o   (),
       .t_source_o   (),
       .t_illegal_o  (),
+      // SCHEMA v2's five, and they are EXPLICIT EMPTY CONNECTIONS rather than
+      // omissions for the reason the block below states: an omitted pin is a
+      // PINMISSING, gate 31 refuses it, and an omission cannot be told apart
+      // from an oversight. They are what the raster swap will read -- the two
+      // quantities `u_geom_setup` takes and the v1 record could not carry --
+      // and they are unconnected in exactly the same arrangement, and for
+      // exactly the same reason, as the twenty-eight vertex fields below.
+      .t_area2_o    (),
+      .t_min_x_o    (),
+      .t_max_x_o    (),
+      .t_min_y_o    (),
+      .t_max_y_o    (),
 
       // ---- THE FETCH ARM'S VERTEX FIELDS: TIED, SAME DECLARATION ---------
       // MUXBUILD built the ProjectedVertex fetch arm and PROVED it (550

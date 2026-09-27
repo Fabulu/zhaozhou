@@ -285,6 +285,22 @@ module zhao_geom_vertid #(
     input  var logic [15:0]             tri_material_i,
     input  var logic [31:0]             tri_raster_i,
     input  var logic [15:0]             tri_src_id_i,
+    // ---- WHAT SCHEMA v2 ADDED TO THE RECORD (SWAPCLOSE, 2026-09-27) --------
+    // GEOM.CLIP computes these five and, until v2, THIS BLOCK WAS NOT HANDED
+    // THEM -- it took the corners, the attributes, `tri_untex_i`,
+    // `tri_material_i`, `tri_raster_i` and `tri_src_id_i` from the same packet
+    // and not the area or the box. So the descriptor it wrote could not carry
+    // what `zhao_geom_setup` consumes, and no back end fed from the arena could
+    // drive that block's input port. They are carried, never recomputed:
+    // `out_area2_o` is the clip's area AFTER its winding flip, and the box is
+    // the section 8 SCISSORED one -- a conversion and a viewport clamp, not a
+    // min/max -- so a second site computing either would be a second
+    // EXPRESSION of a ratified law.
+    input  var logic signed [47:0]      tri_area2_i,
+    input  var logic signed [11:0]      tri_min_x_i,
+    input  var logic signed [11:0]      tri_max_x_i,
+    input  var logic signed [11:0]      tri_min_y_i,
+    input  var logic signed [11:0]      tri_max_y_i,
 
     // ---- GEOM.PARAMARENA's ProjectedVertex intake --------------------------
     output var logic                    pv_valid_o,
@@ -328,6 +344,12 @@ module zhao_geom_vertid #(
     output var logic [15:0]             td_material_o,
     output var logic [31:0]             td_raster_o,
     output var logic [31:0]             td_source_o,
+    // SCHEMA v2's second sixteen bytes, latched with the rest of the record.
+    output var logic signed [47:0]      td_area2_o,
+    output var logic signed [11:0]      td_min_x_o,
+    output var logic signed [11:0]      td_max_x_o,
+    output var logic signed [11:0]      td_min_y_o,
+    output var logic signed [11:0]      td_max_y_o,
     // The triangle's own arena index, for I54's chunk serialisation. Valid
     // with `td_accept_i` and meaningless otherwise, exactly like `pv_id_i`.
     input  var logic                    td_accept_i,
@@ -434,6 +456,11 @@ module zhao_geom_vertid #(
   logic [15:0]         mat_q;
   logic [31:0]         rast_q;
   logic [15:0]         src_q;
+  // SCHEMA v2. Held in the same registers' company and loaded by the same
+  // event, which is the point: a field latched on a DIFFERENT condition from
+  // the record it belongs to is this repository's own metadata-swap defect.
+  logic signed [47:0]  area2_q;
+  logic signed [11:0]  minx_q, maxx_q, miny_q, maxy_q;
   logic [KEYW-1:0]     key_q  [0:2];
   logic signed [20:0]  cx_q   [0:2];
   logic signed [20:0]  cy_q   [0:2];
@@ -529,6 +556,11 @@ module zhao_geom_vertid #(
   assign td_material_o = mat_q;
   assign td_raster_o   = rast_q;
   assign td_source_o   = {16'd0, src_q};
+  assign td_area2_o    = area2_q;
+  assign td_min_x_o    = minx_q;
+  assign td_max_x_o    = maxx_q;
+  assign td_min_y_o    = miny_q;
+  assign td_max_y_o    = maxy_q;
 
   assign tri_id_valid_o = td_valid_o && td_ready_i && td_accept_i;
   assign tri_id_o       = td_id_i;
@@ -572,6 +604,11 @@ module zhao_geom_vertid #(
       mat_q       <= 16'd0;
       rast_q      <= 32'd0;
       src_q       <= 16'd0;
+      area2_q     <= 48'sd0;
+      minx_q      <= 12'sd0;
+      maxx_q      <= 12'sd0;
+      miny_q      <= 12'sd0;
+      maxy_q      <= 12'sd0;
       map_valid_q <= '0;
       map_hitv_q  <= 1'b0;
       eff_epoch_q <= '0;
@@ -637,6 +674,11 @@ module zhao_geom_vertid #(
               mat_q    <= tri_material_i;
               rast_q   <= tri_raster_i;
               src_q    <= tri_src_id_i;
+              area2_q  <= tri_area2_i;
+              minx_q   <= tri_min_x_i;
+              maxx_q   <= tri_max_x_i;
+              miny_q   <= tri_min_y_i;
+              maxy_q   <= tri_max_y_i;
               key_q[0] <= tri_key_a_i;
               key_q[1] <= tri_key_b_i;
               key_q[2] <= tri_key_c_i;

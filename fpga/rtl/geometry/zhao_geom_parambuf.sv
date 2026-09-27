@@ -220,7 +220,7 @@ module zhao_geom_parambuf
 
     // ---- TriangleDescriptor: 16 bytes ---------------------------------------
     input  var logic          td_valid_i,
-    input  var logic [127:0]  td_bytes_i,
+    input  var logic [ZHAO_PARAMBUF_TD_BYTES*8-1:0] td_bytes_i,
     // THE FRAME'S VERTEX COUNT -- 18 BITS AND NOT 16, ARENAID 2026-09-25.
     // Owner vacation directive section 4: "IDs 0..65,535 fit u16, but a count
     // of 65,536 requires a wider internal count/limit. Use at least 17 bits
@@ -242,7 +242,22 @@ module zhao_geom_parambuf
     output var logic [15:0]   td_material_o,
     output var logic [31:0]   td_raster_o,
     output var logic [31:0]   td_source_o,
-    output var logic          td_illegal_o,   // a vertex id past the sealed count
+    // ---- SCHEMA v2's SECOND SIXTEEN BYTES (SWAPCLOSE, 2026-09-27) ---------
+    // `zhao_geom_setup`'s `tri_area2_i` and the four bounds of the section 8
+    // SCISSORED scan box, at that block's own widths. These are the fields
+    // that make a back end fed from this arena possible at all: `kc2` is
+    // DEFINED from `area2` in GEOM.SETUP, so the barycentric identity cannot
+    // recover it and a circuit built on that identity would be correct for any
+    // garbage value. `zhao_pkg`'s TriangleDescriptor table has the argument.
+    output var logic signed [47:0] td_area2_o,
+    output var logic signed [11:0] td_min_x_o,
+    output var logic signed [11:0] td_max_x_o,
+    output var logic signed [11:0] td_min_y_o,
+    output var logic signed [11:0] td_max_y_o,
+    // A MALFORMED DESCRIPTOR. Two terms since v2, and the port comment says
+    // both because "a vertex id past the sealed count" alone would send the
+    // next reader looking for an id when the reserve was what moved.
+    output var logic          td_illegal_o,
 
     // ---- tile-reference chunk: 64 bytes -------------------------------------
     input  var logic          ck_valid_i,
@@ -315,18 +330,35 @@ module zhao_geom_parambuf
 
   assign pv_illegal_o = pv_valid_i && (status_reserved_bad_c || status_domain_bad_c);
 
-  // ---- TriangleDescriptor -------------------------------------------------
+  // ---- TriangleDescriptor -- SCHEMA v2 ------------------------------------
+  // EVERY SLICE IS NAMED. The v1 form read `td_bytes_i[64 +: 32]` and friends
+  // out of bare literals while the encoder packed a positional concatenation,
+  // and the two agreed only because two people kept them agreeing -- the exact
+  // "two hand-maintained inverses" the ProjectedVertex was rescued from one
+  // packet earlier. `zhao_geom_paramarena` now asserts at elaboration that
+  // this table FILLS the record, so a field added without moving
+  // `ZHAO_TD_END_BIT` is a $fatal and not a silently short write.
   logic [15:0] v0_c, v1_c, v2_c;
-  assign v0_c = td_bytes_i[ 0 +: 16];
-  assign v1_c = td_bytes_i[16 +: 16];
-  assign v2_c = td_bytes_i[32 +: 16];
+  assign v0_c = td_bytes_i[ZHAO_TD_V0_LO +: ZHAO_TD_V0_W];
+  assign v1_c = td_bytes_i[ZHAO_TD_V1_LO +: ZHAO_TD_V1_W];
+  assign v2_c = td_bytes_i[ZHAO_TD_V2_LO +: ZHAO_TD_V2_W];
 
   assign td_v0_o       = v0_c;
   assign td_v1_o       = v1_c;
   assign td_v2_o       = v2_c;
-  assign td_material_o = td_bytes_i[48 +: 16];
-  assign td_raster_o   = td_bytes_i[64 +: 32];
-  assign td_source_o   = td_bytes_i[96 +: 32];
+  assign td_material_o = td_bytes_i[ZHAO_TD_MATERIAL_LO +: ZHAO_TD_MATERIAL_W];
+  assign td_raster_o   = td_bytes_i[ZHAO_TD_RASTER_LO   +: ZHAO_TD_RASTER_W];
+  assign td_source_o   = td_bytes_i[ZHAO_TD_SOURCE_LO   +: ZHAO_TD_SOURCE_W];
+
+  // v2's five. Each is `$signed` at its STORED width and then carried at that
+  // same width, because GEOM.SETUP's ports are s48 and s12 -- there is no
+  // sign extension to get wrong, and no wider intermediate for a reader to
+  // wonder about.
+  assign td_area2_o = $signed(td_bytes_i[ZHAO_TD_AREA2_LO +: ZHAO_TD_AREA2_W]);
+  assign td_min_x_o = $signed(td_bytes_i[ZHAO_TD_MINX_LO  +: ZHAO_TD_MINX_W]);
+  assign td_max_x_o = $signed(td_bytes_i[ZHAO_TD_MAXX_LO  +: ZHAO_TD_MAXX_W]);
+  assign td_min_y_o = $signed(td_bytes_i[ZHAO_TD_MINY_LO  +: ZHAO_TD_MINY_W]);
+  assign td_max_y_o = $signed(td_bytes_i[ZHAO_TD_MAXY_LO  +: ZHAO_TD_MAXY_W]);
 
   // A vertex id past the frame's sealed vertex count indexes memory that
   // belongs to no vertex. Refused rather than clamped: clamping would draw a
@@ -334,10 +366,23 @@ module zhao_geom_parambuf
   // The ids are u16 and the seal is u18, so the comparison is written at the
   // WIDER width explicitly. Left implicit it is still correct here, but the
   // next person reading a mixed-width compare has to prove that to themselves.
-  assign td_illegal_o = td_valid_i &&
-                        ((18'(v0_c) >= td_sealed_vertices_i) ||
-                         (18'(v1_c) >= td_sealed_vertices_i) ||
-                         (18'(v2_c) >= td_sealed_vertices_i));
+  wire td_id_bad_c = (18'(v0_c) >= td_sealed_vertices_i) ||
+                     (18'(v1_c) >= td_sealed_vertices_i) ||
+                     (18'(v2_c) >= td_sealed_vertices_i);
+
+  // SCHEMA v2's RESERVED FIELD HAS A DETECTOR RATHER THAN A PROMISE.
+  // `zhao_pkg` rules the top 32 bits "WRITTEN 0. Nonzero is a malformed
+  // record", and the arena writes them from a `'0` initialisation, so on the
+  // live path this term is structurally silent. It is here because a reserve
+  // nobody checks is a reserve that gets quietly spent: the status byte's own
+  // `[7:4]` went the whole of v1 with no detector at all, which is recorded in
+  // `zhao_geom_parambuf`'s header as the thing v2 fixed. This one is
+  // REACHABLE -- the descriptor makes a round trip through a writable SDRAM
+  // model, so a bench can poke those four bytes between the write and the
+  // walk, and `geom_paramarena_directed` does exactly that.
+  wire td_rsvd_bad_c = (td_bytes_i[ZHAO_TD_RSVD_LO +: ZHAO_TD_RSVD_W] != 32'd0);
+
+  assign td_illegal_o = td_valid_i && (td_id_bad_c || td_rsvd_bad_c);
 
   // ---- tile-reference chunk -----------------------------------------------
   logic [31:0] next_c;

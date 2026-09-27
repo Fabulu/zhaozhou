@@ -168,7 +168,20 @@ module zhao_geom_paramwalk
     output var logic [15:0] t_material_o,
     output var logic [31:0] t_raster_o,
     output var logic [31:0] t_source_o,
-    output var logic        t_illegal_o,       // a vertex id past the seal
+    output var logic        t_illegal_o,       // a MALFORMED descriptor
+    // ---- SCHEMA v2's FIVE, AND THEY ARE WHY THE RECORD GREW ----------------
+    // `zhao_geom_setup` consumes `tri_area2_i` and the four bounds of the
+    // section 8 SCISSORED scan box. Before TriangleDescriptor v2 the record
+    // carried none of them, so this walk could offer a triangle no back end
+    // could accept -- which is what "the planes are recomputable" hid for six
+    // packets. They are READ BACK, never recomputed here: `kc2` is DEFINED from
+    // `area2` in GEOM.SETUP, so the barycentric identity recovers nothing and a
+    // walk-side derivation would be correct for any garbage value whatever.
+    output var logic signed [47:0] t_area2_o,
+    output var logic signed [11:0] t_min_x_o,
+    output var logic signed [11:0] t_max_x_o,
+    output var logic signed [11:0] t_min_y_o,
+    output var logic signed [11:0] t_max_y_o,
 
     // ---- THE THREE PROJECTED VERTICES THE DESCRIPTOR NAMES ------------------
     // THIS IS THE ARM THE BLOCK DELIBERATELY DID NOT DRIVE, and the comment
@@ -280,12 +293,12 @@ module zhao_geom_paramwalk
 );
 
   localparam int unsigned CK_B  = ZHAO_PARAMBUF_CK_BYTES;  // w=64 bytes
-  localparam int unsigned TD_B  = ZHAO_PARAMBUF_TD_BYTES;  // w=16 bytes
+  localparam int unsigned TD_B  = ZHAO_PARAMBUF_TD_BYTES;  // w=32 bytes
   localparam int unsigned CKW   = CK_B * 8;                // w=512 bits
   // The low bits an aligned address must have clear.
   localparam int unsigned ALIGN_LSB = $clog2(BURST_ALIGN_B);  // w=4 bits
   localparam int unsigned CK_BEATS = CK_B / 8;             // w=8 beats
-  localparam int unsigned TD_BEATS = TD_B / 8;             // w=2 beats
+  localparam int unsigned TD_BEATS = TD_B / 8;             // w=4 beats
   localparam int unsigned PV_B  = ZHAO_PARAMBUF_PV_BYTES;  // w=32 bytes
   localparam int unsigned PVW   = PV_B * 8;                // w=256 bits
   localparam int unsigned PV_BEATS = PV_B / 8;             // w=4 beats
@@ -386,7 +399,35 @@ module zhao_geom_paramwalk
   // the correctness; a second 512-bit copy of the chunk would have bought the
   // same thing for four times the price.
   logic [CKW-1:0] r_buf_q;
-  logic [127:0]   td_buf_q;
+  // WIDTH-DERIVED SINCE SCHEMA v2, AND IT WAS A LITERAL. At TD_B = 32 this
+  // register holds 256 bits. Its declaration and the beat shift below were
+  // BOTH written `[127:0]`/`[127:64]` while `TD_BEATS` was already derived from
+  // `TD_B`, so the schema change had to find two typed numbers in a block whose
+  // third copy of the same fact was already automatic.
+  //
+  // AND THE FAILURE MODE IS LOUD, WHICH IS WORTH RECORDING BECAUSE I FIRST
+  // WROTE THE OPPOSITE. Leaving either number at 128 while the other moves is
+  // a width MISMATCH, and it was fire tested rather than argued: restoring the
+  // literal `td_buf_q[127:64]` under a 256-bit `td_buf_q` fails the build with
+  //
+  //   %Warning-WIDTHEXPAND: zhao_geom_paramwalk.sv:1017: Operator ASSIGNDLY
+  //   expects 256 bits on the Assign RHS, but Assign RHS's REPLICATE generates
+  //   128 bits.  %Error: Exiting due to 1 warning(s)
+  //
+  // -- so this is a cheap, immediate error and NOT a silent truncation. My
+  // first version of this comment claimed the descriptor would have decoded out
+  // of the wrong bytes "with every instrument in the block still balanced",
+  // which is wrong in the ALARMING direction: it would send the next reader
+  // hunting a quiet fault the toolchain refuses in seconds. The state that
+  // WOULD be silent is both numbers agreeing at the wrong width, and a derived
+  // width is what makes that unreachable.
+  //
+  // WHAT THE FIRE TEST ALSO SETTLED, because the run that followed it lied:
+  // the broken build returned BUILD_RC=1 and the test binary then ran STALE and
+  // printed the previous run's "0/620 checks failed" -- the documented
+  // stale-binary trap, caught only by reading the build's exit code rather than
+  // the pipeline's.
+  logic [TD_B*8-1:0] td_buf_q;
   // A THIRD BUFFER, for the same reason there is a second. `r_buf_q` must hold
   // the chunk while its ids are walked and `td_buf_q` must hold the descriptor
   // while its three vertices are fetched -- the descriptor's ids are re-read on
@@ -460,6 +501,8 @@ module zhao_geom_paramwalk
   logic [15:0] td_v0_c, td_v1_c, td_v2_c, td_material_c;
   logic [31:0] td_raster_c, td_source_c;
   logic        td_illegal_c;
+  logic signed [47:0] td_area2_c;
+  logic signed [11:0] td_min_x_c, td_max_x_c, td_min_y_c, td_max_y_c;
 
   assign dec_ck_valid_c = (wstate_q == W_CK_CHECK);
   // THE DESCRIPTOR'S DECODE IS HELD ACROSS THE VERTEX FETCH. `td_valid_i` used
@@ -512,7 +555,14 @@ module zhao_geom_paramwalk
       .td_sealed_vertices_i (w_verts_q),
       .td_v0_o (td_v0_c), .td_v1_o (td_v1_c), .td_v2_o (td_v2_c),
       .td_material_o (td_material_c), .td_raster_o (td_raster_c),
-      .td_source_o (td_source_c), .td_illegal_o (td_illegal_c),
+      .td_source_o (td_source_c),
+      // SCHEMA v2's five, straight out of the same decoder instance that
+      // reads the ids -- so there is exactly one place in the design that
+      // knows where `area2` sits in the record.
+      .td_area2_o (td_area2_c), .td_min_x_o (td_min_x_c),
+      .td_max_x_o (td_max_x_c), .td_min_y_o (td_min_y_c),
+      .td_max_y_o (td_max_y_c),
+      .td_illegal_o (td_illegal_c),
 
       .ck_valid_i     (dec_ck_valid_c),
       .ck_bytes_i     (r_buf_q),
@@ -618,6 +668,14 @@ module zhao_geom_paramwalk
   assign t_raster_o   = td_raster_c;
   assign t_source_o   = td_source_c;
   assign t_illegal_o  = td_illegal_c;
+  // Combinational off the decoder, exactly like the six fields above, and
+  // held for the whole of W_TD_EMIT because `td_buf_q` is not touched again
+  // until the next descriptor request.
+  assign t_area2_o    = td_area2_c;
+  assign t_min_x_o    = td_min_x_c;
+  assign t_max_x_o    = td_max_x_c;
+  assign t_min_y_o    = td_min_y_c;
+  assign t_max_y_o    = td_max_y_c;
 
   // The three fetched vertices, in the descriptor's own order. Index 0 is v0,
   // which `zhao_geom_setup` and `zhao_geom_attrpack` both call corner A.
@@ -977,7 +1035,7 @@ module zhao_geom_paramwalk
         // 128-bit buffer, so `r_buf_q` still holds the chunk whose ids are
         // being walked and the chain continues without re-reading it.
         W_TD_BEAT: if (beat_valid_i) begin
-          td_buf_q <= {beat_data_i, td_buf_q[127:64]};
+          td_buf_q <= {beat_data_i, td_buf_q[TD_B*8-1:64]};
           r_beat_q <= r_beat_q + 4'd1;
           if (beat_last_i) begin
             if (r_beat_q != (r_beats_q - 4'd1)) begin

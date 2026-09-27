@@ -162,6 +162,16 @@ module tb_zhao_geom_paramarena
     input  var logic [15:0] td_material_i,
     input  var logic [31:0] td_raster_i,
     input  var logic [31:0] td_source_i,
+    // SCHEMA v2's five, driven from C++ so the round trip can be required to
+    // return them BIT-IDENTICAL. A v1 record could not hold these bytes at all,
+    // so the discriminating case is structural rather than a chosen value --
+    // but the VALUES are still chosen to be non-trivial, because a test that
+    // would pass on a garbage `area2` is not a test.
+    input  var logic signed [47:0] td_area2_i,
+    input  var logic signed [11:0] td_min_x_i,
+    input  var logic signed [11:0] td_max_x_i,
+    input  var logic signed [11:0] td_min_y_i,
+    input  var logic signed [11:0] td_max_y_i,
 
     input  var logic        ck_valid_i,
     output var logic        ck_ready_o,
@@ -249,6 +259,12 @@ module tb_zhao_geom_paramarena
     output var logic [31:0] t_raster_o,
     output var logic [31:0] t_source_o,
     output var logic        t_illegal_o,
+    // ... and back out, off the real decoder, after a real burst.
+    output var logic signed [47:0] t_area2_o,
+    output var logic signed [11:0] t_min_x_o,
+    output var logic signed [11:0] t_max_x_o,
+    output var logic signed [11:0] t_min_y_o,
+    output var logic signed [11:0] t_max_y_o,
 
     // ---- the three ProjectedVertices the descriptor names --------------------
     // MUXBUILD, 2026-09-27. The walker's vertex arm, exposed so the directed
@@ -627,6 +643,11 @@ module tb_zhao_geom_paramarena
       .td_material_i(td_material_i),
       .td_raster_i  (td_raster_i),
       .td_source_i  (td_source_i),
+      .td_area2_i   (td_area2_i),
+      .td_min_x_i   (td_min_x_i),
+      .td_max_x_i   (td_max_x_i),
+      .td_min_y_i   (td_min_y_i),
+      .td_max_y_i   (td_max_y_i),
 
       // ONE PRODUCER AT A TIME. `ab_enable_i` hands the intake to
       // GEOM.ARENABIN; low, it is the hand-driven pair the arena's own
@@ -761,6 +782,11 @@ module tb_zhao_geom_paramarena
       .t_raster_o  (t_raster_o),
       .t_source_o  (t_source_o),
       .t_illegal_o (t_illegal_o),
+      .t_area2_o   (t_area2_o),
+      .t_min_x_o   (t_min_x_o),
+      .t_max_x_o   (t_max_x_o),
+      .t_min_y_o   (t_min_y_o),
+      .t_max_y_o   (t_max_y_o),
 
       .t_a_x_o (t_a_x_o), .t_a_y_o (t_a_y_o), .t_a_invw_o (t_a_invw_o),
       .t_a_uow_o (t_a_uow_o), .t_a_vow_o (t_a_vow_o),
