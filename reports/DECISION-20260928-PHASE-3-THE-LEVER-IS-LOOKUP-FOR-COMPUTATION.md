@@ -1,5 +1,49 @@
 # DECISION: phase 3 proceeds, and the escalation stops being a block
 
+> ## ⚠ AMENDED THE SAME NIGHT: THE CHOSEN LEVER IS ~4% OF THE GAP, NOT 11.2%
+>
+> **The decision to proceed stands. The sizing below was wrong and is corrected
+> here rather than left standing.**
+>
+> This document picks lookup-for-computation and sizes it by pointing at *"twelve
+> blocks with ZERO memory and ALUTs far above registers [that] own 32,784 ALUTs
+> — 11.2% of the design"*. **That 32,784 is not table-shaped**, and I asserted it
+> was without checking.
+>
+> `tools/budget/case_tables.py` (written and self-tested against the ROM the map
+> measured) scans all 406 RTL files and 129 case blocks. **The production console
+> contains exactly TWO combinational constant tables:**
+>
+> | module | arms x bits | instantiation sites |
+> |---|---|---|
+> | `zhao_field_rcp24_rom` | 256 x 31 | 6 sites, **13 physical instances** |
+> | `zhao_field_rcp_rom` | 256 x 16 | **1 site** |
+>
+> Everything else the scan turns up is generated **fit-harness scaffolding**
+> (`zhao_shell_fit_top.sv`, `zhao_shell_v2_fit_top.sv`,
+> `zhao_terrain_pipe_rpp3_matw18_fit_top.sv`) or the probe itself. The
+> self-test passed, so **this is a real absence, not a dead pattern.**
+>
+> At the measured 145 comb ALUTs per rcp24 instance that is roughly
+> **2,000–2,500 ALUTs total: ~3-4% of the 66,766 needed for placement, ~1% of
+> the 210,066 the shipping part needs.**
+>
+> **So the twelve blocks are genuine arithmetic** — `mulbank`, `edgewalk`,
+> `spline`, `normalize`, `devstore`, `part_update` — and no lookup replaces
+> them. **Lookup-for-computation cannot close this gap.** It is worth cashing
+> (it is measured, cheap and real) but it is hygiene, exactly as the 4,000-ALUT
+> consolidation is.
+>
+> **What that leaves** is the lever this document explicitly held back:
+> **reducing parallelism / time-multiplexing**, which trades throughput rather
+> than function and is therefore permitted, but invalidates every measured
+> throughput criterion and needs each one re-derived. That is now the only
+> remaining lever with headroom of the right order, and saying so is a finding,
+> not a licence to start cutting.
+>
+> I made the same error this file was written to correct: I named a lever and
+> sized it from a number that was near it rather than from the thing itself.
+
 Coordinator, 2026-09-28. **This retires the blocked posture of
 `OWNER-ESCALATION-20260928-THE-CONSOLE-DOES-NOT-FIT-ANY-CYCLONE-V.md`.** The
 finding in it stands and is not withdrawn. What is withdrawn is my treating it as
