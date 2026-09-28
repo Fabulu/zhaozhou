@@ -1,0 +1,145 @@
+{
+  "_README": "R1 planning inputs. Every quantity carries a 'kind': measured | bound | assumed | ceiling. R0's inputs are kept unmodified at planning_inputs_R0.json. Nothing here is a fit, a schedule or a certificate.",
+  "revision": "R1",
+  "date": "2026-09-28",
+  "baseline_commit": "814687ae955a3ce4690010ce750f2b7b5e597ec2",
+  "baseline_branch": "claude/ceiling-architecture-20260912",
+  "baseline_note": "Identical to the head R0 checked; no drift between R0's snapshot and this review.",
+
+  "device": {
+    "part": "5CSEBA6U23I7",
+    "kind": "ceiling",
+    "alm": 41910,
+    "alut_equivalent": 83820,
+    "register_sites": 167640,
+    "dsp": 112,
+    "m10k": 553,
+    "m10k_bits": 5662720,
+    "confirm_before_signoff": "exact part/package and usable resources must come from the tool/device report, not from this file"
+  },
+
+  "v1_measured": {
+    "kind": "measured",
+    "source": "reports/synthesis/blockpaths/zhao_console_core@current-20260928.map.rpt (Analysis & Synthesis, 2026-09-28 00:14:57)",
+    "caveat": "Analysis and Synthesis ESTIMATES. This design has never placed: no ALM figure and no Fmax may be quoted from it.",
+    "combinational_aluts": 293886,
+    "registers": 279210,
+    "block_memory_bits": 3387975,
+    "dsp_blocks": 128,
+    "estimated_alms_reported_separately": 222666,
+    "pct_of_part": {
+      "aluts": 351,
+      "registers": 167,
+      "memory_bits": 60,
+      "dsp": 114
+    }
+  },
+
+  "state_lever": {
+    "_what": "R0's central bet: bulk state into banked memory.",
+    "nodes_parsed": { "value": 1758, "kind": "measured" },
+    "zero_memory_nodes": { "value": 941, "kind": "measured" },
+    "registers_in_zero_memory_nodes": { "value": 132083, "pct_of_all": 47, "kind": "measured" },
+    "aluts_in_zero_memory_nodes": { "value": 171861, "pct_of_all": 58, "kind": "measured" },
+    "measured_conversion": {
+      "kind": "measured",
+      "_note": "The single FLOPARRAY conversion on record, on a favourable case: wide, shallow, single-ported.",
+      "registers": 5181,
+      "alms_recovered": 2698,
+      "m10k_bits_consumed": 4880,
+      "added_cycles": 0,
+      "alm_per_register": 0.521,
+      "bits_per_register": 0.942
+    },
+    "bound_if_every_flop_array_converted": {
+      "kind": "bound",
+      "alms_recovered": 68800,
+      "m10k_bits_consumed": 124422,
+      "m10k_blocks": 13,
+      "_note": "Physically unreachable; pipeline and control flops and anything needing more than two concurrent ports cannot move."
+    },
+    "limiter": "port count, not memory capacity: banking 60% of this state costs ~7 M10K of 553"
+  },
+
+  "concentration": {
+    "kind": "measured",
+    "_what": "How many nodes must be touched to reach a share of total ALUTs. Decides whether V2 can be surgical.",
+    "top_10": { "aluts": 61043, "pct": 20.8 },
+    "top_25": { "aluts": 100050, "pct": 34.0 },
+    "top_50": { "aluts": 141210, "pct": 48.0 },
+    "top_100": { "aluts": 187363, "pct": 63.8 },
+    "top_200": { "aluts": 235852, "pct": 80.3 },
+    "top_400": { "aluts": 277330, "pct": 94.4 },
+    "conclusion": "Long tail. No surgical rewrite exists; a V2 is a ~400-node migration under a uniform rule."
+  },
+
+  "mass_classification": {
+    "kind": "measured",
+    "_caveat": "dsp and mem are SUBTREE values, so classes are not a strict partition and must not be summed with the state_lever figures.",
+    "carries_dsp": { "nodes": 66, "own_aluts": 73598, "pct": 25.0, "own_registers": 75384 },
+    "carries_memory_no_dsp": { "nodes": 781, "own_aluts": 74912, "pct": 25.5, "own_registers": 95261 },
+    "glue_neither": { "nodes": 911, "own_aluts": 145376, "pct": 49.5, "own_registers": 108565 },
+    "conclusion": "Half the machine carries neither a DSP nor a memory bit - this is the class R0 proposes to replace with scheduled engines."
+  },
+
+  "timing": {
+    "kind": "measured",
+    "_caveat": "Leaf blocks fitted in isolation with few pins. A design's clock is its WORST path, and composition only lowers Fmax.",
+    "blocks_with_fmax": 109,
+    "blocks_status_ok": 74,
+    "min_mhz": 18.5,
+    "median_mhz": 85.7,
+    "max_mhz": 199.72,
+    "at_or_above_60mhz": { "count": 58, "of": 74, "pct": 78 },
+    "at_or_above_100mhz": { "count": 15, "of": 74, "pct": 20 },
+    "at_or_above_120mhz": { "count": 3, "of": 74, "pct": 4 },
+    "only_composed_console_placement": {
+      "row": "zhao_console_core@console-core-first-light",
+      "alms": 47582,
+      "fmax_mhz": 18.5,
+      "gating_clock": "gpu_clk",
+      "setup_slack_ns": -44.06,
+      "setup_tns_ns": -39646.883,
+      "sizing_device": "5CEBA9F31C7",
+      "not_target_device": true,
+      "io_mode": "virtual-top-ports",
+      "virtual_pins": 10833,
+      "sources_hashed": 106,
+      "_note": "Roughly a quarter of the present design (284 sources today). The only composed timing datum that exists."
+    }
+  },
+
+  "derived_budget": {
+    "_what": "R1 replaces R0's chosen 35,000 total with a derived one. It does not balance, and that is the deliverable.",
+    "start_estimated_alm": { "value": 222666, "kind": "measured" },
+    "ceiling_alm": { "value": 41910, "kind": "ceiling" },
+    "must_remove_alm": { "value": 180756, "pct": 81, "kind": "derived" },
+    "levers": [
+      { "name": "storage: flop arrays to banked M10K", "alm": -68800, "kind": "bound" },
+      { "name": "duplication consolidation", "alm": -2000, "kind": "measured" },
+      { "name": "case tables to ROM", "alm": -1100, "kind": "measured" }
+    ],
+    "subtotal_all_measured_levers_cashed": { "value": 150766, "kind": "bound" },
+    "unfunded_residual_alm": { "value": 108856, "over_ceiling_x": 3.6, "kind": "assumed" },
+    "residual_must_come_from": "occupancy restructuring - replacing private per-feature blocks with scheduled engines. UNMEASURED. Experiments E1 and the Gate-B skeleton exist to produce this number.",
+    "rate_lever_available": { "value": 0, "kind": "bound", "_why": "R0's own geometry count needs 4-6 perfect lanes at 100 MHz before omitted work; at 60 MHz four lanes exceed the 800,000-cycle reserve. Area-for-time is already spent on rate-bound paths." }
+  },
+
+  "r0_figures_retained_for_comparison": {
+    "allocation_alm": 35000,
+    "allocation_dsp": 96,
+    "allocation_m10k": 455,
+    "required_reduction_from_v1_estimated_alm_x": 6.36,
+    "_agent_note": "R0 never states this ratio. R1 rejects the table as not derived; see design/v2/reviews/R0-agent-review.md D1."
+  },
+
+  "gate_0_missing_input": {
+    "name": "legal joint workload envelope",
+    "status": "DOES NOT EXIST",
+    "evidence": "design/V1-RELEASE-DEFINITION.md states guarantees in gameplay terms; no numeric per-frame joint demand vector anywhere in the tree.",
+    "owner": "product decision - owner, not agent",
+    "consequence": "Until ratified, every allocation in R0 and R1 is arbitrary."
+  },
+
+  "feasibility": "UNPROVEN. No V2 fit, schedule, simulation or board result is represented here. A lower bound above a budget rejects a configuration; a lower bound below it certifies nothing."
+}

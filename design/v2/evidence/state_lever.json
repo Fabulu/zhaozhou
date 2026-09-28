@@ -1,0 +1,149 @@
+{
+  "nodes": 1758,
+  "total_alut_own": 293886,
+  "total_reg_own": 279210,
+  "zero_mem_nodes": 941,
+  "zero_mem_registers": 132083,
+  "zero_mem_alut": 171861,
+  "zero_mem_reg_pct": 47.30597041653236,
+  "zero_mem_alut_pct": 58.478797901227004,
+  "concentration": [
+    [
+      10,
+      61043,
+      20.77097922323622
+    ],
+    [
+      25,
+      100050,
+      34.04381290704559
+    ],
+    [
+      50,
+      141210,
+      48.04924358424695
+    ],
+    [
+      100,
+      187363,
+      63.753632360847405
+    ],
+    [
+      200,
+      235852,
+      80.25288717393819
+    ],
+    [
+      400,
+      277330,
+      94.36652307357275
+    ],
+    [
+      800,
+      293846,
+      99.98638928019709
+    ]
+  ],
+  "top_flop_arrays": [
+    {
+      "node": "zhao_geom_ladderbank:u_geom_ladderbank",
+      "reg_own": 5951,
+      "alut_own": 2574
+    },
+    {
+      "node": "zhao_terrain_devstore:u_terrain_devstore",
+      "reg_own": 4418,
+      "alut_own": 7070
+    },
+    {
+      "node": "zhao_field_v3_dispatch:u_dispatch",
+      "reg_own": 4108,
+      "alut_own": 1155
+    },
+    {
+      "node": "zhao_field_loader:u_field_loader",
+      "reg_own": 2815,
+      "alut_own": 3495
+    },
+    {
+      "node": "zhao_terrain_fieldlist:u_terrain_fieldlist",
+      "reg_own": 2800,
+      "alut_own": 1057
+    },
+    {
+      "node": "zhao_part_terrain_tap:u_part_terrain_tap",
+      "reg_own": 2783,
+      "alut_own": 2494
+    },
+    {
+      "node": "zhao_geom_clipread:u_geom_clipread",
+      "reg_own": 2590,
+      "alut_own": 2016
+    },
+    {
+      "node": "zhao_terrain_pagestream:u_terrain_pagestream",
+      "reg_own": 2470,
+      "alut_own": 2266
+    },
+    {
+      "node": "zhao_geom_paramwalk:u_geom_paramwalk",
+      "reg_own": 2461,
+      "alut_own": 964
+    },
+    {
+      "node": "zhao_terrain_writeback:u_terrain_writeback",
+      "reg_own": 2180,
+      "alut_own": 1019
+    },
+    {
+      "node": "zhao_geom_skin:u_geom_skin",
+      "reg_own": 2146,
+      "alut_own": 2122
+    },
+    {
+      "node": "zhao_forge_pagebank:u_forge_pagebank",
+      "reg_own": 2068,
+      "alut_own": 655
+    },
+    {
+      "node": "zhao_terrain_patch:u_terrain_patch",
+      "reg_own": 1937,
+      "alut_own": 930
+    },
+    {
+      "node": "zhao_geom_attrpack:u_geom_attrpack",
+      "reg_own": 1907,
+      "alut_own": 294
+    },
+    {
+      "node": "zhao_geom_loomfeed:u_geom_loomfeed",
+      "reg_own": 1847,
+      "alut_own": 937
+    },
+    {
+      "node": "zhao_geom_cull:u_geom_cull",
+      "reg_own": 1825,
+      "alut_own": 1608
+    },
+    {
+      "node": "zhao_light_div32_ii2:u_div",
+      "reg_own": 1806,
+      "alut_own": 1866
+    },
+    {
+      "node": "zhao_post_gather:u_post_gather",
+      "reg_own": 1800,
+      "alut_own": 1280
+    },
+    {
+      "node": "zhao_geom_warpbook:u_geom_warpbook",
+      "reg_own": 1656,
+      "alut_own": 523
+    },
+    {
+      "node": "zhao_geom_meshfetch:u_geom_meshfetch",
+      "reg_own": 1615,
+      "alut_own": 979
+    }
+  ]
+}

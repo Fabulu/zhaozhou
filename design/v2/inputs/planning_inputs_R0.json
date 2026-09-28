@@ -1,0 +1,142 @@
+{
+  "schema_version": 1,
+  "evidence_class": "ALLOCATION_AND_ILLUSTRATIVE_LOWER_BOUNDS_ONLY",
+  "feasibility_status": "UNPROVEN",
+  "v2_measurements": [],
+  "source_snapshot": "814687ae955a3ce4690010ce750f2b7b5e597ec2",
+  "device_working_ceilings": {
+    "part": "5CSEBA6U23I7",
+    "alm": 41910,
+    "dsp": 112,
+    "m10k": 553,
+    "note": "Confirm actual platform and integrated tool report; MLAB is not free M10K."
+  },
+  "allocations": [
+    {
+      "owner": "platform",
+      "alm": 4500,
+      "dsp": 0,
+      "m10k": 70,
+      "advisory_registers": 10000
+    },
+    {
+      "owner": "command_resource_control",
+      "alm": 3500,
+      "dsp": 0,
+      "m10k": 45,
+      "advisory_registers": 10000
+    },
+    {
+      "owner": "geometry",
+      "alm": 6500,
+      "dsp": 40,
+      "m10k": 80,
+      "advisory_registers": 22000
+    },
+    {
+      "owner": "field",
+      "alm": 5500,
+      "dsp": 24,
+      "m10k": 90,
+      "advisory_registers": 24000
+    },
+    {
+      "owner": "raster_attributes_tiles",
+      "alm": 4000,
+      "dsp": 8,
+      "m10k": 65,
+      "advisory_registers": 12000
+    },
+    {
+      "owner": "texture_material",
+      "alm": 6500,
+      "dsp": 16,
+      "m10k": 60,
+      "advisory_registers": 18000
+    },
+    {
+      "owner": "procedural_particle_post",
+      "alm": 2500,
+      "dsp": 8,
+      "m10k": 35,
+      "advisory_registers": 8000
+    },
+    {
+      "owner": "integration_allowance",
+      "alm": 2000,
+      "dsp": 0,
+      "m10k": 10,
+      "advisory_registers": 6000
+    }
+  ],
+  "frame": {
+    "fps": 60,
+    "target_hz_assumption": 100000000,
+    "reserve_numerator": 1,
+    "reserve_denominator": 5,
+    "clock_hz_sensitivity": [
+      60000000,
+      80000000,
+      100000000,
+      120000000
+    ],
+    "note": "Sensitivity values are not fitted operating frequencies. Public deadline conversion remains a separate Gate A obligation."
+  },
+  "geometry_example": {
+    "skinned_vertices": 120000,
+    "products_per_blended_vertex": 18,
+    "terrain_patches": 256,
+    "lattice_vertices_per_patch": 1089,
+    "assumed_products_per_projection": 9,
+    "product_lanes": [
+      3,
+      4,
+      6
+    ],
+    "limitations": "Illustrative joint profile, not a new guarantee. The 120k/18-product skinning term is source-backed; 256x1089 counts unique lattice vertices; nine products per projection is an explicit incomplete arithmetic assumption. Normal/light work, clipping, other geometry, operand-port limits and stalls are omitted. A product lane is NOT one DSP block."
+  },
+  "field_synthetic_example": {
+    "patches": 256,
+    "points_per_patch": 1089,
+    "changing_fields": 16,
+    "assumed_uops_per_point_field": 22,
+    "vector_lanes": [
+      1,
+      2,
+      4
+    ],
+    "limitations": "Synthetic conjunction: every patch overlaps every changing field. It is NOT asserted to be a ratified simultaneous V1 guarantee. The 22-uop rate is an illustrative assumption, excludes long-op and transport cost, and must be replaced with actual certified programs and the legal joint envelope."
+  },
+  "sampler_examples": [
+    {
+      "name": "known-derived example",
+      "logical_samples": 541640,
+      "palette_reads": 496640,
+      "filter_channel_jobs": 180000,
+      "qualification": "Source-derived; excludes creatures, giants, objects, beams, misses."
+    },
+    {
+      "name": "three-sample synthetic example",
+      "logical_samples": 1094600,
+      "palette_reads": 1049600,
+      "filter_channel_jobs": 180000,
+      "qualification": "Synthetic capability profile, not the default or a complete frame."
+    }
+  ],
+  "terrain_backing_example": {
+    "patches": 256,
+    "vertices_per_patch": 1089,
+    "bytes_per_vertex": 2,
+    "planes": 2
+  },
+  "unresolved": [
+    "Actual platform/CDC/controllers and whole-bitstream footprint.",
+    "Clock/deadline conversion and actual fitted operating rate.",
+    "Ratified simultaneous demand envelope and complete command-derived traces.",
+    "Measured arithmetic initiation intervals and operand/retire port schedules.",
+    "Field program/service mix, ingress, export, and long-op timing.",
+    "Texture miss/format mix, memory conflicts, refresh, and queue bounds.",
+    "Actual target-host CPU load, allocation, coherence and data-transfer costs.",
+    "Integrated RTL equivalence, placement/timing, physical-board validation."
+  ]
+}

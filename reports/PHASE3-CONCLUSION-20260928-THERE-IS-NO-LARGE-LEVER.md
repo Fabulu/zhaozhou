@@ -1,5 +1,44 @@
 # Phase 3, concluded: the available optimization is ~10% of the placement gap
 
+> ## ⚠ CORRECTED 2026-09-28 (same day): THIS REPORT OVERREACHED IN ITS LAST STEP
+>
+> **The three measurements below are correct and the ~10% figure stands FOR THE
+> THREE CLASSES MEASURED.** What is wrong is the closing inference.
+>
+> This report concludes that the residual *"could only come from function"*.
+> **It never measured the largest class: state held in flip-flops.** The V2
+> review measured it hours later, from the same `.map.rpt`:
+>
+> | | |
+> |---|---:|
+> | registers in nodes with **zero** memory bits | **132,083 (47% of all)** |
+> | ALUTs in those nodes | **171,861 (58% of all)** |
+> | nodes carrying neither a DSP nor a memory bit | **911, 145,376 ALUTs (49.5%)** |
+>
+> One measured conversion (EARTHRAM) recovered **2,698 ALMs for 4,880 M10K bits
+> at zero added cycles** — 0.521 ALM per register banked. At its bound that
+> class is worth **~68,800 ALM, about 31% of what must go**. That is three times
+> every lever this report measured, combined.
+>
+> **Why the error was structural, not careless.** This report measured
+> **optimizations of V1 in place** — case tables, module duplication,
+> parallelism parameters. The state lever is not an optimization; it is a
+> **reimplementation** of how blocks hold state, which is the V2 programme. The
+> report was right that *optimization* cannot close the gap, and wrong to
+> promote that into a claim about what the gap can come from at all.
+>
+> It also missed the feasibility fact that matters most: **the ALUT mass is
+> long-tail** — top 10 nodes are 20.8%, and 400 of 1,758 nodes are needed for
+> 94%. There is no surgical rewrite either way.
+>
+> The residual after every measured lever, including the state class at its
+> bound, is still **~109,000 ALM, 3.6× over the ceiling**. So the conclusion
+> "nothing measured closes this gap" survives; the sentence "only from function"
+> does not.
+>
+> See `design/v2/evidence/README.md` and
+> `design/v2/reviews/R0-agent-review.md`.
+
 Coordinator, 2026-09-28. This is the answer to the standing goal's clause 2 —
 *"get the real full console fit finished so we know where we stand"* — for the
 part a fit cannot answer, because the fit cannot run.
