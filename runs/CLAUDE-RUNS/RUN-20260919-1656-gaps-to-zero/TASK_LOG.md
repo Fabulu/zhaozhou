@@ -5715,3 +5715,49 @@ arriving at the one place where it costs a measurement.
 
 **Before the next fit: check the tree and normalise these two, or regenerate
 with matching endings.** Do not discover it in the receipt.
+
+#### PHASE 3 STARTED. POSITION, WRITTEN BEFORE THE MAPS COME BACK
+
+Four `quartus_map` runs are in flight: `zhao_probe_rcp24_rom` at STYLE=0..3.
+**The map's source list is EVERY .sv under `fpga/rtl`**, so nothing in there may
+be edited until they finish. Reports, tools and tests are free.
+
+**What the sweep asks, and why it is worth a map at all.** The phase-3 report
+calls `zhao_field_rcp24_rom` x13 the sharpest row and "the cheapest thing on this
+list to reason about, because a ROM has no state and no throughput contract --
+only a read port count". **That ROM has no read port at all**: it is a 256-arm
+`unique case` in an `always_comb`, a 256:1 mux over 31 bits. There is no memory
+to infer. "A pipeline stage at 13 call sites" was half the blocker; the other
+half is that the table is not a table in RTL.
+
+So: **given a registered read, does Quartus 17.0.2 infer M10K from a CASE, or
+does it need an indexed ARRAY with an initialiser?** One pipeline stage versus a
+structural rewrite of a generated file are different packets.
+
+  STYLE=0  baseline, shipped shape        expect 0 M10K, ~133 ALUT
+  STYLE=1  same case, registered read     THE QUESTION
+  STYLE=2  array + initial + clocked read the documented ROM form
+  STYLE=3  plain RAM                      POSITIVE CONTROL, must show M10K
+
+**Read STYLE=3 FIRST.** If the control does not infer, styles 0-2 are evidence
+about nothing and must not be quoted -- the flow or the device would be at
+fault, not the shape. Use `check_ram_inference.py`, not the eye.
+
+**Expected reading and what each outcome means:**
+* control fires, 1 infers -> the fix is a pipeline stage. Cheap packet.
+* control fires, 1 does NOT but 2 does -> the generated ROM needs restructuring
+  into an array as well. Bigger packet, and `gen_*` would need changing.
+* control fires, neither 1 nor 2 -> 7,936 bits is below whatever threshold this
+  device/flow uses for M10K, and the whole lookup-for-computation lever needs
+  re-scoping against a MEASURED minimum table size, not an assumed one.
+
+**Next step after reading them, in order:** record the result in
+`PHASE3-THE-LEVER-IS-DUPLICATION-20260928.md` AT ITS SITE (its "cheapest row"
+sentence is wrong and must not be left standing -- tonight's own rule), then size
+the packet the answer implies. **Do not start the 13 call-site change tonight**;
+it changes a declared `latency: fixed:N` contract in `design/blocks.yml` and
+every consumer of it.
+
+**Still open and NOT part of this:** the `lane_desync_o` arm (a) repair
+(decided, unimplemented), the SIMILARNAME rename (recorded, deferred), the
+paramwalk and field-host refusal packets (both need malformed stimulus first).
