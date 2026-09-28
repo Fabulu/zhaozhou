@@ -2836,6 +2836,178 @@
                        "critical":  1
                    },
                    {
+                       "module":  "zhao_field_v3_exec@storeprobe",
+                       "status":  "ok",
+                       "sourceCommit":  "660feef72581fcd142778d6061aeeceab4ca2750",
+                       "rtlCleanAtHead":  true,
+                       "sourceListHash":  "1b890d6561071eb7",
+                       "sourceFileCount":  407,
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "stage":  "map-only",
+                       "variantOf":  "zhao_field_v3_exec",
+                       "seconds":  240,
+                       "dspBlocks":  0,
+                       "registers":  17274,
+                       "blockMemoryBits":  25344,
+                       "virtualPins":  900,
+                       "pins":  0,
+                       "estimatedAlms":  11946,
+                       "combAluts":  7553,
+                       "mlabMemoryBits":  0,
+                       "inferredMemories":  [
+                                                {
+                                                    "name":  "altsyncram:lq_imm_r_rtl_0|altsyncram_5vj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "altsyncram:lq_s0_r_rtl_0|altsyncram_5vj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "altsyncram:lq_s1_r_rtl_0|altsyncram_5vj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "altsyncram:lq_s2_r_rtl_0|altsyncram_5vj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "altsyncram:lq_s3_r_rtl_0|altsyncram_5vj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "altsyncram:lq_s4_r_rtl_0|altsyncram_5vj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_field_v3_rf:u_rf|altsyncram:mem[0][0][0][31]__1|altsyncram_a3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_field_v3_rf:u_rf|altsyncram:mem[0][1][0][31]__2|altsyncram_a3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_field_v3_rf:u_rf|altsyncram:mem[0][2][0][31]__3|altsyncram_a3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_field_v3_rf:u_rf|altsyncram:mem[1][0][0][31]__4|altsyncram_a3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_field_v3_rf:u_rf|altsyncram:mem[1][1][0][31]__5|altsyncram_a3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_field_v3_rf:u_rf|altsyncram:mem[1][2][0][31]__6|altsyncram_a3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_field_v3_rf:u_rf|altsyncram:mem[2][0][0][31]__7|altsyncram_a3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_field_v3_rf:u_rf|altsyncram:mem[2][1][0][31]__8|altsyncram_a3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_field_v3_rf:u_rf|altsyncram:mem[2][2][0][31]__9|altsyncram_a3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_field_v3_rf:u_rf|altsyncram:mem[3][0][0][31]__10|altsyncram_a3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_field_v3_rf:u_rf|altsyncram:mem[3][1][0][31]__11|altsyncram_a3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_field_v3_rf:u_rf|altsyncram:mem[3][2][0][31]__12|altsyncram_a3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  64,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                }
+                                            ],
+                       "inferredMemoryCount":  18,
+                       "inferredDesignMemoryCount":  18,
+                       "ramConversionWarnings":  0,
+                       "errors":  0,
+                       "critical":  1
+                   },
+                   {
                        "module":  "zhao_forge_cliff",
                        "status":  "ok",
                        "sourceCommit":  "0d25ed049693720a92c8311b7a8e7c89040f24b8",

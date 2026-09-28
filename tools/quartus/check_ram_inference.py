@@ -171,9 +171,49 @@ import re
 import sys
 
 # `logic [W-1:0] name [DEPTH];` or `logic name [A][B];` -- an UNPACKED array.
+#
+# WIDENED 2026-09-28: THIS ONLY MATCHED `logic|reg|bit`, SO EVERY ARRAY DECLARED
+# WITH A USER-DEFINED TYPE WAS INVISIBLE TO THIS ENTIRE TOOL.
+#
+# Found by the external R4 review, by reading the regex rather than running it.
+# The instance that proves it costs something real: `zhao_field_v3_exec.sv:302`
+# declares `uop_t store[0:(CTX*PLAN)-1]` -- 256 x 60 = 15,360 bits -- which the
+# 2026-09-28 console map shows is IN FLIP-FLOPS, about 62% of that node's 24,795
+# own registers, with Quartus naming the cause itself:
+#
+#   Info (276007): RAM logic "...u_exec|store" is uninferred due to
+#   ASYNCHRONOUS READ LOGIC
+#
+# A scanner that cannot see a 15,360-bit array is not a bound on remaining
+# storage in EITHER direction, and this one was quoted as one.
+#
+# HOW THE TYPE IS RECOGNISED, and why not a `_t` suffix match: 69 of the 100
+# typedefs in this tree end in `_t`, 29 in `_e`, and a few (`rider`) in neither.
+# So the type is "any identifier that is not a statement-leading keyword",
+# which is complete rather than conventional. Requiring the `;` immediately
+# after the unpacked dimensions is what keeps ARRAYS OF INSTANCES out --
+# `mod inst [3] (...)` has parentheses, not a semicolon.
+_NOT_A_TYPE = (
+    "input|output|inout|ref|const|parameter|localparam|typedef|wire|var|genvar|"
+    "return|assign|always|always_ff|always_comb|always_latch|initial|final|"
+    "module|endmodule|function|endfunction|task|endtask|begin|end|case|casez|"
+    "casex|endcase|default|if|else|for|while|repeat|forever|do|struct|union|"
+    "enum|packed|static|automatic|import|export|generate|endgenerate|property|"
+    "assert|assume|cover|sequence|interface|endinterface|package|endpackage|"
+    "extern|virtual|pure|context|this|super|new|null|posedge|negedge|edge|or|"
+    "and|not|buf|defparam|specify|endspecify|table|endtable|primitive"
+)
 DECL = re.compile(
-    r"^\s*(?:logic|reg|bit)\s*(?:signed\s+)?(?:\[[^\]]*\]\s*)*"
+    r"^\s*(?!(?:" + _NOT_A_TYPE + r")\b)"
+    r"(?:logic|reg|bit|int|integer|byte|shortint|longint|[A-Za-z_]\w*)"
+    r"\s*(?:signed\s+|unsigned\s+)?(?:\[[^\]]*\]\s*)*"
     r"([A-Za-z_]\w*)\s*((?:\[[^\]]*\]\s*)+);", re.M)
+
+# Arrays whose reported "bits" are really ENTRIES, because the element is a
+# user-defined type whose width this scanner cannot resolve. Populated during
+# the scan and consulted by --rank so a 60x underestimate cannot rank a large
+# array near the bottom of the list without saying so.
+ENTRIES_ONLY = set()
 
 PROC = re.compile(r"always_(ff|comb|latch)\s*(?:@\(([^)]*)\))?")
 
@@ -531,6 +571,19 @@ def check_file_text(raw, sizes=None):
             arrays[name] = (m.start(), m.end(), widths, depths)
             if sizes is not None:
                 sizes[name] = array_bits(widths, depths, vals)
+                # SIZE IS ENTRIES-ONLY FOR A USER-DEFINED ELEMENT TYPE, and
+                # saying so matters more than the number. This scanner reads
+                # PACKED dimensions from the text before the name, so
+                # `uop_t store[0:255];` yields no width and the "bits" figure
+                # is really 256 ENTRIES -- against an actual 15,360 bits once
+                # `uop_t` is 60 wide. A 60x underestimate ranks the largest
+                # remaining array near the bottom of the list, which is how it
+                # stayed invisible even after the declaration was recognised.
+                # Resolving a typedef's width needs real elaboration; until
+                # then the row is FLAGGED rather than quietly wrong.
+                if not re.match(r"^\s*(?:logic|reg|bit|int|integer|byte|"
+                                r"shortint|longint)\b", m.group(0)) and not widths:
+                    ENTRIES_ONLY.add(name)
 
     for name in sorted(arrays):
         # 6. DECLARED INSIDE A `generate for` BLOCK.
@@ -896,11 +949,29 @@ def main():
                     note = "   <- NOT IN THE COMPOSED MAP"
                 else:
                     own, mem = composed[mod]
+                    # "ALREADY INFERRING" IS A HINT AND CANNOT IDENTIFY AN
+                    # ARRAY. Corrected 2026-09-28 after the external R4 review
+                    # read the predicate: `mem` is the MODULE SUBTREE memory and
+                    # `bits` is THIS array's declared size, so a module holding
+                    # an unrelated RAM larger than this array labels this array
+                    # as inferred. It cannot tell "this array became memory"
+                    # from "something in this module did".
                     note = ("   <- composed: %d own reg, %d mem bits%s"
                             % (own, mem,
-                               "  ALREADY INFERRING" if mem >= bits else ""))
-            print("%8d bits  %s  %s  [%s]%s"
-                  % (bits, path.replace("fpga/rtl/", ""), name, effort(whys), note))
+                               "  module holds >= this many mem bits "
+                               "(NOT proof THIS array inferred)"
+                               if mem >= bits else ""))
+            unit = "bits"
+            if name in ENTRIES_ONLY:
+                # The element is a user-defined type whose width this scanner
+                # cannot resolve, so the figure is ENTRIES. Saying so is the
+                # point: `uop_t store[0:255]` is 256 entries and 15,360 bits,
+                # and printing 256 "bits" ranks the largest remaining array in
+                # the tree near the bottom of this list.
+                unit = "ENTRIES (x unresolved element width)"
+            print("%8d %s  %s  %s  [%s]%s"
+                  % (bits, unit, path.replace("fpga/rtl/", ""), name,
+                     effort(whys), note))
             for w in whys:
                 print("               - %s" % w)
         small = sum(1 for b, _p, _n, _w in ranked if b < 256)
