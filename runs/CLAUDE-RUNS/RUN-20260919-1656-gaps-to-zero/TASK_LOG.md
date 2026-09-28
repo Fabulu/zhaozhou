@@ -5649,3 +5649,40 @@ path. The remaining 23 are dominated by GEOM.PARAMWALK's genuinely unread face
 (`pw_t_v0/v1/v2_w`, `pw_t_material_w`, `pw_t_raster_w`) plus the two defects
 above. **The gate should stay RED while `pw_t_illegal_w` is unwired** -- that is
 the gate doing its job, not a gate needing a waiver.
+
+#### SMOKE BEHIND THE WIRE REMOVALS: PASS, AND BYTE-IDENTICAL
+
+`94c74bbc` pushed. The three removals are proven behaviour-neutral, not argued to
+be: every marker in the run matches the pre-change run exactly --
+
+    SMOKE: fieldmat CLAUSE 6 EXECUTED tile_max=6
+    SMOKE: mosaic   tile[max/or]=[6 7]
+    SMOKE: matwin   resolves=2 switches=2  occ_max=2
+    SMOKE: material responses=2 adapter_jobs_c=2
+    [bl8-align] SUMMARY bursts=91636 unaligned=32 (rd=32 wr=0)
+    SMOKE: PASS   RC 0
+
+Board lint 27 -> 23, 0 errors. Both smokes run against the LIVE TREE with no
+edits in flight, per the rule that a suite whose inputs move underneath it is
+evidence in neither direction.
+
+**`reports/BOARD-LINT-TRIAGE-20260928.md` is the deliverable** -- all 27
+classified, so the next reader inherits a classification rather than a list:
+2 defects, 4 removed, 21 benign-with-a-reason of which 7 are located but not yet
+chased. It also records the contrast that makes `omap_src_c` a defect rather than
+a twin of the `tlf_*_slot` headroom: the latter has a committed elaboration
+`$fatal` guarding its narrowing, the former narrows and then checks.
+
+**One shape worth carrying forward:** three of the four removed wires were DEAD
+WIRES SHARING A DECLARATION LINE WITH A LIVE SIBLING (`efa_ans_valid,
+efa_ans_ready`; `gw_o_p_src_id, gw_o_n_src_id`). The eye reads `wire a, b;` as
+one live thing. Verilator is the only reader in the tree that does not -- which
+is the argument for the gate, stated as a measurement rather than a preference.
+
+**STATE OF THE STANDING GOAL, unchanged by tonight's work and stated so it is not
+mistaken for progress on it:** the console still does not place on any installed
+Cyclone V (531% ALM at HEAD, `Error (170011)` at 336,023 combinational nodes
+against a 227,120 ceiling). That escalation --
+`OWNER-ESCALATION-20260928-THE-CONSOLE-DOES-NOT-FIT-ANY-CYCLONE-V.md` -- is
+blocked on the owner and nothing here moves it. Tonight closed gate work and
+found two defects; it did not close the area gap.
