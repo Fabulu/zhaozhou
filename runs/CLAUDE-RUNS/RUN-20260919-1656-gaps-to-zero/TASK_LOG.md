@@ -5761,3 +5761,62 @@ every consumer of it.
 **Still open and NOT part of this:** the `lane_desync_o` arm (a) repair
 (decided, unimplemented), the SIMILARNAME rename (recorded, deferred), the
 paramwalk and field-host refusal packets (both need malformed stimulus first).
+
+#### PHASE 3 MEASURED, AND THE LEVER I CHOSE IS ~4% OF THE GAP
+
+Read the maps. Control first, as the note above said to.
+
+**The ROM sweep, five maps, all at source-list hash `01c9a16ce8122984`,
+`rtlCleanAtHead: true`:**
+
+    zhao_field_rcp24_rom@base20260928  (SHIPPED)   145 ALUT      0 bits   0 mem
+    @style0  case, register AFTER the table          0 ALUT   7936 bits   1 ROM
+    @style1  case INSIDE always_ff                    0 ALUT   7936 bits   1 ROM
+    @style2  array + initial + clocked read           0 ALUT   7936 bits   1 ROM
+    @style3  plain RAM, POSITIVE CONTROL              0 ALUT   7936 bits   1 SDP
+
+**The control fired**, so the rest is evidence. **A registered read is
+SUFFICIENT** -- Quartus infers `altsyncram depth 256 width 31, mode ROM` straight
+from the case statement. No restructuring into an array. The packet is one cycle
+of latency at 13 call sites and nothing else.
+
+**Two corrections came out of it, and the second is the one that matters.**
+
+* The phase-3 report's "a ROM has no state ... only a read port count" is wrong
+  (that ROM has NO read port -- it is a 256:1 mux), but the repair is CHEAPER
+  than that correction implied. Corrected at its site.
+* **`@style0` was labelled BASELINE and is not one.** I registered its output,
+  and that register IS the treatment. Styles 0 and 1 are two spellings of one
+  experiment. The sweep is only interpretable because the shipped module exists
+  and was mapped separately; without it I would have had **four ROMs and no
+  contrast**, which reads as "everything infers" and would have looked like a
+  successful run. A positive control proves the instrument can FIRE; it does
+  nothing for a baseline that quietly contains the treatment.
+
+**THEN THE LEVER ITSELF TURNED OUT TO BE SMALL, and this amends my own decision
+record from an hour earlier.** I sized lookup-for-computation by pointing at
+"twelve blocks ... 32,784 ALUTs, 11.2% of the design" and **asserted that was
+table-shaped without checking.**
+
+`tools/budget/case_tables.py` scans 406 files / 129 case blocks. The production
+console has **exactly TWO** combinational constant tables:
+`zhao_field_rcp24_rom` (256x31, 13 physical instances) and `zhao_field_rcp_rom`
+(256x16, ONE site). Everything else is generated fit-harness scaffolding. The
+tool self-tests against the ROM the map measured and exits if the pattern drifts,
+so **"only two" is a real absence, not a dead regex.**
+
+**~2,000-2,500 ALUTs: 3-4% of the 66,766 needed for placement, ~1% of the
+210,066 the shipping part needs.** The twelve blocks are genuine arithmetic --
+mulbank, edgewalk, spline, normalize, devstore, part_update -- and no lookup
+replaces them.
+
+**So: LOOKUP-FOR-COMPUTATION CANNOT CLOSE THIS GAP.** Worth cashing, but hygiene,
+exactly like the 4,000-ALUT consolidation. What remains with headroom of the
+right order is the lever the decision explicitly held back -- **reducing
+parallelism / time-multiplexing**, which trades throughput rather than function.
+**That is a finding, not a licence to start cutting**, and it is where the next
+session picks up.
+
+**Clause 1 re-verified at HEAD after tonight's RTL edits:** completion register
+**MANDATORY GAPS REMAINING 0**, RC 0, self-test passed, 114 capabilities
+connected, 90 production roots clean.
