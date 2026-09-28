@@ -33,6 +33,41 @@ measurement or an owner ruling.
 > narrower than R3 hopes. Closes via X2 plus an audit of other regular-domain
 > producers.
 
+> ## UPDATED AGAIN after the R4 review, 2026-09-28
+>
+> **Q2 is REOPENED, and no percentage replaces it.** R4 showed my "4-7%" rested
+> on two unsound steps: `check_ram_inference.py:901` labels an array
+> ALREADY INFERRING when the MODULE SUBTREE holds at least that many memory bits
+> (so an unrelated RAM can mask an array in flops), and `bits / 4` is capacity
+> arithmetic rather than an integrated area measurement. The honest wording is
+> R4's: **the known large in-place conversions are already incorporated; the
+> remaining candidates appear less attractive; their net saving is not
+> established by this scan; broader state reorganisation is a separate,
+> unmeasured question.**
+>
+> **Q3's number is withdrawn and replaced by the contract's own.** My 51 MHz
+> derivation was invalid -- a cycle CEILING plus a deadline gives a relationship,
+> not a minimum clock, and 51 MHz would spend 100% of the frame anyway.
+> `FIELD.SEQ.EARTH.md:48-53` states it directly instead: designed for the shared
+> **100 MHz** GPU domain, **~80 MHz lowest credible**, and the measured v2 leaf
+> **59.22 MHz explicitly rejected** at 108% of its own budget. The test is
+> **useful work per second, complete latency and reserve together**, not MHz.
+>
+> **NEW Q15 -- can the uop store be banked at all, and at what schedule cost?**
+> `zhao_field_v3_exec.sv:302` holds 15,360 bits in flip-flops (~62% of that
+> node's registers) and Quartus names the cause: *uninferred due to asynchronous
+> read logic*. Measured cause: the read enable `issue_c` (`:378`) is derived from
+> `dot_inflight_c` (`:429`) which is derived from `s1_uop_r.op` -- **the store's
+> own read data**. Breaking that loop needs a narrow hazard side-table or another
+> stage before the hazard check. **Closes inside X2, priced as a schedule change,
+> not as a saving.**
+>
+> **NEW Q16 -- how many other arrays are invisible to the scanner?** The
+> declaration recogniser is `^\s*(?:logic|reg|bit)`, so every typedef-declared
+> array is unseen. The store is one confirmed instance. A repaired recogniser
+> plus a re-rank is cheap and is the only way to know whether the remaining
+> storage question is small or merely unmeasured.
+
 ## Blocking — nothing should be allocated or built until these resolve
 
 | # | question | closes via | if the answer is bad |

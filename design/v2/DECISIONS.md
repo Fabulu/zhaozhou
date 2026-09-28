@@ -166,6 +166,63 @@ own registers) **and** the only contractual clock floor, so one experiment tests
 storage, transport and timing against a ratified number. R2 invited a challenge
 on its choice; this is it.
 
+## D-V2-012 -- every R4 correction accepted; the percentage is withdrawn entirely
+
+**Question.** R4 challenged the 51 MHz floor, the ALREADY-INFERRING predicate,
+the typedef blind spot, the one-array-per-M10K law, and the 4-7% figure. Which
+stand?
+
+**Decision.** **None of mine stand. All six corrections accepted, verified in
+source.** And rather than produce a better percentage, **no percentage is
+quoted.** No instrument available here can produce one.
+
+**Reason, item by item.**
+
+* The 51 MHz derivation converted a cycle CEILING into a clock MINIMUM, which
+  holds only for a candidate consuming the whole allowance -- and even then
+  51 MHz spends 100% of the frame and fails reserve. Invalid.
+* `check_ram_inference.py:901` is literally `"ALREADY INFERRING" if mem >= bits`,
+  comparing the MODULE SUBTREE memory against THIS ARRAY's declared size. My
+  94/109/88 split is therefore not a partition.
+* `:174` `DECL = re.compile(r"^\s*(?:logic|reg|bit)...")` cannot see a
+  typedef-declared array. Verified, with a real 15,360-bit instance (D-V2-013).
+* Cyclone V PACKED MODE puts two eligible single-port memories in one M10K. The
+  universal law is withdrawn; the original bits-over-10,240 error stands as an
+  error for a different reason -- width, ports and fragmentation.
+* ~15,750 ALM is bits-over-4: capacity arithmetic, not an integrated area
+  measurement. The older density table shares the flaw, so citing it laundered
+  nothing.
+
+**But the contract states a frequency directly, and it is higher than my wrong
+number.** `FIELD.SEQ.EARTH.md:48-53`: designed for the shared **100 MHz** GPU
+domain, **~80 MHz the lowest credible clock**, and the measured v2 leaf
+**59.22 MHz explicitly rejected** at 108% of its own budget -- against 20% of
+placed leaf fits reaching 100 MHz and one composed console at 18.5 MHz.
+
+## D-V2-013 -- the first precise blocker, and it is architectural
+
+**Finding.** `zhao_field_v3_exec.sv:302`, `uop_t store[0:255]` = 15,360 bits, is
+**in flip-flops** -- about 62% of that node's 24,795 own registers. Quartus says
+why, in the console map: *"RAM logic ... |store is uninferred due to ASYNCHRONOUS
+READ LOGIC"*.
+
+**Cause, measured rather than assumed.** My first hypothesis -- the 32-bit signed
+int-cast index -- is **refuted**: a committed probe reproduces the shipped
+addressing and infers a 256-deep Simple Dual Port. The real cause is a
+combinational loop. `:1200` gates the read with `issue_c`; `:378` derives
+`issue_c` from `dot_inflight_c`; `:429` derives that from `s1_uop_r.op` -- **the
+store's own read data.** A read port cannot be enabled by the value it is about
+to deliver.
+
+**Decision.** Treat this as the first sub-experiment of X2, **not as a saving.**
+Banking the store requires breaking the loop: a narrow hazard side-table indexed
+by the same address, or another stage before the hazard check. **Both are schedule
+changes with latency consequences** -- exactly R4's point that state
+reorganisation is priced inside a schedule and not counted from declarations.
+
+**Consequence.** No ALM figure is claimed. 15,360-over-4 would be the arithmetic
+R4 has just corrected.
+
 ---
 
 ## Not the agent's to decide — for the owner
