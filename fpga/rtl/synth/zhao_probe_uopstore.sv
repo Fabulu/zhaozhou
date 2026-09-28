@@ -85,6 +85,7 @@ module zhao_probe_uopstore #(
     parameter int          REGS  = 32
 ) (
     input  logic        clk,
+    input  logic        rst_n,     // STYLE=4 only
     input  logic        we_i,
     input  logic [ 2:0] ctx_i,
     input  logic [ 4:0] pc_i,
@@ -104,8 +105,8 @@ module zhao_probe_uopstore #(
   // Quartus 17.0.2 rejects a bare module-scope elaboration check; it must sit
   // inside `initial begin ... end`. QUARTUS_GOTCHAS.md carries the case.
   initial begin
-    if (STYLE > 3)
-      $fatal(1, "zhao_probe_uopstore: STYLE=%0d is not 0..3", STYLE);
+    if (STYLE > 4)
+      $fatal(1, "zhao_probe_uopstore: STYLE=%0d is not 0..4", STYLE);
     if (UW != 60)
       $fatal(1, "zhao_probe_uopstore: UW=%0d but the probe's port is 60", UW);
   end
@@ -121,6 +122,14 @@ module zhao_probe_uopstore #(
 
   // Explicit generate/endgenerate: Quartus 17.0.2 needs the keywords, while
   // both Verilator and slang accept the implicit form.
+  generate
+    if (STYLE != 4) begin : g_tie_rst
+      // rst_n exists in every style so the PORT LIST is identical across
+      // the maps; differing I/O would make the rows incomparable.
+      wire unused_rst = &{1'b0, rst_n};
+    end
+  endgenerate
+
   generate
     if (STYLE == 0) begin : g_production_int_cast
       // EXACTLY the shipped addressing: a 32-bit SIGNED index expression.
@@ -171,6 +180,34 @@ module zhao_probe_uopstore #(
         if (issue_c) rd_r <= store[addr_c];
       end
       assign uop_o = rd_r;
+    end else if (STYLE == 4) begin : g_async_reset_process
+      // THIRD HYPOTHESIS, and it is THIS REPOSITORY'S OWN DOCUMENTED CAUSE.
+      // check_ram_inference.py flags arrays "written from an ASYNC-RESET
+      // process" as a RAM-inference hazard, with measured false positives. The
+      // production always_ff is `if (!rst_n) <clear many things> else <write
+      // store>`; `store` itself is never cleared, but it lives inside an
+      // asynchronously reset process. This probe's other styles have NO reset
+      // at all, which is why they infer -- so the reset is the one structural
+      // difference left untested.
+      //
+      // MUST NOT INFER if the hypothesis is right.
+      uop_t store[0:(CTX*PLAN)-1];
+      uop_t rd_r;
+      logic [7:0] other_r;
+      wire [AW-1:0] addr_c = {ctx_i, pc_i};
+      always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+          other_r <= 8'd0;
+          rd_r    <= '0;
+        end else begin
+          other_r <= op_i;
+          if (we_i)
+            store[addr_c] <= '{op: op_i, dst: op_i[4:0], a: pc_i,
+                               b: RW'(ctx_i), c: op_i[7:3], imm: imm_i};
+          rd_r <= store[addr_c];
+        end
+      end
+      assign uop_o = rd_r ^ {52'd0, other_r};
     end else begin : g_control_plain
       // POSITIVE CONTROL -- plain packed vector array. MUST infer.
       logic [UW-1:0] store[0:(CTX*PLAN)-1];
