@@ -31,33 +31,52 @@
 // remaining storage, in either direction.
 //
 // ---------------------------------------------------------------------------
-// THE HYPOTHESIS UNDER TEST
+// THE CAUSE, FOUND -- AND QUARTUS NAMED IT ITSELF
 // ---------------------------------------------------------------------------
-// Production addresses the array with a WIDE SIGNED expression:
+// The console map carries the answer in one line:
 //
-//     store[(int'(up_ctx_i) * PLAN) + int'(up_pc_i)]
+//   Info (276007): RAM logic "...zhao_field_v3_exec:u_exec|store" is
+//   uninferred due to ASYNCHRONOUS READ LOGIC
 //
-// `int'()` is 32-bit SIGNED. To infer a RAM, Quartus must prove the index lies
-// within 0..255; a signed 32-bit product-plus-sum is a shape it has been seen
-// to decline. The candidate repair is a NARROW UNSIGNED address of exactly
-// CW+PW bits, which for a power-of-two PLAN is a plain concatenation and is
-// bit-identical arithmetic.
+// My first hypothesis -- that the 32-bit SIGNED int' index expression was the
+// blocker -- IS REFUTED by this probe: STYLE=0 reproduces the shipped
+// addressing exactly and infers a Simple Dual Port 256-deep memory. So neither
+// the typedef nor the cast prevents inference.
 //
-//   STYLE=0  PRODUCTION SHAPE -- `int'()` casts, exactly as shipped.
-//   STYLE=1  NARROW UNSIGNED ADDRESS -- {ctx, pc}, same entries, same widths.
-//   STYLE=2  POSITIVE CONTROL -- plain `logic [59:0]` array, narrow address.
-//            This MUST infer. If it does not, styles 0 and 1 say nothing and
-//            the flow or the device is at fault, not the address expression.
+// THE REAL BLOCKER IS A COMBINATIONAL LOOP THROUGH THE READ ENABLE. Three lines
+// of zhao_field_v3_exec.sv:
 //
-// Read the result with tools/quartus/check_ram_inference.py or the map's
-// inferred-memory table -- and read STYLE=2 FIRST, always.
+//   :378   issue_c = |ready_c && !dot_inflight_c && !hold_c && ...
+//   :429   assign dot_inflight_c = (s1_v_r && is_dot(s1_uop_r.op)) || ...
+//   :1200  if (issue_c) s1_uop_r <= store[...];
 //
-// WHAT THIS PROBE DOES NOT CLAIM. It does not claim the repair is free: moving
-// the store to an M10K adds a read-latency stage that `zhao_field_v3_exec`'s
-// issue path must absorb, and that is a schedule change, not a rename. It does
-// not claim 15,360 bits of ALM savings -- bits/4 is capacity arithmetic, not an
-// integrated area measurement, which is exactly the error R4 corrected. It
-// establishes one thing: whether the address expression is the blocker.
+// s1_uop_r is the store's read-data register. Its .op field feeds
+// dot_inflight_c, which gates issue_c, which is the store's READ ENABLE. An
+// M10K read port cannot be enabled by a term derived from the value it is about
+// to deliver, so the array stays in flip-flops.
+//
+// THIS IS ARCHITECTURAL, NOT COSMETIC. The issue decision depends on the opcode
+// of the instruction currently in S1. Banking the store means breaking that
+// loop -- decoding the hazard bit from a narrow side-table indexed by the same
+// address so it is available without reading the wide store, or accepting
+// another stage before the hazard check. Either is a schedule change with a
+// latency consequence, which is precisely R4's point that state reorganisation
+// must be priced inside a schedule rather than counted from declarations.
+//
+//   STYLE=0  shipped addressing, int' casts            -> INFERS (hypothesis refuted)
+//   STYLE=1  narrow unsigned {ctx,pc} address          -> INFERS
+//   STYLE=2  plain packed-vector array, POSITIVE CONTROL -> MUST infer
+//   STYLE=3  READ ENABLE DERIVED FROM READ DATA        -> MUST **NOT** infer
+//
+// STYLE=3 is the control for the DIAGNOSIS rather than for the flow: if it
+// infers, the explanation above is wrong. Read STYLE=2 first, then STYLE=3.
+//
+// WHAT THIS PROBE DOES NOT CLAIM. Not that the repair is free -- see the
+// architectural note above. Not 15,360/4 ALM of saving: bits/4 is capacity
+// arithmetic, not an integrated area measurement, which is the error R4
+// corrected in R3. And the probe's own first version was UNFAITHFUL: writing
+// dst/a/b/c as constants let Quartus fold 20 of the 60 bits away and report
+// width=40, so the stored fields are now all data-dependent.
 
 module zhao_probe_uopstore #(
     parameter int unsigned STYLE = 0,
@@ -85,8 +104,8 @@ module zhao_probe_uopstore #(
   // Quartus 17.0.2 rejects a bare module-scope elaboration check; it must sit
   // inside `initial begin ... end`. QUARTUS_GOTCHAS.md carries the case.
   initial begin
-    if (STYLE > 2)
-      $fatal(1, "zhao_probe_uopstore: STYLE=%0d is not 0..2", STYLE);
+    if (STYLE > 3)
+      $fatal(1, "zhao_probe_uopstore: STYLE=%0d is not 0..3", STYLE);
     if (UW != 60)
       $fatal(1, "zhao_probe_uopstore: UW=%0d but the probe's port is 60", UW);
   end
@@ -110,7 +129,7 @@ module zhao_probe_uopstore #(
       always_ff @(posedge clk) begin
         if (we_i)
           store[(int'(ctx_i) * PLAN) + int'(pc_i)] <=
-              '{op: op_i, dst: '0, a: '0, b: '0, c: '0, imm: imm_i};
+              '{op: op_i, dst: op_i[4:0], a: pc_i, b: RW'(ctx_i), c: op_i[7:3], imm: imm_i};
         rd_r <= store[(int'(ctx_i) * PLAN) + int'(pc_i)];
       end
       assign uop_o = rd_r;
@@ -121,8 +140,35 @@ module zhao_probe_uopstore #(
       wire [AW-1:0] addr_c = {ctx_i, pc_i};
       always_ff @(posedge clk) begin
         if (we_i)
-          store[addr_c] <= '{op: op_i, dst: '0, a: '0, b: '0, c: '0, imm: imm_i};
+          store[addr_c] <= '{op: op_i, dst: op_i[4:0], a: pc_i, b: RW'(ctx_i), c: op_i[7:3], imm: imm_i};
         rd_r <= store[addr_c];
+      end
+      assign uop_o = rd_r;
+    end else if (STYLE == 3) begin : g_enable_feedback
+      // THE DIAGNOSIS, REPRODUCED. This is the production structure:
+      //
+      //   :378   issue_c = |ready_c && !dot_inflight_c && ...
+      //   :429   assign dot_inflight_c = (s1_v_r && is_dot(s1_uop_r.op)) || ...
+      //   :1200  if (issue_c) s1_uop_r <= store[...];
+      //
+      // The array's READ ENABLE depends combinationally on the array's own
+      // READ DATA. An M10K's read port cannot be enabled by a term derived
+      // from the value it is about to deliver, so Quartus reports
+      //   Info (276007): RAM logic "...|store" is uninferred due to
+      //   asynchronous read logic
+      // THIS STYLE MUST FAIL TO INFER. It is the positive control for the
+      // blocker itself: if it infers, the diagnosis is wrong.
+      uop_t store[0:(CTX*PLAN)-1];
+      uop_t rd_r;
+      wire [AW-1:0] addr_c = {ctx_i, pc_i};
+      // the feedback: enable derived from the previously-read opcode
+      wire hazard_c = (rd_r.op[7] == 1'b1);
+      wire issue_c  = we_i | ~hazard_c;
+      always_ff @(posedge clk) begin
+        if (we_i)
+          store[addr_c] <= '{op: op_i, dst: op_i[4:0], a: pc_i, b: RW'(ctx_i),
+                             c: op_i[7:3], imm: imm_i};
+        if (issue_c) rd_r <= store[addr_c];
       end
       assign uop_o = rd_r;
     end else begin : g_control_plain
@@ -131,7 +177,7 @@ module zhao_probe_uopstore #(
       logic [UW-1:0] rd_r;
       wire [AW-1:0] addr_c = {ctx_i, pc_i};
       always_ff @(posedge clk) begin
-        if (we_i) store[addr_c] <= {op_i, {(4*RW){1'b0}}, imm_i};
+        if (we_i) store[addr_c] <= {op_i, op_i[4:0], pc_i, RW'(ctx_i), op_i[7:3], imm_i};
         rd_r <= store[addr_c];
       end
       assign uop_o = rd_r;
