@@ -137,9 +137,30 @@ modules instantiated more than once:
 
 A **ROM** instantiated thirteen times for 1,727 ALUTs. A ROM is a table, the
 device has 246 spare M10K, and thirteen copies of one table is the exact shape
-"lookup-for-computation" exists to fix. It is also the cheapest thing on this
-list to reason about, because a ROM has no state and no throughput contract --
-only a read port count.
+"lookup-for-computation" exists to fix.
+
+> **MEASURED 2026-09-28, and the sentence that stood here was wrong.** It read:
+> *"It is also the cheapest thing on this list to reason about, because a ROM has
+> no state and no throughput contract -- **only a read port count**."*
+>
+> **That ROM has no read port at all.** `zhao_field_rcp24_rom` is a 256-arm
+> `unique case` inside an `always_comb` -- a 256:1 mux over 31 bits. There is no
+> memory for Quartus to infer: no clock, no register, nothing. Mapped standalone
+> it is **145 comb ALUTs and ZERO memory bits**.
+>
+> **But the repair is CHEAPER than that correction implies, and that is also
+> measured.** A five-row map sweep (`zhao_probe_rcp24_rom`, STYLE=0..3, with a
+> plain RAM as positive control -- it fired) shows that **registering the read is
+> SUFFICIENT**: Quartus infers `altsyncram … depth 256, width 31, mode ROM`
+> straight from the case statement. **145 comb ALUTs -> 0.** No restructuring
+> into an indexed array is needed, and the register may sit outside the table.
+>
+> So the packet is **one cycle of latency at each of 13 call sites and nothing
+> else** -- a real contract change, since `zhao_field_v3_normalize` declares
+> `latency: fixed:N`, but not a rewrite.
+>
+> Full numbers, caveats and the probe-design correction:
+> `MEASURED-20260928-A-REGISTERED-READ-TURNS-THE-CASE-INTO-A-ROM.md`.
 
 ## 4. What this does NOT license
 
