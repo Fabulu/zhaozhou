@@ -6305,22 +6305,40 @@
 //               -> 124.41% -> 177.49% of frame. Cited here so it is not
 //               re-counted as a gap by the next sweep.
 //
-//      (X4) FOUR MORE SELF-REFUTING SENTENCES IN THIS FILE, struck where they
-//           stand rather than quietly overwritten:
-//             * :29232-29238, the adapter's own "TRUE ACCOUNTING", still says
-//               "2 material -> NOBODY. The only channel still open" -- THIRTY
-//               LINES ABOVE `u_terrain_matjoin` reading `efa_material` at
-//               :29370, in this same file.
-//             * :29249 calls `ans_present_o` "PRODUCED, NOT CONSUMED";
-//               `efa_present[2]` is read at :29369.
-//             * :13990 says "the three adapter outputs with no consumer are
-//               left OPEN at that instantiation". ONE is open (`nav_cost_o`),
-//               by owner ruling. Two have consumers.
-//             * :8196-8200's "WHAT CLOSING THE REST NEEDS" is three-quarters
-//               spent: patch_v2's four-channel clause is retired by
-//               measurement, the EARTH stream adapter is BUILT, and only
-//               13.7's `-FieldActive` survives -- which is (X3)(b), and is
-//               the one item nobody carried forward.
+//      (X4) FOUR MORE SELF-REFUTING SENTENCES IN THIS FILE. **ALL FOUR ARE NOW
+//           CORRECTED AT THEIR SITES (2026-09-28), AND THAT IS THE AMENDMENT
+//           THAT MATTERS.** They were originally "struck where they stand
+//           rather than quietly overwritten" -- and a struck sentence is still
+//           a sentence in the reader's path. They stayed live for a week, the
+//           pointers below ALL ROTTED (every line number in the original text
+//           of this list was wrong within days), and three more of the same
+//           kind were found beside them. Named, not numbered, for that reason:
+//             * the adapter's "TRUE ACCOUNTING" said "2 material -> NOBODY.
+//               The only channel still open", thirty lines above
+//               `u_terrain_matjoin` reading `efa_material` IN THIS FILE.
+//             * `ans_present_o`'s comment said "PRODUCED, NOT CONSUMED";
+//               `efa_present[2]` is `u_terrain_matjoin`'s `.f_present_i`.
+//             * the TERRAIN.PATCH port block said "the three adapter outputs
+//               with no consumer are left OPEN at that instantiation". ONE is
+//               open (`nav_cost_o`), by owner ruling. Two have consumers.
+//             * "WHAT CLOSING THE REST NEEDS" is three-quarters spent:
+//               patch_v2's four-channel clause is retired by measurement, the
+//               EARTH stream adapter is BUILT, and only 13.7's `-FieldActive`
+//               survives -- which is (X3)(b), and is the one item nobody
+//               carried forward.
+//           THE THREE FOUND ON 2026-09-28, same disease, also corrected:
+//             * GEOM.PARAMWALK's fetch-arm block said the multiplex "has a
+//               back end and NO DOOR -- 2,065 wires ... to open it". Written
+//               06:03 on 2026-09-27; SWAPCLOSE opened the door at 09:30 THE
+//               SAME MORNING. Three and a half hours.
+//             * the "SCHEMA v2's five" paragraph beside it, same cause.
+//             * `efa_ans_ready` -- not prose but the same failure in a wire:
+//               declared beside the live `efa_ans_valid`, driven by nothing
+//               and read by nothing, while the real ready is `tvj_a_ready`.
+//           SEE reports/FINDING-20260928-STRIKING-A-SENTENCE-DOES-NOT-RETIRE-
+//           THE-CLAIM.md. The rule it lands on: DELETE THE CLAIM OR DERIVE IT,
+//           never strike it, and never write a line number into a comment
+//           about another part of this file.
 //           EVERY ONE of these makes the remaining work look SMALLER or the
 //           entry look more BLOCKED-ON-A-PORT than it is. 15.35's direction
 //           tell, holding across five independent sentences.
@@ -7281,7 +7299,12 @@
 //                                   compcache 4.2 -> spdesc -> heighttap ->
 //                                   part_terrain_tap -> `zhao_part_collide`.
 //                                   REAL CONSUMER, composed by TERRVEL.
-//             ordinal 2 material -> NOBODY. The one open channel.
+//             ordinal 2 material -> `u_terrain_matjoin` -> `u_terrain_matpub`.
+//                                   REAL CONSUMER, composed when I34 closed on
+//                                   2026-09-27. This line said "NOBODY. The one
+//                                   open channel" until 2026-09-28; it was true
+//                                   when written and stopped being true the next
+//                                   day, and nothing re-read it.
 //             ordinal 3 nav_cost -> OWNER-RULED ELSEWHERE. SW.CPUCOLL /
 //                                   `zref::nav::Service`. Classified, kept.
 //           So a `zhao_terrain_patch_v2`, if built, owns TWO -- and the
@@ -8404,11 +8427,20 @@
 //      (`cmd_exec_tflds_o`, `cmd_exec_tfld_overflow_o`,
 //      `cmd_exec_tfld_src_truncated_o`).
 //
-//      WHAT CLOSING THE REST NEEDS, unchanged and still directive 20.8's
-//      Commit G: `zhao_terrain_patch_v2` owning all four Earth channels
-//      (13.2), the EARTH stream adapter that consumes the uniforms and returns
-//      them (build item (c)), the accumulator's ready/valid and phase
-//      exclusivity (13.4), and 13.7's `-FieldActive` positive smoke mode.
+//      WHAT CLOSING THE REST NEEDS. CORRECTED 2026-09-28: this said
+//      "unchanged", and it is THREE-QUARTERS SPENT. Of directive 20.8's
+//      Commit G --
+//        * `zhao_terrain_patch_v2` owning all four Earth channels (13.2):
+//          RETIRED BY MEASUREMENT. Ordinals 0 and 1 have real consumers, 2 was
+//          composed when I34 closed (`u_terrain_matjoin`), 3 is owner-ruled
+//          elsewhere. The channel count is no longer a reason to build v2.
+//        * the EARTH stream adapter that consumes the uniforms and returns
+//          them (build item (c)): BUILT.
+//        * the accumulator's ready/valid and phase exclusivity (13.4): done.
+//        * 13.7's `-FieldActive` positive smoke mode: THE ONE THAT SURVIVES.
+//          It is (X3)(b) above, and the item nobody carried forward.
+//      Leaving "unchanged" on a list that is one-quarter live is how a spent
+//      blocker gets re-quoted as a reason not to start.
 //      `zhao_terrain_fieldlist` is a piece of that build and not a detour
 //      around it: 13.2 gives the v2 owner "the bounded 16-entry field intake
 //      in command order", and v2 instantiates this block rather than growing a
@@ -14700,10 +14732,13 @@ module zhao_console_core
   //      has three missing ports", which is directive 13.2's
   //      `zhao_terrain_patch_v2` and is a CONSUMER-side item. See entry I34.
   //
-  //      The three adapter outputs with no consumer are left OPEN at that
-  //      instantiation and declared in the INCOMPLETE block, which is the same
-  //      shape -- and for the same stated reason -- that `zhao_cmd_exec`'s
-  //      three uniform outputs carried until this commit.
+  //      CORRECTED 2026-09-28. This read "The three adapter outputs with no
+  //      consumer are left OPEN at that instantiation". ONE is open --
+  //      `nav_cost_o`, by owner ruling, see OWNER-DECISION-20260926-I34-NAV.md.
+  //      The other two acquired consumers: `velocity_o` -> `u_terrain_veljoin`
+  //      (TERRVEL, 2026-09-26) and `material_o` -> `u_terrain_matjoin`
+  //      (I34 close, 2026-09-27). The shape it compares itself to --
+  //      `zhao_cmd_exec`'s three uniform outputs -- still holds for the one.
   output logic                    terr_pt_fld_add_accept_o,
   output logic                    terr_pt_fld_add_reject_o,
   output logic                    terr_pt_fld_covers_o,
@@ -18615,7 +18650,7 @@ module zhao_console_core
   wire               gw_o_p_valid, gw_o_n_valid, gw_o_n_degenerate;
   wire signed [31:0] gw_o_px, gw_o_py, gw_o_pz;
   wire signed [31:0] gw_o_nx, gw_o_ny, gw_o_nz;
-  wire [15:0]        gw_o_p_src_id, gw_o_n_src_id;
+  wire [15:0]        gw_o_n_src_id;
 
   // The logical Warp client, between the block and its adapter.
   wire               gw_f_vtx_valid, gw_f_vtx_take, gw_f_slot_valid;
@@ -18638,10 +18673,16 @@ module zhao_console_core
   // different path is the pairing entry I39 refuses by name. The NORMAL side
   // IS read, because `zhao_light_skin_adapter` carries it through to the lit
   // colour and there is no job-side alternative there.
+  // THE SINK IS `gw_o_p_src_id_unused` AND NOTHING ELSE. A second wire,
+  // `gw_o_p_src_id`, used to be declared beside the live `gw_o_n_src_id` and
+  // assigned from this one, read by nobody -- the waiver covered the sink and
+  // not the copy, so Verilator went on reporting the copy. Removed 2026-09-28:
+  // it is the same decoy shape as `efa_ans_ready`, a dead wire sharing a
+  // declaration line with a live sibling, where the eye reads the pair as one
+  // live thing.
   /* verilator lint_off UNUSEDSIGNAL */
   wire [15:0] gw_o_p_src_id_unused;
   /* verilator lint_on UNUSEDSIGNAL */
-  assign gw_o_p_src_id = gw_o_p_src_id_unused;
 
   // ---- THE DESCRIPTOR BOOK ------------------------------------------------
   // Written on the DRAW handshake `u_geom_drawjob` takes, read by the cookie
@@ -22552,11 +22593,18 @@ module zhao_console_core
   // shared with the neighbouring patch and own no cell of this one.
   wire                    tps_v_cell;
   wire [7:0]              tps_v_mat_a, tps_v_mat_b, tps_v_weight;
-  // THE ACCEPTED CELL BEAT. `tpsx_v_valid`/`tpsx_v_ready` is the demuxed
-  // handshake the stream is actually taken on, so this is the fire the
-  // material plane's fire-and-forget write port wants -- the same shape and
-  // the same reasoning as `tbk_cs_fire_c` two thousand lines below.
-  wire                    tps_v_cell_fire_c;
+  // `tps_v_cell_fire_c` WAS DECLARED HERE AND IS GONE (2026-09-28). Its
+  // comment said this beat "is the fire the material plane's fire-and-forget
+  // write port wants". IT IS NOT, and that is not a quibble -- it is the
+  // defect the matjoin analysis found by being blocked by it. The beat is the
+  // DEMUXED PAGE STREAM fire, raised for every cell the streamer hands to
+  // either arm of `u_terrain_psmux`, including lattices this console never
+  // places: 8,192 against the 1,024 a patch owes. The key is TERRAIN.PATCH's
+  // own vertex accept, which is what `u_terrain_matjoin` takes.
+  // The wire outlived its last reader when I34 closed, and sat here computing
+  // a value nobody read UNDER A COMMENT RECOMMENDING IT FOR EXACTLY THE JOB IT
+  // IS WRONG FOR. That is a loaded gun for the next person wiring a material
+  // write, so it is removed rather than left dangling.
   // TWO DELIBERATE NARROWINGS, WAIVED AT THE DECLARATION AND NOWHERE ELSE.
   // `tps_v_src_id` is T5's 32-bit record id against TERRAIN.PATCH's 16-bit
   // trace field; `tps_done_slot` is the POOL index against the directory's
@@ -29844,15 +29892,23 @@ module zhao_console_core
     .idle_o             (terr_ps_idle_o)
   );
 
-  // THE ACCEPTED CELL BEAT, DECLARED WHERE THE HANDSHAKE IS. `tpsx_v_*` is the
-  // demuxed pair the vertex stream is actually taken on -- `tps_v_*` are the
-  // broadcast data wires and carry no handshake of their own, so writing the
-  // material plane off `tps_v_cell` alone would write on every cycle the beat
-  // was OFFERED, including every cycle the consumer stalled. That is a
-  // duplicate write of a correct value, which corrupts nothing and makes
-  // `mat_cells_o` read several thousand instead of 1,024 -- a counter saying
-  // something alarming about a plane that is fine, which is worse than silence.
-  assign tps_v_cell_fire_c = tpsx_v_valid && tpsx_v_ready && tps_v_cell;
+  // `tps_v_cell_fire_c` WAS ASSIGNED HERE AND IS GONE (2026-09-28), because
+  // its last reader went away when I34 closed and `u_terrain_matjoin` took
+  // TERRAIN.PATCH's own vertex accept instead. Two things it knew are kept,
+  // because both are still true and neither is recorded anywhere else:
+  //
+  //   * `tpsx_v_*` is the demuxed pair the vertex stream is actually taken
+  //     on. `tps_v_*` are BROADCAST DATA WIRES and carry no handshake of
+  //     their own, so writing a plane off `tps_v_cell` alone writes on every
+  //     cycle the beat is OFFERED, including every cycle the consumer
+  //     stalled -- a duplicate write of a correct value, which corrupts
+  //     nothing and makes a cell counter read several thousand instead of
+  //     1,024. A counter saying something alarming about a plane that is
+  //     fine is worse than silence.
+  //   * and that beat is STILL NOT the material plane's key, whatever its
+  //     handshake: it is the demuxed PAGE STREAM beat, fired for lattices
+  //     this console never places. The measurement is beside
+  //     `u_terrain_matjoin` -- 8,192 cells against the 1,024 a patch owes.
 
   // ---- TERRAIN.FIELDLIST ---------------------------------------------------
   // NEW 2026-09-22 (FIELDARM). The producer entry I34's section 9.1 list
@@ -30387,7 +30443,12 @@ module zhao_console_core
     .nav_cost_o (efa_nav_cost),
     .ans_field_o(efa_ans_field),
 
-    // PRODUCED, NOT CONSUMED, AND DECLARED IN THE INCOMPLETE BLOCK under I34
+    // CONSUMED SINCE I34 CLOSED (2026-09-27): `efa_present[2]` is read by
+    // `u_terrain_matjoin` as `.f_present_i`, which is what lets it tell a
+    // WRITTEN ZERO from a lane no program declared. This comment opened with
+    // "PRODUCED, NOT CONSUMED" until 2026-09-28. Kept from here down because
+    // the REASONING is still the reason the port exists:
+    // ORIGINALLY DECLARED IN THE INCOMPLETE BLOCK under I34
     // with the three channels above it. This is the per-ordinal presence of the
     // four words beside it, and it is what makes directive 13.2's material
     // reducer ("the LAST field in command order that covers the vertex AND
@@ -32802,13 +32863,15 @@ module zhao_console_core
       .t_raster_o   (pw_t_raster_w),
       .t_source_o   (pw_t_source_w),
       .t_illegal_o  (pw_t_illegal_w),
-      // SCHEMA v2's five, and they are EXPLICIT EMPTY CONNECTIONS rather than
-      // omissions for the reason the block below states: an omitted pin is a
-      // PINMISSING, gate 31 refuses it, and an omission cannot be told apart
-      // from an oversight. They are what the raster swap will read -- the two
-      // quantities `u_geom_setup` takes and the v1 record could not carry --
-      // and they are unconnected in exactly the same arrangement, and for
-      // exactly the same reason, as the twenty-eight vertex fields below.
+      // SCHEMA v2's five -- the two quantities `u_geom_setup` takes and the v1
+      // record could not carry. CORRECTED 2026-09-28: this paragraph called
+      // them "EXPLICIT EMPTY CONNECTIONS" that "are unconnected in exactly the
+      // same arrangement ... as the twenty-eight vertex fields below", and
+      // said they are "what the raster swap WILL read". THE RASTER SWAP
+      // LANDED. `pw_t_area2_w` is read at the GEOM.SETUP select
+      // (`tw_active_w ? pw_t_area2_w : cl_o_area2`), and so are the other
+      // four. They are ordinary driven wires with live consumers; nothing
+      // here dangles.
       .t_area2_o    (pw_t_area2_w),
       .t_min_x_o    (pw_t_min_x_w),
       .t_max_x_o    (pw_t_max_x_w),
@@ -32827,20 +32890,26 @@ module zhao_console_core
       // walker's directed test fires it with legal stimulus.
       .tri_id_wide_o (pw_tri_id_wide_w),
 
-      // ---- THE FETCH ARM'S VERTEX FIELDS: TIED, SAME DECLARATION ---------
+      // ---- THE FETCH ARM'S VERTEX FIELDS: DRIVEN, AND READ ---------------
       // MUXBUILD built the ProjectedVertex fetch arm and PROVED it (550
       // checks, every field of all three vertices bit-identical out of real
-      // SDRAM). It has no consumer here for one measured reason: `job_*` IS
-      // NOT A PORT. `zhao_raster_tile_pipe_v2` is a CHILD of
-      // `zhao_geom_bin_pipe_v2`, fed over internal wires, so the multiplex
-      // has a back end and NO DOOR -- 2,065 wires through two module
-      // boundaries to open it. See entry I55 and FINDINGS-muxbuild.
+      // SDRAM). All 27 reach GEOM.SETUP and GEOM.ATTRPACK: `pw_t_a_x_w` and
+      // its siblings through the `tw_active_w` select, and the seven
+      // attribute lanes packed by `walk_attr_pack` into `pw_attr_a/b/c_w`.
       //
-      // THESE ARE EXPLICIT EMPTY CONNECTIONS, NOT OMISSIONS. An omitted pin
-      // is a `PINMISSING`; gate 31 refuses it and caught all 31 of these on
-      // the merge. An omission cannot be told apart from an oversight, and
-      // "the t_* outputs dangle" is precisely what five packets refused to
-      // FAKE a consumer for -- so it must be stated, not left implied.
+      // CORRECTED 2026-09-28, AND THE DATES ARE THE POINT. This paragraph
+      // said "It has no consumer here for one measured reason: `job_*` IS
+      // NOT A PORT ... the multiplex has a back end and NO DOOR -- 2,065
+      // wires through two module boundaries to open it. See entry I55."
+      // It was written at 06:03 on 2026-09-27 (MUXBUILD merge) and SWAPCLOSE
+      // opened that door at 09:30 THE SAME MORNING -- three and a half hours
+      // -- which is the work entry I55 names. The sentence told the reader to
+      // consult the entry that had already refuted it, and priced a rebuild
+      // that was done. Do not quote a consumer list; derive it.
+      //
+      // The pins stay EXPLICITLY CONNECTED rather than omitted: an omitted
+      // pin is a `PINMISSING`, gate 31 refuses it and caught all 31 of these
+      // on the merge, and an omission cannot be told apart from an oversight.
       .t_a_x_o         (pw_t_a_x_w),
       .t_a_y_o         (pw_t_a_y_w),
       .t_a_invw_o      (pw_t_a_invw_w),
@@ -33815,7 +33884,10 @@ module zhao_console_core
                                                    : mw_pub_recipe_weight;
   endfunction
 
-  wire st_mat_token_live_c = zhao_ms_mosaic_live(st_mat_token, st_domain);
+  // `zhao_ms_mosaic_live(st_mat_token, st_domain)` was hoisted to a wire here
+  // and read by nobody: BOTH consumers below call it themselves, inside
+  // `zhao_ms_base_rgb` and `zhao_ms_weight`. Removed 2026-09-28 rather than
+  // left as dead logic that looks like the select somebody forgot to use.
   // Only the sixteen bits the mosaic reads are replaced. `base_rgb[7:0]` has
   // no mosaic meaning, so it keeps its named constant rather than being
   // silently redefined -- the decision record names "base_rgb[23:8] plus

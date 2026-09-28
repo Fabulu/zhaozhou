@@ -5592,3 +5592,60 @@ groups, not individually:
 **Not to be forgotten while this runs:** do NOT edit `zhao_console_core.sv` until
 the smoke returns -- a suite reads the live tree and its greens are then worth no
 more than its reds.
+
+#### BOARD LINT 27 -> 23, AND WHAT THE 27 WERE HIDING
+
+The 27 real warnings are now fully triaged -- every one classified, none left as
+"probably benign". Three commits so far; the smoke is running behind the third.
+
+**Two defects found, neither repaired here, both written up.**
+
+* **`pw_t_illegal_w`** -- GEOM.PARAMWALK flags a malformed descriptor for a
+  consumer THAT DOES NOT EXIST. `t_valid_o` is not gated by it, so the record is
+  offered as valid carrying the PREVIOUS triangle's vertices. R7's "rejected and
+  counted" has its counted half wired and its rejected half unwired.
+* **`omap_src_c[15:6]`** -- FIELD.HOST v2 decodes a u16 `source_index` and
+  STORES SIX BITS, then runs the spec's out-of-window refusal against the stored
+  value. `source_index = 68` becomes 4 and validates as in-window. The check
+  sits under a long, CORRECT comment about doing every bound comparison at 32
+  bits -- which is why nobody looked again: the comparison is widened, the
+  operand was already truncated. `32'(x)` on a 6-bit x is a 6-bit value in a
+  32-bit container.
+
+  **This is the return on clearing the 209 generated UNUSEDPARAMs.** The lint
+  line WAS the defect, stated exactly -- "sixteen bits decoded, six used" -- and
+  it was unreadable for as long as the gate printed 236 diagnostics.
+
+**Seven stale assertions in the composer, all corrected at their sites.** The
+sharpest: the fetch arm's "back end and NO DOOR -- 2,065 wires through two
+module boundaries to open it" was written 2026-09-27 06:03 and refuted by
+SWAPCLOSE at 09:30 THE SAME MORNING. It told the reader to consult entry I55 --
+the very work that had opened the door. `:6309` already carried an audit naming
+four of them, "struck where they stand"; all four were still live a week later
+and every bare line number in it had rotted.
+
+**Three dead wires removed, each proven zero-reader:** `efa_ans_ready` (the one
+Verilator called "not driven, NOR used", and the one that nearly attracted a
+`busy` term), `gw_o_p_src_id` (a copy of a properly-waived sink, sharing a
+declaration line with a live sibling), and `tps_v_cell_fire_c` -- whose comment
+still RECOMMENDED it as "the fire the material plane's write port wants", which
+is precisely the defect the matjoin analysis found by being blocked by it.
+
+**Two things I got wrong and corrected in the same pass**, both by reading rather
+than assuming:
+
+* I wrote that every stale sentence "overstates the work remaining". The file
+  says it better -- "makes the remaining work look SMALLER **or** the entry look
+  more BLOCKED-ON-A-PORT than it is". Two distortions, not one. The checkable
+  invariant is narrower: each names a consumer or port as ABSENT when present.
+* I called `:6519`'s ":28412" a fourth rotted pointer. **It is anchored** --
+  "at `62d8b6a7`, :27814 is ... and :28412 is ..." -- and both lines verify
+  EXACTLY at that commit. I had read it against HEAD. So the rule is not "never
+  write a line number", it is **anchor it to a commit or do not write it**.
+
+**Not done, deliberately:** the SIMILARNAME rename (`MAT_BASE_RGB_C` vs
+`mat_base_rgb_c`) stays recorded and unrenamed -- production RTL on the material
+path. The remaining 23 are dominated by GEOM.PARAMWALK's genuinely unread face
+(`pw_t_v0/v1/v2_w`, `pw_t_material_w`, `pw_t_raster_w`) plus the two defects
+above. **The gate should stay RED while `pw_t_illegal_w` is unwired** -- that is
+the gate doing its job, not a gate needing a waiver.

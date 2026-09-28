@@ -4,7 +4,24 @@ Coordinator, 2026-09-28. Found while triaging the 27 real `lint_zhao_console_boa
 warnings one at a time. The lint found one of these; **reading around it found
 six more**, and the file already contained a record of four of them.
 
-Every one overstates the work remaining. Not one is caught by any gate.
+Not one is caught by any gate.
+
+**On direction, corrected against the file's own words.** A first draft of this
+report said "every one overstates the work remaining". The file states it more
+carefully at the end of its `(X4)` block, and the file is right:
+
+> *"EVERY ONE of these makes the remaining work look SMALLER **or the entry look
+> more BLOCKED-ON-A-PORT than it is.** 15.35's direction tell, holding across
+> five independent sentences."*
+
+Those are two different distortions and the sentences split between them. What is
+uniform — and is the checkable invariant — is narrower: **each names a consumer,
+a port or a converter as ABSENT when it is present.** Whether that makes the
+total look bigger or smaller depends on which list the reader is holding.
+
+Note also that this pattern is **already recorded** as HANDOVER 15.35's "direction
+tell". What is new below is not the pattern; it is the DATES, and the fact that
+the sentences recorded a week ago were never corrected at their sites.
 
 ---
 
@@ -47,6 +64,10 @@ A reader who believed this would have costed a rebuild that was already done.
 | `:8407` | `WHAT CLOSING THE REST NEEDS, unchanged` | three-quarters spent |
 | `:32805` | SCHEMA v2's five "unconnected … same reason as the twenty-eight vertex fields below" | `pw_t_area2_w` read at `:21809` |
 | `:32836` | "a back end and NO DOOR — 2,065 wires" | door opened `4513c7c5`, same morning |
+
+*Line numbers above are at `f2881730`, the commit before the corrections — taking
+this report's own rule 2 below. **All seven are corrected at their sites as of
+2026-09-28**, along with the `(X4)` audit block that had recorded four of them.*
 
 And one that is not prose at all but the identical failure in a wire —
 `efa_ans_ready`, declared beside the live `efa_ans_valid`, **driven by nothing
@@ -104,9 +125,19 @@ author left to argue with.
 1. **Delete the claim or derive it — do not strike it.** If the sentence is
    wrong, the correct edit removes the assertion and states what is true. A
    strike-through leaves a live sentence and adds a second thing to maintain.
-2. **Never write a line number into a comment about another part of the file.**
-   All four of the X4 audit's pointers rotted within a week. Names survive edits;
-   line numbers do not, and a wrong pointer makes a true finding unverifiable.
+2. **A line number in a comment must be ANCHORED TO A COMMIT, or not written.**
+   All four of the X4 audit's pointers were bare and all four rotted within a
+   week, which makes a true finding unverifiable.
+
+   **The counter-example is in the same file and it is the model.** The
+   `tps_v_cell_fire_c` attribution note writes *"By SOURCE: at `62d8b6a7`,
+   :27814 is `assign tps_v_cell_fire_c = …` and :28412 is
+   `.mat_we_i (tps_v_cell_fire_c),`"*. Checked at that commit on 2026-09-28:
+   **both lines are exactly as quoted.** A bare `:28412` against HEAD lands on
+   `zhao_part_project` — so the anchor is doing the whole job, and an earlier
+   draft of this report mistook that pointer for a fourth rotted one by reading
+   it against the wrong revision. Anchored line numbers survive; bare ones do
+   not. Prefer names anyway, because they need no anchor.
 3. **A producer-side comment must not describe its consumers.** The file says
    this about itself, at `:30350`, and then did it anyway — twice, in the two
    paragraphs on either side of the sentence that says it. The consumer list is
