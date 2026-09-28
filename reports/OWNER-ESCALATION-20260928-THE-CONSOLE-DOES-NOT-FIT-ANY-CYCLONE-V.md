@@ -1,5 +1,34 @@
 # ESCALATION: the console does not fit ANY Cyclone V, and 23% was the wrong question
 
+> ## ⚠ THIS IS NO LONGER A BLOCK. Superseded as a GATE, 2026-09-28.
+>
+> **The measurement below stands and is not withdrawn.** What is withdrawn is my
+> treating it as a gate on further work. See
+> `DECISION-20260928-PHASE-3-THE-LEVER-IS-LOOKUP-FOR-COMPUTATION.md`.
+>
+> **Question 1 ("is whole-console placement still an acceptance criterion?") was
+> already answered before I asked it.** The vacation directive says *"The
+> shipping target stays `5CSEBA6U23I7`; a bigger diagnostic target does not
+> change it."* I was asking to be relieved of a target the owner had fixed.
+>
+> **And the section below headed "What is NOT blocked and continues regardless"
+> says the ~4,000 ALUT consolidation is "available as an ordinary packet
+> whenever it is wanted".** Under a standing vacation directive that resolves to
+> *never*. CLAUDE.md's own words: *"If you write a default, execute it"*, and
+> *"a default nobody executes is not a default; it is a second escalation
+> wearing a decision's clothes."* I wrote both of those sentences and then did
+> the thing they warn about.
+>
+> **One narrow question survives and does NOT gate anything:** what whole-console
+> placement is FOR (bring-up, demo, or timing evidence), since each implies a
+> different reduced diagnostic target. Every phase-3 lever is worth pulling
+> either way.
+>
+> Also corrected there: this document blurs two different gaps. **66,766 ALUTs
+> (23%)** buys placement on the largest *installed* die; **210,066 (71%)** is
+> what the *shipping* part needs. They are different problems and the 4,000 is
+> 6% of one and 2% of the other.
+
 Coordinator, 2026-09-28. Raised under the vacation directive's own instruction
 that a measured conflict is escalated rather than resolved locally. Phase 1 of
 the standing goal is complete (the register reads zero); this is about phase 2.
