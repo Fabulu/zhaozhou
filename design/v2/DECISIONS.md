@@ -101,6 +101,73 @@ fabric↔HPS path that decides it.
 
 ---
 
+## D-V2-008 — the storage lever is 4–7%, and D-V2-001's residual is withdrawn
+
+**Question.** After R2 challenged the 0.521 ALM/register figure as not a bound,
+is the storage lever larger or smaller than R1 claimed?
+
+**Decision.** **Smaller — materially.** R1's 31% and its 108,856-ALM residual are
+withdrawn. The measured remaining lever is **4–7%**.
+
+**Reason.** Commit `7d049e9f` (2026-09-26) already recorded that the flop-array
+programme is done: three conversions landed (2,178–2,458 ALM/M10K) and the tail
+runs at **~225 ALM/M10K**. Re-measured at HEAD, 291 ranked arrays split 94
+absent / 109 already inferring / **88 live**, worth ~15,750 ALM and needing **≥87
+M10K blocks** against ~238 free. **R2's two extra data points are rows two and
+three of that table — already-spent savings, as R2 itself says.**
+
+**The deeper error was the unit.** Quartus packs one array per M10K, so N small
+arrays cost N blocks regardless of total bits. R1's "7 M10K" was not a rounding
+slip.
+
+**Consequence.** `tools/budget/v2_state_lever.py` is deprecated as a budget
+instrument in its own header; `check_ram_inference.py --rank --against` is the
+correct one. **I built a census and read it as a work list four days after
+committing a note whose lesson is that its noise is not a work list.**
+
+## D-V2-009 — rate-bound does not mean irreducible (R2 accepted)
+
+**Decision.** Withdraw R1's claim that area-for-time is unavailable on
+rate-bound paths, and adopt R2's principle: **reducing repeated work is not the
+same as doing the same work more slowly.**
+
+**Reason.** R1 inherited R0's nine-products-per-terrain-vertex count as though it
+were a lower bound. R2's identity `row(i,j) = A·h(i,j) + B·i + C·j + D` for
+lattice coordinates takes three products per row to one. Verified: the algebra
+follows from `m₀x + m₁y + m₂z + m₃`, and **`zhao_project_core` takes arbitrary
+`vx/vy/vz` and does not exploit it.**
+
+**Constraints.** Regular lattice only; accumulator width to i,j = 32 without
+intermediate rounding (keep R2's early-rounded failing control); `zhao_project_core`
+declares contract latency **fixed 36**, so a variant path is a contract change.
+
+## D-V2-010 — the clock floor is contractual, not chosen
+
+**Decision.** The timing witness is measured against **51 MHz as a contractual
+minimum**, not 60 MHz as a preference.
+
+**Reason.** `design/contracts/FIELD.SEQ.EARTH.md` sets **≤850,000 Field/Earth-slice
+clocks for the 128-association stress frame**. At 60 fps that is 51 MHz for the
+Field engine alone at 100% duty, before any other engine and before reserve.
+Stated in none of R0, R1 or R2.
+
+**Consequence.** A witness below 51 MHz fails an existing commitment rather than
+a guess. The only composed placement on record is 18.5 MHz.
+
+## D-V2-011 — X2 (cluster replacement) replaces E1 as the decisive experiment
+
+**Decision.** Adopt R2's coherent cluster replacement. Drop R1's E1 conversion
+sweep. **Provisionally prefer the Field prepared-context slice** over
+draw/context-binding.
+
+**Reason.** E1 measured a lever that D-V2-008 shows is spent. The Field slice
+carries the largest single register concentration (`zhao_field_v3_exec`, 24,795
+own registers) **and** the only contractual clock floor, so one experiment tests
+storage, transport and timing against a ratified number. R2 invited a challenge
+on its choice; this is it.
+
+---
+
 ## Not the agent's to decide — for the owner
 
 | # | question | why it is a product decision |

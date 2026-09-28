@@ -168,3 +168,53 @@ escalation of mine asking whether it still is was over-asking.
   optimization. A correction box has been added to that report.
 * The same report's framing remains right in one important respect: nothing
   measured closes a 3.5–6.4× gap on its own.
+
+---
+
+# CORRECTIONS, 2026-09-28, after the R2 review
+
+**Section 2, "the state-in-flops lever", is WITHDRAWN as a budget figure.** The
+census is hierarchy-sensitive: it **excludes 147,127 of 279,210 registers** --
+more than it counts -- whenever any descendant holds a RAM, including the largest
+single holder `zhao_field_v3_exec` (24,795 own registers); and what it counts
+includes pipeline and control flops that are not arrays. It is neither an upper
+nor a lower bound.
+
+**The measured remaining storage lever is 4-7%, not 31%.** Commit `7d049e9f`
+(2026-09-26) recorded that the three conversions that mattered already landed
+(`pal_q`, `lodstate st_q`, `forge_assemble pos_q+inv_q` -- ~142,000 bits out of
+flip-flops, 2,178-2,458 ALM per M10K) and that the tail runs at ~225 ALM per
+M10K. Re-measured at HEAD with `check_ram_inference.py --rank --against`: 291
+ranked arrays split **94 not in the composed map / 109 already inferring / 88
+live**. The 88 hold 128,466 declared bits, of which the largest (65,536,
+`forge_cliff_ram prio_mem_r`) sits in a module with 562 own registers and is not
+in flops. Net approximately **63,000 bits, 87 arrays, >=87 M10K blocks,
+~15,750 ALM**.
+
+**The binding resource is M10K BLOCKS, not bits.** Quartus packs one array per
+block, so 87 small arrays cost 87 blocks against ~238 free. The earlier "7 M10K"
+figure was the wrong unit, not a rounding slip.
+
+**Section 4's glue class is not shown to be event-rate.** "No DSP and no RAM"
+also catches soft multipliers, dividers and comparators; invocation rates were
+never established by those resource counts.
+
+**Section 3's concentration curve stands** -- it is exclusive attribution and
+does not depend on the memory classification -- **but it does not bound engine
+replacement.** Replacing one coherent engine removes many descendant nodes at
+once, so "400 nodes rather than five rewrites" was a false choice.
+
+**Section 7 is corrected.** `design/V1-RELEASE-DEFINITION.md` carries no numeric
+envelope, but `design/contracts/FIELD.SEQ.EARTH.md` does: 1,089 lattice vertices
+per full patch, 297 four-wide update groups, a 128-association stress frame, and
+a frame acceptance ceiling of **<=850,000 Field/Earth-slice clocks**.
+
+**NEW, derived from that contract and stated in neither R0, R1 nor R2:**
+
+    850,000 clocks/frame x 60 frames/s = 51 MHz
+
+**A ratified contract fixes a hard floor of 51 MHz on the Field engine alone**,
+at 100% duty, before any other engine and before reserve. The clock is not a free
+parameter. The only composed console placement on record is 18.5 MHz.
+
+Raw instrument output: `ram_inference_rank_at_head.txt`.

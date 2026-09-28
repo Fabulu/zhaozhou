@@ -1,6 +1,43 @@
 #!/usr/bin/env python3
 """Size the STATE-IN-FLOPS lever, which is V2's central architectural bet.
 
+============================================================================
+DEPRECATED AS A BUDGET INSTRUMENT, 2026-09-28, THE DAY IT WAS WRITTEN.
+Use `tools/quartus/check_ram_inference.py --rank --against=<map.rpt>`.
+============================================================================
+
+This census is HIERARCHY-SENSITIVE and is neither an upper nor a lower bound
+on bankable storage. The external R2 review found it and the repository data
+confirms it, worse than argued:
+
+  * It EXCLUDES a node's entire register count if ANY descendant holds a RAM.
+    On the 2026-09-28 console that excludes 147,127 of 279,210 registers --
+    MORE THAN IT COUNTS -- including the single largest holder,
+    `zhao_field_v3_exec` at 24,795 own registers.
+  * What it does count includes pipeline stages, accumulators and control
+    flops, which are not arrays and cannot be banked.
+  * "No DSP and no RAM" is not "low-rate housekeeping": it also catches soft
+    multipliers, dividers and comparators. `zhao_field_v3_mulbank` is 3,328
+    ALUTs with 8 registers and no memory.
+
+AND THE UNIT WAS WRONG, WHICH MATTERED MORE THAN THE ROUNDING.
+This tool divided total bits by 10,240 and reported M10K blocks. The Quartus
+inferrer DOES NOT PACK TWO ARRAYS INTO ONE BLOCK, so N small arrays cost N
+blocks whatever they total. Measured at HEAD: 88 live arrays totalling ~128k
+declared bits need >= 88 blocks, not 13. The repository's own recorded density
+for the remaining tail is ~225 ALM per M10K, against 2,178-2,458 for the three
+conversions that already landed -- TEN TIMES WORSE, against ~238 free blocks.
+
+So the flop-array programme is already DONE (commit 7d049e9f, 2026-09-26): the
+three that mattered landed and took ~142,000 bits out of flip-flops. What this
+tool's census looks like is a large remaining lever; what is actually left is
+~5% of the design. A census is not a work list.
+
+The concentration curve below is still sound -- it is exclusive attribution and
+does not depend on the memory classification -- but see the caveat printed with
+it: it does not bound how much one engine replacement can reach.
+
+
 WHY. The V2 candidate (design/v2/proposals/R0-external-candidate.md) proposes
 "put bulk state in banked memory; keep only active operands in registers". That
 is the right instinct and this tool measures how much of V1 it could actually
@@ -32,6 +69,7 @@ Usage:
   python tools/budget/v2_state_lever.py ... --json OUT.json
 """
 import argparse
+import math
 import json
 import pathlib
 import sys
@@ -51,7 +89,12 @@ def load_rows(src: pathlib.Path):
         return json.load(open(src, encoding='utf-8'))
     sys.path.insert(0, str(ROOT / 'tools' / 'budget'))
     import map_entity_attrib as mea
-    return mea.parse(open(src, encoding='utf-8', errors='replace').read())
+    # BUG FIXED 2026-09-28 (found by the R2 review): `parse` takes a PATH, and
+    # this passed it the file CONTENTS, so the advertised raw-.map.rpt route
+    # never worked. The JSON route did, and is what produced the published
+    # numbers, so they are unaffected -- but a usage nobody exercised is a
+    # usage nobody could trust.
+    return mea.parse(str(src))
 
 
 def analyse(rows):
@@ -111,8 +154,10 @@ def main():
           f"({d['zero_mem_reg_pct']:.0f}% of all registers)")
     print(f"  ALUTs there             : {d['zero_mem_alut']:,} "
           f"({d['zero_mem_alut_pct']:.0f}% of all ALUTs)")
-    print("  ^ this BOUNDS the lever from above. Pipeline and control flops and")
-    print("    anything needing >2 concurrent ports cannot move to an M10K.")
+    print("  ^ NOT A BOUND IN EITHER DIRECTION -- see the header. It EXCLUDES")
+    print("    147,127 registers (more than it counts) because their subtree")
+    print("    holds a RAM somewhere, and it INCLUDES pipeline and control")
+    print("    flops that are not arrays. A census is not a work list.")
     print()
     print("CONCENTRATION -- how many nodes must be touched to reach a share")
     for n, share, pct in d['concentration']:
@@ -135,8 +180,13 @@ def main():
         print(f"ASSUMED at rate={a.rate:.2f} -- THIS IS AN ASSUMPTION, NOT A MEASUREMENT")
         print(f"  registers banked        : {moved:,.0f}")
         print(f"  ALMs recovered          : {alms:,.0f}")
-        print(f"  M10K bits consumed      : {bits:,.0f} "
-              f"({bits / 10240:,.0f} M10K of 553)")
+        print(f"  M10K bits consumed      : {bits:,.0f}")
+        print(f"  blocks by CAPACITY      : {math.ceil(bits / 10240)} of 553 "
+              f"-- and this is the WRONG UNIT, kept only to show the error")
+        print("  blocks ACTUALLY needed  : one per ARRAY. Quartus does not pack")
+        print("    two arrays into one M10K, so N small arrays cost N blocks.")
+        print("    Measured at HEAD: 88 live arrays, ~128k declared bits, >=88")
+        print("    blocks -- against ~238 free. Use check_ram_inference.py.")
 
     if a.out:
         json.dump(d, open(a.out, 'w', encoding='utf-8'), indent=2)

@@ -8,6 +8,31 @@ measurement or an owner ruling.
 
 ---
 
+> ## UPDATED after the R2 review, 2026-09-28
+>
+> **Q2 is CLOSED, and not in the direction either document expected.** The
+> remaining storage lever is **4–7%**, not 31% and not more. The three
+> conversions that mattered already landed; what is left is 87 small arrays
+> needing ≥87 M10K blocks for ~15,750 ALM (~181–225 ALM/M10K) against ~238 free.
+> R2's two extra data points are the already-spent conversions. See D-V2-008.
+>
+> **Q1 is NARROWED, not open.** `design/contracts/FIELD.SEQ.EARTH.md` already
+> specifies 1,089 lattice vertices, 297 update groups, a 128-association stress
+> frame and **≤850,000 Field/Earth-slice clocks**. Gate 0 becomes *extract and
+> reconcile the existing contracts*, not start from blank paper. What remains
+> genuinely open is the **joint** question — how Earth stress coexists with
+> maximum geometry, the giant, texture and Duo.
+>
+> **Q3 is SHARPENED and now contractual.** 850,000 clocks × 60 fps = **51 MHz
+> floor on the Field engine alone**. The witness is measured against that, not
+> against 60 as a preference.
+>
+> **NEW Q14 — does the projector's lattice structure generalise?** R2's
+> `row(i,j) = A·h + B·i + C·j + D` is sound and unexploited, but applies to the
+> regular lattice only. If it is the only such reduction, the rate side is
+> narrower than R3 hopes. Closes via X2 plus an audit of other regular-domain
+> producers.
+
 ## Blocking — nothing should be allocated or built until these resolve
 
 | # | question | closes via | if the answer is bad |
