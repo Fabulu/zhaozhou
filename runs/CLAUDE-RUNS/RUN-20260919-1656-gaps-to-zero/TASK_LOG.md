@@ -5686,3 +5686,32 @@ against a 227,120 ceiling). That escalation --
 `OWNER-ESCALATION-20260928-THE-CONSOLE-DOES-NOT-FIT-ANY-CYCLONE-V.md` -- is
 blocked on the owner and nothing here moves it. Tonight closed gate work and
 found two defects; it did not close the area gap.
+
+#### THE SCHEMA GENERATOR LEAVES THE TREE DIRTY, AND THAT IS NOT COSMETIC
+
+End-of-session tree check found two files modified that I never edited:
+
+    spec/form/field-host-image.md
+    reference/include/zfield/generated/zfield_host_image.hpp
+
+`git diff --numstat` returns **nothing** and `--ignore-cr-at-eol` returns
+nothing: **zero content lines changed.** Both carry mtime 01:30:15, which is the
+schema regeneration earlier tonight, and `gen_field_host_schema.py --check`
+returns RC 0 -- the files are FRESH. The generator writes **LF** into a **CRLF**
+working tree, so regenerating always leaves these two modified.
+
+**Left alone deliberately.** `git checkout --` for a difference with no content
+is the destructive command from the rules file spent on cosmetics, and unstaged
+changes have no reflog. Nothing is lost by leaving them.
+
+**But it is worth writing down, because of where it lands.** A fit receipt
+records `rtlCleanAtHead`, and this rules file is explicit that a row fitted from
+a dirty tree has a digest describing nothing while still being stamped `ok`. So
+the sequence "regenerate the schema, then start a fit" produces a receipt that is
+**dirty for a reason that is pure line endings** -- a worthless provenance digest
+earned by changing nothing at all. That is the `check_eol_worktree.py` chapter
+(*"a line-ending difference in a correct file reads as a content mismatch"*)
+arriving at the one place where it costs a measurement.
+
+**Before the next fit: check the tree and normalise these two, or regenerate
+with matching endings.** Do not discover it in the receipt.
