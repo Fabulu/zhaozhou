@@ -5894,3 +5894,79 @@ blanket "no arrays in flip-flops" rule, which `zhao_field_v3_rf` refutes at
 not predictable -- twice too pessimistic, twice too optimistic. Every estimate
 made without an instrument came in wrong. No probability of success appears in
 R5, deliberately.
+
+#### THE uop STORE: SIZE SETTLED THREE WAYS, CAUSE STILL OPEN AFTER SIX REFUTATIONS
+
+Branch `design/zhaozhou-v2-rfc`. The one concrete thing to come out of the V2
+exchange, pursued to a measurement.
+
+**THE SIZE IS SETTLED, and it took a process correction to get right.** The
+external reviewer asked for the PRODUCTION parameters rather than module
+defaults. The console composes `.INSTR_N(48)`, so `uop_t store[0:(CTX*PLAN)-1]`
+is **384 entries x 60 bits = 23,040 bits**, not the 256 x 60 = 15,360 I first
+wrote from the exec's own defaults. Fifty per cent out, and it raised the store's
+share of that module's registers from ~62% to **~92%**.
+
+Confirmed three independent ways:
+
+  1. parameter trace: console `.INSTR_N(48)` -> engine `.PLAN(INSTR_N)` -> core -> exec
+  2. paired standalone maps: PLAN 32 -> 48 moved registers 17,274 -> 24,962,
+     **+7,688 against a predicted (384-256) x 60 = 7,680** -- 0.1%
+  3. variant R1: memory bits 25,344 -> 48,384, **+23,040 = exactly 384 x 60**
+
+And (2) also confirmed the composed console is at PLAN=48: the PLAN=48 standalone
+lands within 0.7% of the composed exec's 24,795 own registers.
+
+**THE CAUSE IS STILL OPEN, and six hypotheses are dead.** Quartus says
+"uninferred due to ASYNCHRONOUS READ LOGIC", and there is no asynchronous read of
+`store` in the source. Eliminated so far: the typedef, the signed `int'()` index,
+an enable derived from read data (*apparently* -- see below), an async-reset
+process, an address routed through a flop array, and the read address being
+combinational.
+
+**VARIANT R1 KILLED MY BEST HYPOTHESIS WITH ITS OWN PREDICTION.** I predicted R1
+-- read lifted out of both enables, address left combinational -- would STILL
+FAIL. It inferred. So the address is innocent and an ENABLE is the blocker.
+
+The error is worth naming: I found a real correlation (the arrays that infer,
+`lq_s0_r`/`lq_imm_r`, have REGISTERED addresses; the one that fails has a
+combinational one) and promoted it to a mechanism without testing it. The
+FLOPARRAY tool-note I quoted says a registered address HELPED; it never said a
+combinational one PREVENTS. **I read a sufficient condition as a necessary one.**
+
+**AND THE PROBE GAVE A FALSE ELIMINATION, which is the durable lesson.** STYLE=3
+tested "read enable derived from read data" and INFERRED, which I recorded as
+ruling it out. Its enable was `we_i | ~hazard_c` with `we_i` a module PORT and its
+address a port too -- easier than the real case in ways unrelated to the property
+under test. **A synthetic probe that INFERS eliminates nothing.** Only a probe
+that FAILS isolates a cause, and only a reduction of the real module produces one.
+All six styles and both evidence documents are corrected at their sites to say so.
+
+**INSTRUMENTS BUILT THIS ROUND**, because measuring this needed them:
+
+* `tools/budget/store_variant_receipt.py` -- asks what Quartus said about an
+  array BY NAME. Verdicts INFERRED / UNINFERRED / **ABSENT** / AMBIGUOUS, all
+  three reachable ones demonstrated on real reports. ABSENT exists because a
+  reduction can make synthesis DELETE the array, and deletion is not inference --
+  "total memory increased" is an unsound predicate and this tree has shipped two
+  variants of it. Carries an anti-vacuity guard and an explicit not-claimed list.
+* `check_ram_inference.py` -- three repairs after the reviewer read the code: the
+  declaration recogniser was `^\s*(?:logic|reg|bit)` and could not see ANY
+  typedef array (widened; exactly two were hidden tree-wide, this being the
+  larger); sizes for such arrays were ENTRIES printed as BITS (a 60x
+  underestimate that ranked the biggest array near the bottom of its own list);
+  and `ALREADY INFERRING` was `mem >= bits`, module-subtree memory against one
+  array's size, so an unrelated RAM masked an array in flops. Plus a fourth fire
+  test for the new code, which **failed twice on real defects in itself** -- a
+  fixture with no writes, then a missing `sizes` dict that would have made one
+  check pass vacuously -- before being allowed to pass.
+
+**NEXT:** variant R3a isolates `issue_c` alone. It depends on `s1_uop_r.op`, the
+store's own read output, so it is hypothesis 2 returning. Prediction on record:
+**R3a does not infer.** If it does, the outer `!hold_c && !mul_denied_c` is the
+cause and R3b tests that.
+
+**NOT CLAIMED, and the reviewer was right to fence all of it:** no ALM saving (the
+11,946 -> 17,100 between parameterisations is a parameterisation difference); no
+extra architectural cycle required (the production read is already clocked); and
+nothing here rescues a whole console from one array.

@@ -1,3 +1,31 @@
+> # CORRECTED AGAIN 2026-09-29: THE SIX PROBES ELIMINATED NOTHING
+>
+> This file says the six styles **eliminated** five candidate causes. **They did
+> not, and variant R1 proved it.**
+>
+> R1 lifted the store's read out of its two enclosing enables and left the
+> address alone. It **INFERRED** -- 25,344 -> 48,384 memory bits (+23,040, exactly
+> 384 x 60), registers 24,962 -> 1,862. So one of the ENABLES is the blocker, and
+> **STYLE=3 tested exactly that shape and inferred**, which this file recorded as
+> ruling it out.
+>
+> **Why STYLE=3 was a false elimination:** its enable was `we_i | ~hazard_c` with
+> `we_i` a module PORT, and its address was a port too. At the top of a standalone
+> map a port is available at the clock edge, so the synthetic case was easier than
+> the real one in ways that had nothing to do with the property under test.
+>
+> **THE RULE THIS ESTABLISHES, and it is the useful part:** a synthetic probe that
+> INFERS eliminates nothing. It can only ever show that the flow works and that
+> *some* arrangement of the named property infers. Only a probe that FAILS
+> isolates a cause, and only a reduction of the real module can produce one.
+>
+> So the correct reading of the table below is: **six arrangements infer, and the
+> real module does not.** That is a statement about the probe, not about
+> production. What still stands unaltered is the SIZE -- 384 x 60 = 23,040 bits,
+> now confirmed three independent ways (parameter trace, register delta +7,688 vs
+> a predicted 7,680, memory delta +23,040) -- and the fact that the array can be
+> an M10K at all.
+
 # The Field exec's uop store: measured, and five hypotheses refuted
 
 Coordinator, 2026-09-29. Device `5CSEBA6U23I7`, Quartus Prime Lite 17.0.2,
