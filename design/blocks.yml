@@ -875,8 +875,12 @@ blocks:
     owner_issue: ZH-009
     inputs: [decoded_records, frame_complete]
     outputs: [dispatch, slot_state, guard_policy, fence]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
     upstream: [CMD.DECODER, VIDEO.FRAMECTL]
-    downstream: [MEM.GUARD, FIELD.PROGCACHE, DEBUG.COUNTERS, MEASURE.GOVERNOR, MEASURE.TOKENS, TERRAIN.PATCH, SURFACE.STAMP, GEOM.MESHFETCH, PART.STATE, FORGE.PRIM, FORGE.PRIM.EVAL, TWOD.PLANE, TWOD.SPRITE, POST.GATHER, POST.COMPOSITE, DEBUG.FRAMEBLIT, MEM.UPLOAD, MATERIAL.RESOLVE, FORGE.SHADOW, TERRAIN.SEQ, TERRAIN.CMD]
+    downstream: [MEM.GUARD, FIELD.PROGCACHE, DEBUG.COUNTERS, MEASURE.GOVERNOR, MEASURE.TOKENS, TERRAIN.PATCH, SURFACE.STAMP, GEOM.MESHFETCH, PART.STATE, FORGE.PRIM, FORGE.PRIM.EVAL, TWOD.PLANE, TWOD.SPRITE, POST.GATHER, POST.COMPOSITE, DEBUG.FRAMEBLIT, MEM.UPLOAD, MATERIAL.RESOLVE, FORGE.SHADOW, TERRAIN.SEQ, TERRAIN.CMD, TWOD.BAND]
     backpressure: credit
     latency: variable
     target_throughput: 1 slot transition per clock
@@ -1216,8 +1220,12 @@ blocks:
     owner_issue: ZH-029
     inputs: [client_req, guard_policy]
     outputs: [arb_req, guard_violation]
-    upstream: [CMD.SCHEDULER, TERRAIN.PATCH, TERRAIN.VELOCITY, SURFACE.SHEET, GEOM.MESHFETCH, GEOM.POSE, TEXTURE.CACHE, PART.STATE, RASTER.RESOLVE, POST.GATHER, POST.ECHO, VIDEO.SCANOUT, DEBUG.FRAMEBLIT, MEM.UPLOAD, GEOM.ASSETFETCH, TERRAIN.PAGELOADER, TERRAIN.WRITEBACK]
-    downstream: [MEM.VRAM.ARBITER, TERRAIN.PAGESTREAM]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
+    upstream: [CMD.SCHEDULER, TERRAIN.PATCH, TERRAIN.VELOCITY, SURFACE.SHEET, GEOM.MESHFETCH, GEOM.POSE, TEXTURE.CACHE, PART.STATE, RASTER.RESOLVE, POST.GATHER, POST.ECHO, VIDEO.SCANOUT, DEBUG.FRAMEBLIT, MEM.UPLOAD, GEOM.ASSETFETCH, TERRAIN.PAGELOADER, TERRAIN.WRITEBACK, TERRAIN.PAGEIO, TERRAIN.DEVSTORE, TERRAIN.MATPUB]
+    downstream: [MEM.VRAM.ARBITER, TERRAIN.PAGESTREAM, TERRAIN.PAGEIO, TERRAIN.DEVSTORE]
     backpressure: ready_valid
     latency: fixed:1
     target_throughput: 1 checked request per clock
@@ -1371,8 +1379,12 @@ blocks:
     owner_issue: ZH-035
     inputs: [cached_program, patch_intake]
     outputs: [field_results]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
     upstream: [FIELD.PROGCACHE, FIELD.SEQ.CORE]
-    downstream: [TERRAIN.PATCH]
+    downstream: [TERRAIN.PATCH, TERRAIN.MATJOIN]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 Field IR instruction per clock
@@ -2370,8 +2382,12 @@ blocks:
     owner_issue: ZH-126
     inputs: [page_lattice_jobs]
     outputs: [page_lattice_stream, page_cell_material]
-    upstream: [TERRAIN.RESIDENCY, MEM.GUARD, TERRAIN.MIPFEED]
-    downstream: [TERRAIN.MIPGEN, TERRAIN.PATCH, TERRAIN.MIPFEED]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
+    upstream: [TERRAIN.RESIDENCY, MEM.GUARD, TERRAIN.MIPFEED, TERRAIN.BAKEREC]
+    downstream: [TERRAIN.MIPGEN, TERRAIN.PATCH, TERRAIN.MIPFEED, TERRAIN.MATJOIN, TERRAIN.SPDESC]
     backpressure: ready_valid
     latency: variable
     target_throughput: "one 33x33 lattice per 4,181 gpu clocks measured on the played fabric at 2-cycle read latency; 154 bursts, derived from the layout rather than observed. WAS 105 bursts / 3,544 clocks before ruling R13's layer E joined the read window on 2026-09-22 -- +49 bursts and +47% of this block's read bandwidth for the page, which is what a layer nobody read costs to start reading. Recorded, not absorbed."
@@ -2659,7 +2675,11 @@ blocks:
     owner_issue: ZH-128
     inputs: [page_bake_jobs]
     outputs: [page_bake_completions, deformation_marks]
-    upstream: [TERRAIN.SEQ, TERRAIN.RESIDENCY, MEM.GUARD, TERRAIN.BAKE]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
+    upstream: [TERRAIN.SEQ, TERRAIN.RESIDENCY, MEM.GUARD, TERRAIN.BAKE, TERRAIN.BAKEREC]
     downstream: [TERRAIN.BAKE, MEM.GUARD, TERRAIN.RESIDENCY]
     backpressure: ready_valid
     latency: variable
@@ -2948,8 +2968,12 @@ blocks:
     owner_issue: ZH-033
     inputs: [dispatch, field_results, baked_scars]
     outputs: [patch_state, subpatch_requests]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
     upstream: [CMD.SCHEDULER, FIELD.SEQ.EARTH, TERRAIN.BAKE, TERRAIN.SEQ, TERRAIN.PAGESTREAM]
-    downstream: [TERRAIN.TESS, TERRAIN.LOD, TERRAIN.VELOCITY, PART.COLLIDE, MEM.GUARD, TERRAIN.MIPGEN, TERRAIN.RESIDENCY, TERRAIN.COMPCACHE]
+    downstream: [TERRAIN.TESS, TERRAIN.LOD, TERRAIN.VELOCITY, PART.COLLIDE, MEM.GUARD, TERRAIN.MIPGEN, TERRAIN.RESIDENCY, TERRAIN.COMPCACHE, TERRAIN.MATJOIN]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 patch-layer update per clock
@@ -3130,8 +3154,12 @@ blocks:
     owner_issue: ZH-125
     inputs: [patch_state, lattice_placement, cell_state, cell_material]
     outputs: [lattice_reads, cell_reads, material_reads]
-    upstream: [TERRAIN.PATCH, TERRAIN.SEQ]
-    downstream: [TERRAIN.TESS]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
+    upstream: [TERRAIN.PATCH, TERRAIN.SEQ, TERRAIN.MATJOIN]
+    downstream: [TERRAIN.TESS, TERRAIN.MATPUB, TERRAIN.SPDESC, TERRAIN.JOBISSUE]
     backpressure: ready_valid
     latency: fixed:1
     target_throughput: "one lattice datum per clock, registered; one record per two fill clocks"
@@ -3289,8 +3317,12 @@ blocks:
     owner_issue: ZH-127
     inputs: [terrain_patch_set]
     outputs: [page_load_jobs, page_writeback_jobs, terrain_patch_jobs]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
     upstream: [CMD.SCHEDULER, TERRAIN.CMD]
-    downstream: [TERRAIN.RESIDENCY, TERRAIN.LOADQ, TERRAIN.PAGELOADER, TERRAIN.PATCH, TERRAIN.COMPCACHE, TERRAIN.LOD, TERRAIN.WRITEBACK]
+    downstream: [TERRAIN.RESIDENCY, TERRAIN.LOADQ, TERRAIN.PAGELOADER, TERRAIN.PATCH, TERRAIN.COMPCACHE, TERRAIN.LOD, TERRAIN.WRITEBACK, TERRAIN.PAGEIO]
     backpressure: ready_valid
     latency: variable
     target_throughput: "5.38 gpu clocks per resident static record, measured; one record in service at a time"
@@ -3435,8 +3467,12 @@ blocks:
     owner_issue: ZH-123
     inputs: [patch_claims, loader_completions, deformation_marks]
     outputs: [residency_answers, eviction_writebacks]
-    upstream: [TERRAIN.PATCH, TERRAIN.PAGELOADER, TERRAIN.SEQ, TERRAIN.WRITEBACK, TERRAIN.MIPFEED]
-    downstream: [TERRAIN.MIPGEN, TERRAIN.LOD, TERRAIN.ISLAND, TERRAIN.WRITEBACK, TERRAIN.PAGESTREAM, TERRAIN.MIPFEED]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
+    upstream: [TERRAIN.PATCH, TERRAIN.PAGELOADER, TERRAIN.SEQ, TERRAIN.WRITEBACK, TERRAIN.MIPFEED, TERRAIN.PAGEIO]
+    downstream: [TERRAIN.MIPGEN, TERRAIN.LOD, TERRAIN.ISLAND, TERRAIN.WRITEBACK, TERRAIN.PAGESTREAM, TERRAIN.MIPFEED, TERRAIN.PAGEIO]
     backpressure: ready_valid
     latency: fixed:2
     target_throughput: one mutation or one query per clock
@@ -3679,8 +3715,12 @@ blocks:
     owner_issue: ZH-039
     inputs: [layer_e_material, earth_out_lane_2]
     outputs: [composed_material]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
     upstream: [TERRAIN.PAGESTREAM, FIELD.SEQ.EARTH, TERRAIN.PATCH]
-    downstream: [TERRAIN.COMPCACHE]
+    downstream: [TERRAIN.COMPCACHE, TERRAIN.MATPUB]
     backpressure: none
     latency: fixed:1
     target_throughput: 1 cell per page-stream vertex beat
@@ -3837,8 +3877,12 @@ blocks:
     owner_issue: ZH-036
     inputs: [stamp_results]
     outputs: [baked_scars]
-    upstream: [SURFACE.STAMP]
-    downstream: [TERRAIN.PATCH]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
+    upstream: [SURFACE.STAMP, TERRAIN.PAGEIO, TERRAIN.SHEETSEAM, TERRAIN.BAKEREC]
+    downstream: [TERRAIN.PATCH, TERRAIN.PAGEIO, TERRAIN.SHEETSEAM]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 bake texel per clock
@@ -4166,8 +4210,12 @@ blocks:
     owner_issue: ZH-050
     inputs: [patch_state, lod_targets]
     outputs: [lod_decisions]
-    upstream: [TERRAIN.PATCH, MEASURE.GOVERNOR, TERRAIN.MIPGEN, TERRAIN.RESIDENCY, TERRAIN.ISLAND, TERRAIN.VISIBLE, TERRAIN.SEQ]
-    downstream: [TERRAIN.PROJECT]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
+    upstream: [TERRAIN.PATCH, MEASURE.GOVERNOR, TERRAIN.MIPGEN, TERRAIN.RESIDENCY, TERRAIN.ISLAND, TERRAIN.VISIBLE, TERRAIN.SEQ, TERRAIN.SPDESC, TERRAIN.EDGERECON]
+    downstream: [TERRAIN.PROJECT, TERRAIN.DEVSTORE, TERRAIN.EDGERECON, TERRAIN.JOBISSUE]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 decision per patch per frame
@@ -4277,7 +4325,11 @@ blocks:
     owner_issue: ZH-129
     inputs: [bake_sheet_jobs, sheet_pages]
     outputs: [bake_depth_mode, sheet_requests]
-    upstream: [TERRAIN.BAKE, SURFACE.SHEET]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
+    upstream: [TERRAIN.BAKE, SURFACE.SHEET, TERRAIN.BAKEREC]
     downstream: [TERRAIN.BAKE, SURFACE.SHEET]
     backpressure: ready_valid
     latency: variable
@@ -4458,8 +4510,12 @@ blocks:
     owner_issue: ZH-031
     inputs: [sheet_requests]
     outputs: [sheet_pages, residency_status]
-    upstream: []
-    downstream: [SURFACE.STAMP, TEXTURE.AUX, MEM.GUARD]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
+    upstream: [TERRAIN.SHEETSEAM]
+    downstream: [SURFACE.STAMP, TEXTURE.AUX, MEM.GUARD, TERRAIN.SHEETSEAM]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 sheet texel per clock
@@ -4508,8 +4564,12 @@ blocks:
     owner_issue: ZH-052
     inputs: [dispatch, stamp_field_results, sheet_pages]
     outputs: [stamp_results]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
     upstream: [CMD.SCHEDULER, FIELD.SEQ.STAMP, SURFACE.SHEET]
-    downstream: [TERRAIN.BAKE]
+    downstream: [TERRAIN.BAKE, TERRAIN.BAKEREC]
     backpressure: ready_valid
     latency: variable
     target_throughput: 20,000 stamp texels per frame (one texel per ~83 clocks at the 100 MHz gpu_clk placeholder)
@@ -4714,8 +4774,12 @@ blocks:
     owner_issue: ZH-054
     inputs: [vertex_batch, bone_matrices]
     outputs: [world_normal]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
     upstream: [GEOM.VDECODE, GEOM.POSE]
-    downstream: [GEOM.LIGHT]
+    downstream: [GEOM.LIGHT, GEOM.WARP]
     backpressure: ready_valid
     latency: variable
     target_throughput: one vertex per isqrt service turn; behind GEOM.SKIN's one per twelve clocks
@@ -4761,8 +4825,12 @@ blocks:
     owner_issue: ZH-054
     inputs: [vertex_batch, bone_matrices]
     outputs: [skinned_vertices]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
     upstream: [GEOM.VDECODE, GEOM.POSE]
-    downstream: [GEOM.LOOM, GEOM.WCACHE, GEOM.LIGHT]
+    downstream: [GEOM.LOOM, GEOM.WCACHE, GEOM.LIGHT, GEOM.WARP]
     backpressure: ready_valid
     latency: variable
     target_throughput: 120,000 skinned vertex instances per 60 Hz frame (owner ruling 2026-08-23); 166,666 sustained at MUL_LANES=3, 100 MHz
@@ -4908,6 +4976,10 @@ blocks:
     # range-reduced, NON-unit world direction from GEOM.SKIN.NORM.
     inputs: [skinned_world_vertices, skin_world_normals, warp_field_results]
     outputs: [warped_vertices, warped_normals]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
     upstream: [GEOM.SKIN, GEOM.SKIN.NORM, FIELD.SEQ.WARP, GEOM.LOOM]
     # GROUP_SEQ -> GROUPSEQ, 2026-09-29. The old spelling could never be a block id:
     # `blockId`'s pattern forbids the underscore, which is why all 136 ids concatenate
@@ -4918,7 +4990,7 @@ blocks:
     # someone else's design. Renamed rather than invented so rule V7 reports it as the
     # unknown block reference it is, instead of the schema stage rejecting a spelling and
     # thereby hiding all twenty-three rules behind it.
-    downstream: [GEOM.GROUPSEQ, GEOM.LIGHT]
+    downstream: [GEOM.GROUPSEQ, GEOM.LIGHT, GEOM.PROJECT]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 warped vertex per clock
@@ -5027,8 +5099,12 @@ blocks:
     owner_issue: ZH-040
     inputs: [skinned_vertices]
     outputs: [cached_vertices]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
     upstream: [GEOM.SKIN]
-    downstream: [GEOM.PROJECT]
+    downstream: [GEOM.PROJECT, GEOM.REPLAY]
     backpressure: ready_valid
     latency: fixed:1
     target_throughput: 1 lookup per clock
@@ -5114,7 +5190,11 @@ blocks:
     owner_issue: ZH-121
     inputs: [view_vertices, triangle_descriptors, tile_lists]
     outputs: [parambuf_records]
-    upstream: [GEOM.PROJECT, GEOM.BINNER, GEOM.ASSEMBLE]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
+    upstream: [GEOM.PROJECT, GEOM.BINNER, GEOM.ASSEMBLE, GEOM.VERTID]
     downstream: [GEOM.PARAMWALK]
     backpressure: ready_valid
     latency: variable
@@ -5330,8 +5410,12 @@ blocks:
     owner_issue: ZH-055
     inputs: [warped_vertices, cached_vertices, camera_pair]
     outputs: [view_vertices, projected_w]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
     upstream: [GEOM.WARP, GEOM.WCACHE, GEOM.LIGHT]
-    downstream: [GEOM.CLIP, GEOM.PARAMBUF, GEOM.DEPTHQUANT]
+    downstream: [GEOM.CLIP, GEOM.PARAMBUF, GEOM.DEPTHQUANT, GEOM.PARAMARENA]
     backpressure: ready_valid
     latency: fixed:36
     target_throughput: 1 projected vertex per clock
@@ -5386,8 +5470,12 @@ blocks:
     owner_issue: ZH-056
     inputs: [view_vertices]
     outputs: [clipped_triangles]
-    upstream: [GEOM.PROJECT, TERRAIN.PROJECT, GEOM.ASSEMBLE]
-    downstream: [GEOM.SETUP]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
+    upstream: [GEOM.PROJECT, TERRAIN.PROJECT, GEOM.ASSEMBLE, GEOM.CLIPDOOR, GEOM.REPLAY]
+    downstream: [GEOM.SETUP, GEOM.VERTID]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 accepted triangle per clock
@@ -5459,7 +5547,11 @@ blocks:
     # producer today -- GEOM.REPLAY, through `u_material_window` -- and it is
     # wired to GEOM.CLIP DIRECTLY, not through this block. The other three are
     # the customers the door exists for.
-    upstream: [GEOM.REPLAY, PART.EXPAND, FORGE.PRIM, FORGE.SHADOW]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
+    upstream: [GEOM.REPLAY, PART.EXPAND, FORGE.PRIM, FORGE.SHADOW, PART.CLIPFEED]
     downstream: [GEOM.CLIP]
     backpressure: ready_valid
     # CORRECTED 2026-09-29. The vocabulary is fixed:N | variable |
@@ -5835,8 +5927,12 @@ blocks:
     owner_issue: ZH-083
     inputs: [meshlet_stream, index_stream]
     outputs: [triangle_descriptors]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
     upstream: [GEOM.MESHFETCH, GEOM.ASSETFETCH]
-    downstream: [GEOM.CLIP, GEOM.PARAMBUF]
+    downstream: [GEOM.CLIP, GEOM.PARAMBUF, GEOM.PARAMARENA, GEOM.REPLAY]
     backpressure: ready_valid
     latency: variable
     target_throughput: see contract
@@ -5885,8 +5981,12 @@ blocks:
     owner_issue: ZH-129
     inputs: [sealed_groups, triangle_descriptors, cached_vertices]
     outputs: [view_triangles]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
     upstream: [GEOM.ASSEMBLE, GEOM.WCACHE, GEOM.DEPTHQUANT]
-    downstream: [GEOM.CLIP]
+    downstream: [GEOM.CLIP, GEOM.CLIPDOOR]
     backpressure: ready_valid
     latency: variable
     target_throughput: see contract
@@ -5927,7 +6027,11 @@ blocks:
     owner_issue: ZH-085
     inputs: [world_normal, environment]
     outputs: [vertex_rgb]
-    upstream: [GEOM.SKIN, GEOM.SKIN.NORM]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
+    upstream: [GEOM.SKIN, GEOM.SKIN.NORM, GEOM.WARP]
     downstream: [GEOM.PROJECT]
     backpressure: ready_valid
     latency: variable
@@ -5989,8 +6093,12 @@ blocks:
     owner_issue: ZH-086
     inputs: [projected_w, depth_profile]
     outputs: [invw24]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
     upstream: [GEOM.PROJECT]
-    downstream: [RASTER.EARLYZ]
+    downstream: [RASTER.EARLYZ, GEOM.REPLAY]
     backpressure: ready_valid
     latency: variable
     target_throughput: see contract
@@ -6062,8 +6170,12 @@ blocks:
     owner_issue: ZH-058
     inputs: [setup_triangles, token_grant]
     outputs: [tile_lists]
-    upstream: [GEOM.SETUP, MEASURE.TOKENS, GEOM.PARAMBUF]
-    downstream: [RASTER.EDGEWALK, GEOM.PARAMBUF]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
+    upstream: [GEOM.SETUP, MEASURE.TOKENS, GEOM.PARAMBUF, GEOM.PARAMWALK]
+    downstream: [RASTER.EDGEWALK, GEOM.PARAMBUF, GEOM.PARAMARENA]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 bin reference per clock
@@ -6975,8 +7087,12 @@ blocks:
     owner_issue: ZH-065
     inputs: [ladder_assignments]
     outputs: [expanded_particles]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
     upstream: [PART.LADDER]
-    downstream: [GEOM.SETUP]
+    downstream: [GEOM.SETUP, GEOM.CLIPDOOR, PART.CLIPFEED]
     backpressure: ready_valid
     latency: fixed:1
     target_throughput: 1 expanded particle per clock
@@ -7066,8 +7182,12 @@ blocks:
     owner_issue: ZH-087
     inputs: [shadow_caster, terrain_height]
     outputs: [forge_primitives]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
     upstream: [CMD.SCHEDULER]
-    downstream: [GEOM.SETUP]
+    downstream: [GEOM.SETUP, GEOM.CLIPDOOR]
     backpressure: ready_valid
     latency: variable
     target_throughput: see contract
@@ -7188,8 +7308,12 @@ blocks:
     owner_issue: ZH-044
     inputs: [dispatch]
     outputs: [forge_primitives]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
     upstream: [CMD.SCHEDULER]
-    downstream: [GEOM.SETUP]
+    downstream: [GEOM.SETUP, GEOM.CLIPDOOR]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 emitted vertex per clock
@@ -7409,7 +7533,11 @@ blocks:
     owner_issue: ZH-068
     inputs: [dispatch]
     outputs: [plane_fragments]
-    upstream: [CMD.SCHEDULER]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
+    upstream: [CMD.SCHEDULER, TWOD.CMD]
     downstream: [POST.COMPOSITE]
     backpressure: ready_valid
     latency: variable
@@ -7449,7 +7577,11 @@ blocks:
     owner_issue: ZH-069
     inputs: [dispatch]
     outputs: [sprite_fragments]
-    upstream: [CMD.SCHEDULER]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
+    upstream: [CMD.SCHEDULER, TWOD.BAND]
     downstream: [POST.COMPOSITE]
     backpressure: ready_valid
     latency: variable
@@ -7511,8 +7643,12 @@ blocks:
     owner_issue: ZH-069
     inputs: [dispatch, sprite_fragments]
     outputs: [sprite_fragments]
-    upstream: [CMD.SCHEDULER, TWOD.SAMPLER]
-    downstream: [TWOD.SPRITE, POST.COMPOSITE]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
+    upstream: [CMD.SCHEDULER, TWOD.SAMPLER, TWOD.CMD]
+    downstream: [TWOD.SPRITE, POST.COMPOSITE, TWOD.CMD]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 HUD pixel written and 1 read per clock
@@ -7939,7 +8075,11 @@ blocks:
     owner_issue: ZH-070
     inputs: [dispatch, lowres_buffers, plane_fragments, sprite_fragments]
     outputs: [fb_tiles]
-    upstream: [CMD.SCHEDULER, POST.GATHER, TWOD.PLANE, TWOD.SPRITE]
+    # REVERSE EDGES ADDED 2026-09-29 (marked <-): rule V7 checks edge SYMMETRY,
+    # and these were declared on the OTHER block only -- newer rows named their
+    # neighbours and the neighbours were never edited back. Symmetrising declares
+    # no new relationship; it records an existing one from both ends.
+    upstream: [CMD.SCHEDULER, POST.GATHER, TWOD.PLANE, TWOD.SPRITE, TWOD.BAND]
     downstream: [VIDEO.SCANOUT, POST.ECHO]
     backpressure: ready_valid
     latency: variable
