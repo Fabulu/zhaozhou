@@ -6525,3 +6525,52 @@ evidence -- so a row can be BORN at any height on one evidence file, which is wh
 Fit attempt 3 still alive, ~90 min wall, peak 4.43 GB, and it measures the current design.
 
 All of the above is in `reports/LEDGER-RULE-STAGE-20260929.md` with the evidence.
+
+---
+
+## 11:40 -- THE FULL CONSOLE SYNTHESIZES. It is 341% of the device. Placement was killed.
+
+**Analysis & Synthesis: Successful**, `zhao_console_core`, zero errors, 11:30:28. First
+whole-console synthesis of this campaign.
+
+    ALMs needed (estimate)   212,198  vs 41,910   506%
+    Combinational ALUTs      285,628  vs 83,820   341%
+    Registers                256,111
+    Block memory bits      3,411,015  vs ~5.66Mb  ~60%
+    DSP blocks                   128  vs    112   114%
+
+**Placement never finished and the fit was the VICTIM, not the cause.** `quartus_fit` started
+at 11:30 and was killed eight minutes in by Claude Code's background memory-pressure reaper.
+The fit held 3.57 GB and had peaked at 4.43 GB across 83 minutes of synthesis; the machine's
+largest consumer at the kill was a **29-process `cc1plus` fleet at 13.79 GB** from another
+session, free 4.47 GB of 63.4 GB. So there is no post-fit ALM and no Fmax, and nothing in the
+fit to debug. **NOT restarted** -- the reaper says memory may still be short and to restart
+only when asked.
+
+**Reports preserved into `reports/synthesis/console_core_map_20260929/`** before the temp
+workspace could disappear: the summary, the flow log, the first 4,000 lines of the
+110,224-line map report, and the per-entity resource table extracted whole.
+
+**The store repair is independently corroborated.** V1 measured 293,886 comb ALUTs; this run
+reads 285,628. The 8,258 drop sits within 1% of the -8,177 that the `zhao_field_v3_exec` store
+repair measured standalone at PLAN=48 -- a leaf measurement and a whole-design measurement
+agreeing on the size of the same change.
+
+**Where the ALUTs are:** render path dominates (shell 59,720 > binner 43,673 > tile pipe
+41,409 > texture stage 21,316), FIELD next at 33,858. TWO CAUTIONS recorded with it, because
+this is exactly the table that gets read as a target list too early: the totals are NESTED and
+must not be summed (u_fabric 24,276 + u_svc 21,929 already exceeds their apparent parent
+u_field_host 33,858, so the containment is not what the indentation suggests), and the listed
+entries account for only ~105k of 285,628 -- two thirds sits below the 2,500-ALUT cut, so the
+biggest lever may not be on that page.
+
+**A provenance gap to fix:** no `.sources.sha256` survived, because
+`run_block_fit.ps1` writes it INSIDE the disposable temp workspace. A digest that cannot
+outlive the run it describes is not a provenance record. The launch banner's
+`source digest: abf0c8d52952 over 299 file(s)` is all that remains.
+
+**Next, in order:** (1) the source-id plumbing on TERRAIN.MATJOIN and TERRAIN.EDGERECON, which
+was blocked only by the running fit and is now unblocked; (2) read the full nesting out of the
+map report before naming any optimization target; (3) the 164 V20 investigations. The fit
+restarts when the owner asks, and the machine wants the other session's compile fleet to
+finish first.
