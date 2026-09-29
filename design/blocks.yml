@@ -5250,6 +5250,10 @@ blocks:
     maturity_log:
       - state: UNIT_VERIFIED
         date: "2026-09-21"
+        # commit ADDED 2026-09-29: the commit that ADDED this entry's own evidence file,
+        # which is the tree at which the state became demonstrable. It corroborates the
+        # date already recorded above, to the day.
+        commit: "15b0ccc5"
         evidence: tests/geometry/geom_clipdoor_directed.cpp
     deferred: false
     cut_order: null
@@ -5365,9 +5369,27 @@ blocks:
     maturity_log:
       - state: UNIT_VERIFIED
         date: "2026-09-22"
+        # commit ADDED 2026-09-29: the commit that ADDED this entry's own evidence file,
+        # which is the tree at which the state became demonstrable. It corroborates the
+        # date already recorded above, to the day.
+        commit: "3ce19cfb"
         evidence: tests/particles/part_clipfeed_directed.cpp
-      - state: COMPOSED
+        # COMPOSED IS NOT ON THE LADDER, corrected 2026-09-29. The vocabulary is SPECIFIED /
+        # REFERENCE_COMPLETE / UNIT_VERIFIED / RTL_VERIFIED / SYNTHESIZED / INTEGRATED /
+        # HARDWARE_PROVEN. This is the THIRD invalid maturity value found today, after BUILT
+        # on three blocks -- the vocabulary is being written from memory rather than read.
+        #
+        # INTEGRATED, and it is a decision: "composed" here means wired into
+        # zhao_console_core, which is what INTEGRATED names, and this entry's evidence is a
+        # PRODUCTION acceptance test -- integration evidence rather than unit evidence.
+        # Nothing higher is claimed: SYNTHESIZED would assert a fit this entry does not cite,
+        # and HARDWARE_PROVEN a board run no block has had.
+      - state: INTEGRATED
         date: "2026-09-22"
+        # commit ADDED 2026-09-29: the commit that ADDED this entry's own evidence file,
+        # which is the tree at which the state became demonstrable. It corroborates the
+        # date already recorded above, to the day.
+        commit: "d91f308b"
         evidence: tests/prod/partmat_acceptance.cpp
     deferred: false
     cut_order: null
@@ -6389,9 +6411,17 @@ blocks:
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-09-05"
+        # commit ADDED 2026-09-29: the commit that ADDED this entry's own evidence file,
+        # which is the tree at which the state became demonstrable. It corroborates the
+        # date already recorded above, to the day.
+        commit: "42f49f95"
         evidence: reference/include/zref/zref_material_resolve.hpp + tests/texture/material_resolve_directed.cpp (32 checks)
       - state: UNIT_VERIFIED
         date: "2026-09-19"
+        # commit ADDED 2026-09-29: the commit that ADDED this entry's own evidence file,
+        # which is the tree at which the state became demonstrable. It corroborates the
+        # date already recorded above, to the day.
+        commit: "569841da"
         evidence: >-
           fpga/rtl/texture/zhao_material_resolve.sv, differenced against
           zref::material::Resolver by tests/texture/material_resolve_rtl_directed.cpp
