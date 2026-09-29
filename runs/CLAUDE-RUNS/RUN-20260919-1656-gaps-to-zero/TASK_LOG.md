@@ -6121,3 +6121,57 @@ eight more field tests all pass.
 
 **NEXT, in order, and none of it touches the fit's closure while it runs:** the
 `ledger_check` 96 schema errors; then the shell-fit policy drift; then the captures.
+
+#### THE CONSOLE FIT WAS KILLED BY MEMORY PRESSURE AT ~22 MINUTES. NO MEASUREMENT.
+
+2026-09-29. Launched 07:38:31 from clean `c033dc00`, `run_block_fit.ps1 -Module
+zhao_console_core`, 299 sources, snapshot digest `abf0c8d52952`. Stopped during
+`quartus_map` at about 20 CPU minutes and 4 GB resident, **not by any fault of its
+own**: the harness reaps background shells when the machine runs critically low on
+memory, and it did. I am not restarting it on my own -- that is the harness's explicit
+instruction, and memory may still be short.
+
+**IT PRODUCED NOTHING TO READ.** No fit row, no ALM figure, no Fmax, no timing. The only
+artifact is `reports/synthesis/blockpaths/zhao_console_core.sources.sha256`, which
+records which 299 files were snapshotted and is left in place because the same tree
+reproduces the same digest on the next attempt. **Do not quote a console area or clock
+from this run; there is none.** The fit ledger's most recent two `zhao_console_core`
+rows remain `map_only` with no ALM and no Fmax, so a full PLACED console fit has still
+never completed.
+
+**WHY THE MACHINE WAS SHORT, measured rather than guessed.** Three things were resident
+at once: this fit at 4 GB, a full `cmake --build` of this tree, and **another lane's
+gate** -- the process tree showed a second ctest whose children are
+`_lanes/upheaval-coord/build/gate11/test_gpu_device.exe` and `test_impact_fx.exe`. That
+lane's work was left alone. Free memory is back to 14.4 GB of 63.4 GB now that the fit
+is gone.
+
+**THE LESSON FOR THE NEXT ATTEMPT, and it is not "retry".** A four-hour fit and a
+concurrent full build and another repo's GPU gate do not coexist on this machine. The
+fit is the scarce resource; it should get the machine to itself. That is a scheduling
+constraint this log did not previously record.
+
+**WHERE THE WORK STANDS, unchanged by the kill** -- all of it is outside the fit's
+closure and all of it is pushed:
+
+* the uop store repair is landed and confirmed on PRODUCTION RTL at PLAN=48
+  (`zhao_field_v3_exec@repaired`: 1,862 reg / 2,110 ALUT / 2,016 ALM / 48,384 mem, with
+  `store_rtl_0` inferred 60 x 384 Simple Dual Port);
+* `check_prod_manifest.py` FAILED -> OK;
+* the full `cmake --build` broken -> clean (21 stale Verilator partition dirs);
+* the manifest's Field-host `INSTR_N` corrected 32 -> 48 with `PCW: 6`;
+* `counter_ids_append_only` FAILED -> passes (44 names appended, lock untouched);
+* `ledger_check` 96 -> 68 errors, every value measured from the tree or from git.
+
+**STILL FIRST IN LINE, and it needs no fit:** the `terr_vj_sweeps_aborted_o`
+misattribution in `FINDINGS-veljoin-counter.md`. It waited only to keep a commit from
+landing between the fit's snapshot and HEAD. **That reason is now gone**, so it can be
+done immediately -- and it must be done before the next fit attempt, because it adds
+about 32 flops and an incrementer to the console and a fit taken before it measures an
+arrangement we already know is wrong.
+
+**The three suite timeouts were contention, now proven.** `texjoin_accounting_retirement`
+timed out at 600 s inside the suite twice and completes in seconds when run alone at
+RC 0. `render_texture_packet_a` and `field_host_v2_r126_guard` are the same shape. The
+other ~35 reds are persistent and belong to other lanes' packets -- a serial re-run on
+the settled tree returned 38 of 39, which is what established the distinction.
