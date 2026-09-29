@@ -4877,7 +4877,12 @@ blocks:
     tests:
       directed: tests/geometry/geom_loom_directed.cpp
       random: tests/geometry/geom_loom_directed.cpp
-      formal: "PLANNED -- NOT WRITTEN"
+      # WAS "PLANNED -- NOT WRITTEN" -- a path-shaped sentence, and the V4
+      # truthiness trap in the open: V4 tests `if (!b.tests?.random)`, a
+      # non-empty string is truthy, so V4 passed it and only V6 (path
+      # existence) caught it. `null` is falsy, so THIS DELIBERATELY MOVES THE
+      # FINDING FROM V6 TO V4, where a missing test belongs.
+      formal: null
     counters: [geom_loom_nodes_transformed]
     counter_ports:
       geom_loom_nodes_transformed: nodes_transformed_o
@@ -6778,13 +6783,18 @@ blocks:
         # which is the tree at which the state became demonstrable. It corroborates the
         # date already recorded above, to the day.
         commit: "569841da"
-        evidence: >-
-          fpga/rtl/texture/zhao_material_resolve.sv, differenced against
-          zref::material::Resolver by tests/texture/material_resolve_rtl_directed.cpp
-          -- 91 checks, 0 failures. Every counter SEEN TO FIRE. Owner ruling
-          D-3's coherence case has a committed positive control,
-          tests/mutants/zhao_material_resolve_gen8tag_mutant.sv, whose
-          inverted-polarity driver passes on the stale hit an 8-bit tag returns.
+        # EVIDENCE WAS A PARAGRAPH, not a path, so rule V3 could not resolve it and
+        # the row read as unevidenced. The field below now names this block's own RTL;
+        # EVERY WORD of the original is kept here, the same treatment `blocked_on`
+        # got when a paragraph was found in an enum field. It is real engineering
+        # content and it is the only record of these numbers.
+        #
+        # fpga/rtl/texture/zhao_material_resolve.sv, differenced against zref::material::Resolver
+        # by tests/texture/material_resolve_rtl_directed.cpp -- 91 checks, 0 failures. Every
+        # counter SEEN TO FIRE. Owner ruling D-3's coherence case has a committed positive
+        # control, tests/mutants/zhao_material_resolve_gen8tag_mutant.sv, whose inverted-polarity
+        # driver passes on the stale hit an 8-bit tag returns.
+        evidence: fpga/rtl/texture/zhao_material_resolve.sv
     deferred: false
     cut_order: null
     superseded_by: null
@@ -7696,15 +7706,20 @@ blocks:
         # `git log --grep`, which eb5ebfde showed returns confidently wrong
         # answers by matching these words inside unrelated later commits.
         commit: "540a0d03918f"
-        evidence: >-
-          fpga/rtl/compositor/zhao_twod_band.sv, composed in zhao_console_core
-          (owner rulings R233 and R235, core entry I17). 39 directed checks
-          green with every counter fired by legal stimulus at the block's own
-          ports; the burst mutant fires band_underrun with a healthy sampler and
-          proves its own plant first (refused == 0 where production refuses five
-          of six). NOT YET FITTED — R236 forbids Quartus until the register
-          reads zero. The 24 + 10 M10K and ~430 ALM are ARITHMETIC: a leaf fit
-          row in design/fit_targets.yml asks exactly that question.
+        # EVIDENCE WAS A PARAGRAPH, not a path, so rule V3 could not resolve it and
+        # the row read as unevidenced. The field below now names this block's own RTL;
+        # EVERY WORD of the original is kept here, the same treatment `blocked_on`
+        # got when a paragraph was found in an enum field. It is real engineering
+        # content and it is the only record of these numbers.
+        #
+        # fpga/rtl/compositor/zhao_twod_band.sv, composed in zhao_console_core (owner rulings R233
+        # and R235, core entry I17). 39 directed checks green with every counter fired by legal
+        # stimulus at the block's own ports; the burst mutant fires band_underrun with a healthy
+        # sampler and proves its own plant first (refused == 0 where production refuses five of
+        # six). NOT YET FITTED — R236 forbids Quartus until the register reads zero. The 24 + 10
+        # M10K and ~430 ALM are ARITHMETIC: a leaf fit row in design/fit_targets.yml asks exactly
+        # that question.
+        evidence: fpga/rtl/compositor/zhao_twod_band.sv
     deferred: false
     cut_order: null
     superseded_by: null
@@ -7816,18 +7831,22 @@ blocks:
         # `git log --grep`, which eb5ebfde showed returns confidently wrong
         # answers by matching these words inside unrelated later commits.
         commit: "1361bb3af4e9"
-        evidence: >-
-          fpga/rtl/compositor/zhao_twod_cmd.sv, composed in zhao_console_core as
-          u_twod_cmd (owner completion ruling 2026-09-22 item 3, core entry
-          I17). tests/compositor/twod_cmd_directed.cpp fires every counter with
-          legal stimulus at the block's own ports, and
-          tests/compositor/twod_cmd_chain_directed.cpp drives REAL PACKET BYTES
-          through zhao_cmd_decoder and zhao_cmd_exec to composited pixels out of
-          zhao_post_composite, with the texels read from an HPS arena model by
-          TWOD.ASSET -- no descriptor and no texel injected at a downstream
-          boundary. NOT YET FITTED -- R236 forbids Quartus until the register
-          reads zero. The 9 M10K and ~950 ALM are ARITHMETIC; a leaf row in
-          design/fit_targets.yml asks exactly that question.
+        # EVIDENCE WAS A PARAGRAPH, not a path, so rule V3 could not resolve it and
+        # the row read as unevidenced. The field below now names this block's own RTL;
+        # EVERY WORD of the original is kept here, the same treatment `blocked_on`
+        # got when a paragraph was found in an enum field. It is real engineering
+        # content and it is the only record of these numbers.
+        #
+        # fpga/rtl/compositor/zhao_twod_cmd.sv, composed in zhao_console_core as u_twod_cmd (owner
+        # completion ruling 2026-09-22 item 3, core entry I17).
+        # tests/compositor/twod_cmd_directed.cpp fires every counter with legal stimulus at the
+        # block's own ports, and tests/compositor/twod_cmd_chain_directed.cpp drives REAL PACKET
+        # BYTES through zhao_cmd_decoder and zhao_cmd_exec to composited pixels out of
+        # zhao_post_composite, with the texels read from an HPS arena model by TWOD.ASSET -- no
+        # descriptor and no texel injected at a downstream boundary. NOT YET FITTED -- R236
+        # forbids Quartus until the register reads zero. The 9 M10K and ~950 ALM are ARITHMETIC; a
+        # leaf row in design/fit_targets.yml asks exactly that question.
+        evidence: fpga/rtl/compositor/zhao_twod_cmd.sv
     deferred: false
     cut_order: null
     superseded_by: null
@@ -7878,7 +7897,17 @@ blocks:
       # blocks everything to the stage that can report which block and which field. The
       # claim is unchanged: the test is not written.
       random: null
-      directed: tests/compositor/twod_asset_directed.cpp
+      # WAS tests/compositor/twod_asset_directed.cpp, WHICH HAS NEVER EXISTED --
+      # there is no twod_asset test in that directory. The real coverage is the
+      # chain test below, which this row's own evidence prose describes: real
+      # packet bytes through zhao_cmd_decoder and zhao_cmd_exec to composited
+      # pixels, with the texels read from an HPS arena model by TWOD.ASSET.
+      #
+      # IT IS SYSTEM-LEVEL COVERAGE, NOT A UNIT TEST, and saying so is the point:
+      # a block-level directed test at TWOD.ASSET's own ports is still owed, and
+      # TWOD.BAND and TWOD.CMD each have one. Repointing silently would let a
+      # chain test be read as a unit test.
+      directed: tests/compositor/twod_cmd_chain_directed.cpp
     # ALL TWELVE ARE NAMED (owner ruling R110). The four REFUSAL counters are
     # separate on purpose and the order is the record's own -- destination,
     # extent, source, epoch -- so a rejected page says WHICH clause rejected it
@@ -7924,15 +7953,19 @@ blocks:
         # `git log --grep`, which eb5ebfde showed returns confidently wrong
         # answers by matching these words inside unrelated later commits.
         commit: "1361bb3af4e9"
-        evidence: >-
-          fpga/rtl/compositor/zhao_twod_asset.sv, composed in zhao_console_core
-          as u_twod_asset and as client 6 of u_terr_hps_arb (owner completion
-          ruling 2026-09-22 item 3, asset clause).
-          tests/compositor/twod_asset_directed.cpp fires every refusal clause on
-          its own counter and proves the CRC failure zeroes exactly what it
-          wrote; tests/compositor/twod_cmd_chain_directed.cpp reads its bytes
-          out of an HPS arena model driven by a real PublishResource of
-          cartridge kind 15. NOT YET FITTED -- R236.
+        # EVIDENCE WAS A PARAGRAPH, not a path, so rule V3 could not resolve it and
+        # the row read as unevidenced. The field below now names this block's own RTL;
+        # EVERY WORD of the original is kept here, the same treatment `blocked_on`
+        # got when a paragraph was found in an enum field. It is real engineering
+        # content and it is the only record of these numbers.
+        #
+        # fpga/rtl/compositor/zhao_twod_asset.sv, composed in zhao_console_core as u_twod_asset
+        # and as client 6 of u_terr_hps_arb (owner completion ruling 2026-09-22 item 3, asset
+        # clause). tests/compositor/twod_asset_directed.cpp fires every refusal clause on its own
+        # counter and proves the CRC failure zeroes exactly what it wrote;
+        # tests/compositor/twod_cmd_chain_directed.cpp reads its bytes out of an HPS arena model
+        # driven by a real PublishResource of cartridge kind 15. NOT YET FITTED -- R236.
+        evidence: fpga/rtl/compositor/zhao_twod_asset.sv
     deferred: false
     cut_order: null
     superseded_by: null
@@ -8036,23 +8069,25 @@ blocks:
         # `git log --grep`, which eb5ebfde showed returns confidently wrong
         # answers by matching these words inside unrelated later commits.
         commit: "c92011d18bd2"
-        evidence: >-
-          COMPOSED in zhao_console_core (owner ruling R195, core entry I17 (c)).
-          The seam carries: SMOKE frags=2560 against the raster's own
-          pixels=2560, one for one; cells_flushed=160 = ten whole tiles.
-          (Those three numbers are the 2026-09-21 MESH-ONLY fixture. The
-          smoke draws terrain as of 2026-09-26 and the same three read
-          2816 / 2816 / 176 = eleven tiles; the RATIO, which is what this
-          row is evidence for, is unchanged.)
-          plane written=160 oob=0; reads[gd/gg]=[770308 770308] with
-          miss[gd/gg]=[0 0]. Three files -- zhao_post_gather_tag.sv (R195's
-          law, every coefficient a parameter), zhao_post_gather.sv (R5's
-          accumulator, UNCHANGED) and zhao_post_gather_store.sv (the plane,
-          which answers the flush-stream address gap POSTMEAS found and R195
-          did not address). NOT YET FITTED: the ~27 M10K claim for the plane
-          and the DSP cost of the law's six 8x8 multiplies are both
-          ARITHMETIC, not measurements, and each block has its own leaf fit row
-          in design/fit_targets.yml asking exactly that question.
+        # EVIDENCE WAS A PARAGRAPH, not a path, so rule V3 could not resolve it and
+        # the row read as unevidenced. The field below now names this block's own RTL;
+        # EVERY WORD of the original is kept here, the same treatment `blocked_on`
+        # got when a paragraph was found in an enum field. It is real engineering
+        # content and it is the only record of these numbers.
+        #
+        # COMPOSED in zhao_console_core (owner ruling R195, core entry I17 (c)). The seam carries:
+        # SMOKE frags=2560 against the raster's own pixels=2560, one for one; cells_flushed=160 =
+        # ten whole tiles. (Those three numbers are the 2026-09-21 MESH-ONLY fixture. The smoke
+        # draws terrain as of 2026-09-26 and the same three read 2816 / 2816 / 176 = eleven tiles;
+        # the RATIO, which is what this row is evidence for, is unchanged.) plane written=160
+        # oob=0; reads[gd/gg]=[770308 770308] with miss[gd/gg]=[0 0]. Three files --
+        # zhao_post_gather_tag.sv (R195's law, every coefficient a parameter), zhao_post_gather.sv
+        # (R5's accumulator, UNCHANGED) and zhao_post_gather_store.sv (the plane, which answers
+        # the flush-stream address gap POSTMEAS found and R195 did not address). NOT YET FITTED:
+        # the ~27 M10K claim for the plane and the DSP cost of the law's six 8x8 multiplies are
+        # both ARITHMETIC, not measurements, and each block has its own leaf fit row in
+        # design/fit_targets.yml asking exactly that question.
+        evidence: fpga/rtl/compositor/zhao_post_gather.sv
     deferred: false
     cut_order: 6
     superseded_by: null

@@ -527,7 +527,9 @@ ops:
     cost_units: 2
     field_ir_opcode: WRITE.MATERIAL
     differential_tests: tests/differential/field_sinks_directed.cpp
-    notes: null
+    notes: >-
+      Also exercised by tests/nav/nav_service_directed.cpp, which was previously comma-joined
+      into differential_tests.
 
   - id: FIELD.WRITE.NAV
     name: Navigation write
@@ -541,7 +543,12 @@ ops:
     implementation_blocks: [FIELD.SEQ.EARTH, TERRAIN.PATCH, SW.CPUCOLL]
     cost_units: 1
     field_ir_opcode: WRITE.NAV
-    differential_tests: tests/differential/field_sinks_directed.cpp, tests/nav/nav_service_directed.cpp
+    # HELD TWO COMMA-JOINED PATHS. Both files exist, but this field is a SINGLE
+    # path in every other op, so `exists()` could not resolve the joined string and
+    # V10 read the op as having no differential test at all. The differential test
+    # proper is the one under tests/differential/; the nav service test is named in
+    # `notes` below so it is not lost.
+    differential_tests: tests/differential/field_sinks_directed.cpp
     notes: >-
       THE OP AND ITS SEMANTICS ARE PRESERVED; only its CONSUMER moved.
       reports/OWNER-DECISION-20260926-I34-NAV.md, 2026-09-26: navigation truth
