@@ -1,3 +1,40 @@
+> # REFUTED THE SAME HOUR, BY ITS OWN PREDICTION
+>
+> **Everything below is wrong about the CAUSE.** It predicted that variant R1 --
+> the read lifted out of both enables, address left combinational -- would
+> **still fail**. R1 **INFERRED**:
+>
+> | | production (PLAN=48) | R1 |
+> |---|---:|---:|
+> | registers | 24,962 | **1,862** |
+> | comb ALUTs | 10,287 | 2,110 |
+> | memory bits | 25,344 | **48,384** |
+> | verdict | UNINFERRED | **INFERRED** (`store_rtl_0`, Simple Dual Port) |
+>
+> **+23,040 memory bits is exactly 384 x 60**, and registers fell by 23,100. So
+> the array CAN be an M10K and **the read address is NOT the blocker**. One of
+> the two enables is.
+>
+> **What survives from below:** the size (confirmed a third time), the fact that
+> `lq_s0_r` and `lq_imm_r` infer in the same `always_ff`, and the observation
+> that Quartus's "asynchronous read logic" wording does not mean what it appears
+> to mean. **What does not survive:** the claim that a combinational read address
+> prevents inference, and the generalised V2 rule drawn from it -- "an array
+> addressed by a combinational select cannot be banked" -- which is now
+> unsupported and must not be reused.
+>
+> **The specific error is worth naming.** I found a real correlation -- the
+> arrays that infer have registered addresses, the one that fails does not -- and
+> promoted it to a mechanism without testing it. The tool-note I quoted
+> (FLOPARRAY's "the read address was ALREADY REGISTERED") describes a case where
+> a registered address *helped*; it never said a combinational one *prevents*.
+> I read a sufficient condition as a necessary one.
+>
+> Next: R3a isolates `issue_c`, which depends on `s1_uop_r.op` -- the store's own
+> read output -- and is therefore hypothesis 2, the one probe STYLE=3 appeared to
+> eliminate. **A synthetic probe that infers eliminates nothing**, and that is the
+> durable lesson of this round.
+
 # Why the uop store does not infer: the READ ADDRESS is combinational
 
 Coordinator, 2026-09-29. **Status: hypothesis with strong in-module evidence and
