@@ -111,7 +111,9 @@ module zhao_mem_guard
   // 5f.1). A region that does not lie wholly inside the asset pool OPENS
   // NOTHING -- it is refused, not clamped. Tie `res_valid` low on a guard
   // instance whose client is never TERRAIN_BUILD.
-  // ENFORCED-BY: tests/formal/formal_mem_guard.sv:a1_resource_*
+  // ENFORCED-BY: tests/formal/formal_mem_guard.sv:a1_resource_bounded
+  // (was `a1_resource_*`. V20 matches the symbol LITERALLY, so naming a FAMILY
+  // names no assertion at all; that family has exactly one member.)
   input  logic        res_valid,
   input  logic [31:0] res_base,
   input  logic [31:0] res_span,
@@ -156,7 +158,13 @@ module zhao_mem_guard
   // admitted it. That drain precondition is the protection, it is counted by
   // `view_flip_blocked_o`, and `tests/mutants/zhao_geom_paramarena_drain_mutant.sv`
   // is the committed fault that removes it and makes the directed test FAIL.
-  // ENFORCED-BY: tests/formal/formal_mem_guard.sv:a1_pb_*
+  // ENFORCED-BY: tests/formal/formal_mem_guard.sv:a1_pb_lease
+  // ENFORCED-BY: tests/formal/formal_mem_guard.sv:a1_pb_wr_view0
+  // ENFORCED-BY: tests/formal/formal_mem_guard.sv:a1_pb_scr_owned
+  // (was `a1_pb_*`, which resolves to nothing -- V20 matches the symbol LITERALLY.
+  // Seventeen a1_pb_* theorems stand in the same cone; the three named above are the
+  // lease, the write-view arm and the scratch ownership, and the remaining fourteen
+  // are their siblings rather than separate laws.)
   input  logic        pb_lease_valid,
   input  logic        pb_wr_view,
   input  logic        pb_scratch_valid,
@@ -416,9 +424,12 @@ module zhao_mem_guard
   // `zhao_terrain_devstore`'s `slot_addr_bad_o` watches from inside the block,
   // where the slot the read was STARTED for and the address the burst was
   // ISSUED at are two registers loaded by two different enables.
-  // ENFORCED-BY: tests/formal/mem_guard_no_escape.sby, and the committed
-  // mutant tests/mutants/zhao_mem_guard_devbound_mutant.sv (the upper bound
-  // removed) that makes that proof FAIL.
+  // ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
+  // ...and the committed mutant tests/mutants/zhao_mem_guard_devbound_mutant.sv
+  // (the upper bound removed) that makes that proof FAIL.
+  // The prose sits on its own lines because V20 captures the reference up to
+  // whitespace: a comma directly after `.sby` became part of the path, and the
+  // failure then read as a missing FILE rather than as punctuation.
   logic devstore_wr_ok, devstore_rd_ok;
   assign devstore_wr_ok = req.write
                         && (addr32 >= ZHAO_TERRAIN_DEVSTORE_BASE)
@@ -520,11 +531,14 @@ module zhao_mem_guard
   // containment is `zhao_geom_paramarena`'s, where the chunk free-list and
   // the reader-ownership bits live, and `arena_overrun_o` watches it from
   // inside the block.
-  // ENFORCED-BY: tests/formal/mem_guard_no_escape.sby, and the committed
-  // mutants tests/mutants/zhao_mem_guard_pbview_mutant.sv (the write arm's
-  // view selection removed) and zhao_mem_guard_pbunion_mutant.sv (the three
-  // containment tests collapsed to their union), each of which makes that
+  // ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
+  // ...and the committed mutants tests/mutants/zhao_mem_guard_pbview_mutant.sv (the
+  // write arm's view selection removed) and zhao_mem_guard_pbunion_mutant.sv (the
+  // three containment tests collapsed to their union), each of which makes that
   // proof FAIL.
+  // The prose sits on its own lines because V20 captures the reference up to
+  // whitespace: a comma directly after `.sby` became part of the path, and the
+  // failure then read as a missing FILE rather than as punctuation.
   logic pb_in_view0, pb_in_view1, pb_in_scratch;
   logic pb_rd_ok, pb_wr_ok, pb_scr_ok;
 
@@ -588,9 +602,12 @@ module zhao_mem_guard
   // framebuffer is refused whole rather than clamped into something legal-
   // looking. ENGINE1's read arm is untouched, so the asset pool gains a WRITER
   // and keeps its one READER.
-  // ENFORCED-BY: tests/formal/mem_guard_no_escape.sby, and the committed
-  // mutant tests/mutants/zhao_mem_guard_resbound_mutant.sv (the pool-
-  // containment term removed) that makes that proof FAIL.
+  // ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
+  // ...and the committed mutant tests/mutants/zhao_mem_guard_resbound_mutant.sv
+  // (the pool-containment term removed) that makes that proof FAIL.
+  // The prose sits on its own lines because V20 captures the reference up to
+  // whitespace: a comma directly after `.sby` became part of the path, and the
+  // failure then read as a missing FILE rather than as punctuation.
   logic [32:0] res_end33, end33;
   logic        res_in_pool, resource_wr_ok;
   assign res_end33   = {1'b0, res_base} + {1'b0, res_span};
