@@ -600,6 +600,64 @@ counter_catalog:
   - vertid_sunk
   - vertid_tris
   - vertid_unshared
+  # ---- 44 counters REGISTERED 2026-09-29, appended not sorted ----------------
+  # Declared by TERRAIN.MATJOIN, TERRAIN.MATPUB, TWOD.ASSET, TWOD.BAND, TWOD.CMD
+  # and reported by rule V12 as absent from this list. APPENDED, because
+  # spec/counters.md 2 makes a counter id its zero-based position here and the list
+  # append-only -- sorting the file would renumber live ids, which is the defect
+  # check_counter_ids.py was written after (frame_cycles, id 0 in zhao_pkg and in
+  # every wave-2 capture, had been pushed to index 150 by prepends).
+  #
+  # EACH ONE WAS CHECKED AGAINST THE RTL BEFORE BEING REGISTERED. All 44 resolve to a
+  # real output port through an explicit `counter_ports:` mapping in their own block.
+  # check_counters.py also reports 118 counters that resolve to NOTHING -- no port, no
+  # mapping, no snap channel. NONE of those is registered here: this list is an
+  # allowlist, so adding an unimplemented name would create a counter nobody can read
+  # and permanently silence V12 about it.
+  - terrain_matjoin_field_composed
+  - terrain_matjoin_held_overrun
+  - terrain_matjoin_token_refused
+  - terrain_matpub_bursts_written
+  - terrain_matpub_cell_oob
+  - terrain_matpub_cells_captured
+  - terrain_matpub_commit_busy
+  - terrain_matpub_commits
+  - terrain_matpub_guard_denied
+  - terrain_matpub_patches_published
+  - terrain_matpub_short_fill
+  - terrain_matpub_skipped_clean
+  - terrain_matpub_stranger_pub
+  - twod_asset_addr_refused
+  - twod_asset_bridge_errs
+  - twod_asset_bursts
+  - twod_asset_crc_fails
+  - twod_asset_epoch_refused
+  - twod_asset_len_refused
+  - twod_asset_loads_done
+  - twod_asset_loads_during_pass
+  - twod_asset_loads_started
+  - twod_asset_regions_zeroed
+  - twod_asset_slot_refused
+  - twod_asset_words_written
+  - twod_band_desc_mid_sweep
+  - twod_band_desc_overflow
+  - twod_band_pixels_written
+  - twod_band_sprites_admitted
+  - twod_band_sprites_refused_budget
+  - twod_band_underrun
+  - twod_cmd_bind_conflict
+  - twod_cmd_frames_sealed
+  - twod_cmd_list_overflow
+  - twod_cmd_packets_abandoned
+  - twod_cmd_packets_committed
+  - twod_cmd_plane_refused
+  - twod_cmd_planes_published
+  - twod_cmd_planes_staged
+  - twod_cmd_seal_overrun
+  - twod_cmd_slots_auto_disabled
+  - twod_cmd_sprite_refused
+  - twod_cmd_sprites_published
+  - twod_cmd_sprites_staged
 blocks:
 
   # ===========================================================================
