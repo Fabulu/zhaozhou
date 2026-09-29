@@ -4892,9 +4892,21 @@ blocks:
       paramarena_burst_unaligned: burst_unaligned_o
     source_ids: true
     budget_group: geometry_mantle
-    maturity: BUILT
+    # THAT VALUE IS NOT ON THE LADDER, corrected 2026-09-29. The vocabulary is
+    # SPECIFIED / REFERENCE_COMPLETE / UNIT_VERIFIED / RTL_VERIFIED / SYNTHESIZED /
+    # INTEGRATED / HARDWARE_PROVEN, and the old value was never on it -- git log -p over
+    # the schema shows it neither added nor removed. Every tool that branches on maturity
+    # was reading something outside its own enum.
+    #
+    # UNIT_VERIFIED rather than the rung below, and that is a DECISION. The old value
+    # meant "the RTL exists" and the ladder has no rung for that alone. REFERENCE_COMPLETE
+    # is a claim about the reference model and is false here. This block carries a
+    # committed directed test and is not among the suite's failures, so UNIT_VERIFIED is
+    # what the tree supports. Choosing lower would not be the safe option: an understated
+    # maturity tells planning a block needs work it has already had.
+    maturity: UNIT_VERIFIED
     maturity_log:
-      - state: BUILT
+      - state: UNIT_VERIFIED
         date: "2026-09-22"
         # PINNED 2026-09-29. The field held 'PARAMARENA' -- a packet name, not a commit.
         # Resolved from the MERGE SUBJECT git generated for it (Merge PARAMARENA...),
@@ -4950,9 +4962,21 @@ blocks:
       vertid_stall: vid_stall_o
     source_ids: true
     budget_group: geometry_mantle
-    maturity: BUILT
+    # THAT VALUE IS NOT ON THE LADDER, corrected 2026-09-29. The vocabulary is
+    # SPECIFIED / REFERENCE_COMPLETE / UNIT_VERIFIED / RTL_VERIFIED / SYNTHESIZED /
+    # INTEGRATED / HARDWARE_PROVEN, and the old value was never on it -- git log -p over
+    # the schema shows it neither added nor removed. Every tool that branches on maturity
+    # was reading something outside its own enum.
+    #
+    # UNIT_VERIFIED rather than the rung below, and that is a DECISION. The old value
+    # meant "the RTL exists" and the ladder has no rung for that alone. REFERENCE_COMPLETE
+    # is a claim about the reference model and is false here. This block carries a
+    # committed directed test and is not among the suite's failures, so UNIT_VERIFIED is
+    # what the tree supports. Choosing lower would not be the safe option: an understated
+    # maturity tells planning a block needs work it has already had.
+    maturity: UNIT_VERIFIED
     maturity_log:
-      - state: BUILT
+      - state: UNIT_VERIFIED
         date: "2026-09-25"
         # PINNED 2026-09-29. The field held 'ARENAID' -- a packet name, not a commit.
         # Resolved from the MERGE SUBJECT git generated for it (Merge ARENAID...),
@@ -5009,9 +5033,21 @@ blocks:
       paramwalk_burst_unaligned: burst_unaligned_o
     source_ids: true
     budget_group: geometry_mantle
-    maturity: BUILT
+    # THAT VALUE IS NOT ON THE LADDER, corrected 2026-09-29. The vocabulary is
+    # SPECIFIED / REFERENCE_COMPLETE / UNIT_VERIFIED / RTL_VERIFIED / SYNTHESIZED /
+    # INTEGRATED / HARDWARE_PROVEN, and the old value was never on it -- git log -p over
+    # the schema shows it neither added nor removed. Every tool that branches on maturity
+    # was reading something outside its own enum.
+    #
+    # UNIT_VERIFIED rather than the rung below, and that is a DECISION. The old value
+    # meant "the RTL exists" and the ladder has no rung for that alone. REFERENCE_COMPLETE
+    # is a claim about the reference model and is false here. This block carries a
+    # committed directed test and is not among the suite's failures, so UNIT_VERIFIED is
+    # what the tree supports. Choosing lower would not be the safe option: an understated
+    # maturity tells planning a block needs work it has already had.
+    maturity: UNIT_VERIFIED
     maturity_log:
-      - state: BUILT
+      - state: UNIT_VERIFIED
         date: "2026-09-22"
         # PINNED 2026-09-29. The field held 'PARAMARENA' -- a packet name, not a commit.
         # Resolved from the MERGE SUBJECT git generated for it (Merge PARAMARENA...),
