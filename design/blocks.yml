@@ -3841,7 +3841,18 @@ blocks:
     upstream: [TERRAIN.LOD]
     downstream: [TERRAIN.LOD]
     backpressure: ready_valid
-    latency: fixed
+    # CORRECTED 2026-09-29. The vocabulary is fixed:N | variable |
+    # variable_bounded:N | batch | n/a (...). This field held:
+    #     fixed
+    # which is true and is not one of those. Every word of it is above; nothing is
+    # rounded and no number is invented.
+    # The old value said `fixed`, and the contract's own "## Latency" section gives a
+    # TABLE rather than a number: sweep `ENTRIES + 1 = 257`, one filed lane 2, one
+    # patch filed 32, one query 7. So `fixed` was wrong in KIND, not just in format --
+    # there is no single clock count. Every path is bounded and 257 bounds them all,
+    # which is what `variable_bounded` means. The per-query 7 is deliberately NOT used:
+    # it describes one path of four and would read as the whole block's cost.
+    latency: variable_bounded:257
     target_throughput: 1 query per patch per frame
     tests:
       directed: tests/terrain/terrain_edgerecon_directed.cpp
@@ -5219,7 +5230,14 @@ blocks:
     upstream: [GEOM.REPLAY, PART.EXPAND, FORGE.PRIM, FORGE.SHADOW]
     downstream: [GEOM.CLIP]
     backpressure: ready_valid
-    latency: 0 (combinational select on a registered grant)
+    # CORRECTED 2026-09-29. The vocabulary is fixed:N | variable |
+    # variable_bounded:N | batch | n/a (...). This field held:
+    #     0 (combinational select on a registered grant)
+    # which is true and is not one of those. Every word of it is above; nothing is
+    # rounded and no number is invented.
+    # The value was already 0; only the parenthetical made it unparseable, and the
+    # parenthetical is the useful half so it stays right here.
+    latency: fixed:0
     target_throughput: 1 beat per clock
     reference_model: null
     tests:
@@ -5326,7 +5344,15 @@ blocks:
     upstream: [PART.EXPAND]
     downstream: [GEOM.CLIPDOOR]
     backpressure: ready_valid
-    latency: the depth converter's, plus head-of-line in the ring
+    # CORRECTED 2026-09-29. The vocabulary is fixed:N | variable |
+    # variable_bounded:N | batch | n/a (...). This field held:
+    #     the depth converter's, plus head-of-line in the ring
+    # which is true and is not one of those. Every word of it is above; nothing is
+    # rounded and no number is invented.
+    # Not a number even in the prose it replaces: this depends on another block's
+    # latency plus head-of-line queueing in the ring. `variable` is what the
+    # vocabulary has for that, and claiming a bound would be inventing one.
+    latency: variable
     target_throughput: 1 beat per clock out; in, the converter's rate
     reference_model: null
     tests:
