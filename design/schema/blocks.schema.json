@@ -93,6 +93,11 @@
       "type": "string",
       "minLength": 1
     },
+    "pathOrNone": {
+      "$comment": "ADDED 2026-09-29. A path, or null meaning THERE IS DELIBERATELY NONE. Rule V4 tests truthiness (`if (!b.tests?.random)`), so null is FALSY and V4 catches it, while a non-empty placeholder string like \"OWED -- NOT WRITTEN\" is TRUTHY and V4 does NOT. The schema was rejecting the form that keeps the gate working and accepting the form that defeats it. Deliberately NOT used for `evidence`: a maturity_log entry with no evidence is not a considered none, it is an unsupported claim.",
+      "type": ["string", "null"],
+      "minLength": 1
+    },
     "block": {
       "type": "object",
       "required": [
@@ -223,7 +228,8 @@
         },
         "reference_model": {
           "description": "The block's oracle. Either a zref:: symbol (a scalar reference model), or rtl::<module> when the block has NO arithmetic and its correctness is a protocol relationship with another RTL module -- MEM.HPS.ARBITER routes bursts and is checked against the real zhao_hps_bridge composed in its test. Demanding a zref:: name where none exists is how this ledger accumulated phantom citations; rtl:: is checked for existence by V17 exactly as zref:: is, so it is a different claim and not a weaker one. A block whose semantics ARE the Field IR interpreter names zfield::interpret, the same answer design/ops.yml gives: field-ir.md 1 puts op semantics in exactly two places, and the sequencer's law is that interpreter and not a per-block paraphrase of it.",
-          "type": "string",
+          "$comment": "null ALLOWED 2026-09-29, meaning there is deliberately no oracle. V4 tests truthiness so it still reports the block; see $defs/pathOrNone for why the honest form had to be legalised. The pattern applies to strings only, so a null passes it.",
+          "type": ["string", "null"],
           "pattern": "^(zref::[A-Za-z0-9_:]+|zfield::interpret|rtl::[a-z0-9_]+)$"
         },
         "implementation": {
@@ -233,23 +239,23 @@
           "type": "object",
           "$comment": "WIDENED 2026-09-29 from additionalProperties:false. Five blocks carry nine arms outside the five kinds below -- rtl_directed, oracle, bridge, mutant_control, chain, sharer, mutant, law_directed, store_directed -- and every one names a real committed test. The schema allowed ONE path per KIND while this repository writes several directed arms per block plus the committed mutants its own rules demand. Extra keys must still be non-empty path strings, and the conditional required:[directed,random] is UNCHANGED, so this widens what may be added and relaxes nothing about what is owed.",
           "additionalProperties": {
-            "$ref": "#/$defs/path"
+            "$ref": "#/$defs/pathOrNone"
           },
           "properties": {
             "directed": {
-              "$ref": "#/$defs/path"
+              "$ref": "#/$defs/pathOrNone"
             },
             "random": {
-              "$ref": "#/$defs/path"
+              "$ref": "#/$defs/pathOrNone"
             },
             "formal": {
-              "$ref": "#/$defs/path"
+              "$ref": "#/$defs/pathOrNone"
             },
             "unit": {
-              "$ref": "#/$defs/path"
+              "$ref": "#/$defs/pathOrNone"
             },
             "differential": {
-              "$ref": "#/$defs/path"
+              "$ref": "#/$defs/pathOrNone"
             }
           }
         },

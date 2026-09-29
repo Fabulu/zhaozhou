@@ -4733,7 +4733,12 @@ blocks:
       # Ruling R102 said 102 all along. Three files agreeing with each other is
       # not corroboration when none of them ran the binary.
       directed: tests/geometry/geom_warp_reference_directed.cpp   # REFERENCE ONLY, 102 checks
-      random: "OWED -- NOT WRITTEN"
+      # WAS "OWED -- NOT WRITTEN" -- a TRUTHY string, which rule V4 does NOT catch, because
+      # V4 tests `if (!b.tests?.random)`. Changed to null 2026-09-29 so the gate can
+      # see it: null is falsy, so V4 will report this block the moment the rule stage
+      # runs. The claim the string made is unchanged -- the test is not written -- but
+      # it is now visible to the checker instead of silencing it.
+      random: null
       # WRITTEN 2026-09-20 by packet W1: 2,468 checks against
       # zref::geom_warp::apply_outputs, fed the HARDWARE's six output words.
       # Plus tests/mutants/zhao_geom_warp_shift_oneliner_mutant.sv, a committed
@@ -6428,7 +6433,12 @@ blocks:
       oracle: tests/texture/material_resolve_directed.cpp
       bridge: tests/texture/material_resolve_combine_bridge.cpp
       mutant_control: tests/texture/material_resolve_gen8tag_control.cpp
-      random: "PLANNED -- NOT WRITTEN"
+      # WAS "PLANNED -- NOT WRITTEN" -- a TRUTHY string, which rule V4 does NOT catch, because
+      # V4 tests `if (!b.tests?.random)`. Changed to null 2026-09-29 so the gate can
+      # see it: null is falsy, so V4 will report this block the moment the rule stage
+      # runs. The claim the string made is unchanged -- the test is not written -- but
+      # it is now visible to the checker instead of silencing it.
+      random: null
     counters: [material_hits, material_misses, material_refused]
     source_ids: true
     budget_group: tile
@@ -6894,7 +6904,12 @@ blocks:
       # PRESENCE and a FALSE ABSENCE at once, which is the thing to notice:
       # a ledger is not documentation, it is an input to the completion number.
       directed: tests/forge/forge_shadow_directed.cpp
-      random: "PLANNED -- NOT WRITTEN"
+      # WAS "PLANNED -- NOT WRITTEN" -- a TRUTHY string, which rule V4 does NOT catch, because
+      # V4 tests `if (!b.tests?.random)`. Changed to null 2026-09-29 so the gate can
+      # see it: null is falsy, so V4 will report this block the moment the rule stage
+      # runs. The claim the string made is unchanged -- the test is not written -- but
+      # it is now visible to the checker instead of silencing it.
+      random: null
     # THE FIVE CENSUS PORTS THE RTL ACTUALLY EMITS -- R94's other half, and it
     # IS repaired here, by the gz/forgeconnect lane. (The projadopt lane left
     # this deliberately undone, correctly, because `counter_catalog` is
