@@ -368,8 +368,15 @@ int main(int argc, char** argv) {
         "PASS terrain_psmux_directed -- one streamer, two clients, every beat "
         "attributed; the turn alternates under contention; both stray counters "
         "fired on demand.\n");
-    return 0;
+    // EXIT HARD, not `return`: a plain return runs exit-time static destruction
+    // of the default VerilatedContext, which deadlocks at ~0 CPU on this
+    // toolchain AFTER the checks pass and print -- so the SUCCESS path is the
+    // one that hangs. The value is carried across unchanged.
+    zhao::exit_hard(0);
   }
   std::printf("FAILED terrain_psmux_directed -- %d check(s)\n", failures);
-  return 1;
+  // EXIT HARD, not `return`: a plain return runs exit-time static destruction of
+  // the default VerilatedContext, which deadlocks at ~0 CPU on this toolchain
+  // AFTER the checks pass. The value is unchanged.
+  zhao::exit_hard(1);
 }

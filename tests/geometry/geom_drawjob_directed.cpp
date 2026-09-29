@@ -556,5 +556,4 @@ int main(int argc, char** argv) {
 
   std::printf("geom_drawjob_directed: %d checks, %d failed\n", g_checks, g_failed);
   zhao::exit_hard(g_failed == 0 ? 0 : 1);
-  return 0;
 }

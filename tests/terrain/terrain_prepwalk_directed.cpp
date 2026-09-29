@@ -869,5 +869,8 @@ int main(int argc, char** argv) {
   case12_alignment_refetch(h);
 
   std::printf("\nterrain_prepwalk_directed: %d checks, %d failure(s)\n", checks, failures);
-  return failures == 0 ? 0 : 1;
+  // EXIT HARD, not `return`: a plain return runs exit-time static destruction of
+  // the default VerilatedContext, which deadlocks at ~0 CPU on this toolchain
+  // AFTER the checks pass. The value is unchanged.
+  zhao::exit_hard(failures == 0 ? 0 : 1);
 }

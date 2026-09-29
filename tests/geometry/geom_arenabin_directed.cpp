@@ -992,5 +992,4 @@ int main(int argc, char** argv) {
   }
 
   zhao::exit_hard(g_fail == 0 ? 0 : 1);
-  return 0;
 }

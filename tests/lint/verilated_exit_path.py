@@ -133,6 +133,70 @@ def local_hard_exits(raw: str, scan: str) -> list:
     return names
 
 
+# A `{` opening a scope that a `return` does NOT leave main from. Inside a function
+# body only two things qualify: a LAMBDA, and a local class/struct/union, whose member
+# functions return to their own caller.
+LAMBDA_INTRO = re.compile(
+    r"\[[^\]\[;{}]*\]\s*(\([^()]*\))?\s*(mutable\b)?\s*(constexpr\b)?\s*"
+    r"(noexcept\b[^{;]*)?\s*(->[^{;]*)?\s*$")
+LOCAL_TYPE = re.compile(r"\b(struct|class|union|enum)\b[^;{}]*$")
+
+
+def is_barrier_brace(before: str) -> bool:
+    """Does the text immediately before a `{` introduce a lambda or a local type?"""
+    tail = before[-200:]
+    return bool(LAMBDA_INTRO.search(tail) or LOCAL_TYPE.search(tail))
+
+
+def count_unsafe_returns(raw, lo, body_scan, is_safe) -> int:
+    """Returns that leave main without going through something noreturn.
+
+    THE FIRST VERSION COUNTED BRACE DEPTH AND ONLY LOOKED AT DEPTH 0, reasoning that
+    "a return inside a lambda (depth > 0) is ordinary control flow". But an `if` block
+    inside main raises that same depth, so
+
+        if (failures == 0) { std::printf("PASS ...\n"); return 0; }
+        std::printf("FAILED ...\n");
+        zhao::exit_hard(1);
+
+    reported CLEAN: the gate saw the exit_hard at depth 0 and never looked at the
+    `return 0` at depth 1. That return is the SUCCESS path, and the success path is
+    exactly where this deadlock happens -- exit-time static destruction runs AFTER
+    every check has passed and printed. The gate was blind to the failure mode in its
+    own docstring, in the branch where it actually bites. It read clean on
+    terrain_mipreq_directed.cpp and terrain_psmux_directed.cpp with the hazard live in
+    both.
+
+    So depth is the wrong question. A brace is a barrier only if it opens a lambda or a
+    local type; if/else/for/while/switch/try/do and bare blocks are all still main.
+    """
+    return len(unsafe_return_spans(raw, lo, body_scan, is_safe))
+
+
+def unsafe_return_spans(raw, lo, body_scan, is_safe):
+    """(start, end) of every unsafe return, as offsets into `raw`.
+
+    THE SPANS ARE THE SINGLE IMPLEMENTATION and count_unsafe_returns is their length,
+    so a repair that edits these sites and the gate that reports them cannot disagree.
+    A fixer written with its own `^\\s*return <expr>;$` regex immediately wanted to
+    rewrite `return r;` inside `auto take = [&]() { ... }` -- a site this analysis
+    already excludes correctly. Two matchers for one question is one matcher too many,
+    and the duplicate is always the weaker one.
+    """
+    stack, spans = [], []
+    for m in re.finditer(r"[{}]|\breturn\b([^;]*);", body_scan):
+        tok = m.group(0)
+        if tok == "{":
+            stack.append(is_barrier_brace(body_scan[:m.start()]))
+        elif tok == "}":
+            if stack:
+                stack.pop()
+        elif not any(stack):
+            if not is_safe(raw[lo + m.start(): lo + m.end()]):
+                spans.append((lo + m.start(), lo + m.end()))
+    return spans
+
+
 def violations():
     bad, unparsed, total = [], [], 0
     for p in sorted(TESTS.rglob("*.cpp")):
@@ -161,20 +225,7 @@ def violations():
         def is_safe(expr: str) -> bool:
             return any(s in expr for s in safe_names)
 
-        # Every TOP-LEVEL return in main must hand back the result of something
-        # that never returns. A return inside a lambda (depth > 0) is ordinary
-        # control flow and is not our business.
-        depth = 0
-        unsafe_returns = 0
-        for m in re.finditer(r"[{}]|\breturn\b([^;]*);", body_scan):
-            tok = m.group(0)
-            if tok == "{":
-                depth += 1
-            elif tok == "}":
-                depth -= 1
-            elif depth == 0:
-                if not is_safe(raw[lo + m.start(): lo + m.end()]):
-                    unsafe_returns += 1
+        unsafe_returns = count_unsafe_returns(raw, lo, body_scan, is_safe)
 
         # ... and main must not fall off its end, which is an implicit
         # `return 0` and deadlocks identically.
@@ -195,11 +246,40 @@ def violations():
 def self_check():
     """The detector must be seen to FIRE. A gate that only ever passes is a
     claim, not a check -- and this one's whole job is to notice an absence."""
-    good = '#include "Vfoo.h"\nint main(){ zhao::exit_hard(0); }\n'
-    bad = '#include "Vfoo.h"\nint main(){ return 0; }\n'
-    sep = '#include "Vfoo.h"\nint main(){ int x = 0x1\'0000; zhao::exit_hard(x); }\n'
-    for name, src, want_bad in (("good", good, False), ("bad", bad, True),
-                                ("digit-separator", sep, False)):
+    H = '#include "Vfoo.h"\n'
+    cases = (
+        ("flat hard exit", 'int main(){ zhao::exit_hard(0); }', False),
+        ("flat plain return", 'int main(){ return 0; }', True),
+        # 0x1'0000 is a C++14 DIGIT SEPARATOR, not a char literal.
+        ("digit separator", "int main(){ int x = 0x1'0000; zhao::exit_hard(x); }", False),
+        # THE SHAPE THE FIRST VERSION OF THIS GATE COULD NOT SEE. The success branch
+        # returns plainly at brace depth 1 while a hard exit sits at depth 0, and the
+        # depth-0-only counter was satisfied by the latter. It is the success path that
+        # deadlocks, so this was the worst possible blind spot.
+        ("return inside the success branch",
+         'int main(){ if (f == 0) { return 0; } zhao::exit_hard(1); }', True),
+        ("return inside a for body",
+         'int main(){ for (int i=0;i<2;++i) { if (i) return 3; } zhao::exit_hard(0); }',
+         True),
+        # A return from a LAMBDA is ordinary control flow and must NOT be reported --
+        # the reason the original had a depth test at all. Widening the rule must not
+        # reintroduce the 164-of-254 false-positive reading its docstring records.
+        ("return inside a lambda",
+         'int main(){ auto f = [&](int v) -> int { return v + 1; };'
+         ' zhao::exit_hard(f(0)); }', False),
+        ("return inside a capture-less lambda",
+         'int main(){ auto g = []{ return 7; }; zhao::exit_hard(g()); }', False),
+        # An array initialiser also ends in `]` before a `{` and must not be mistaken
+        # for a lambda introducer, or every return after one goes unseen.
+        ("array initialiser is not a lambda",
+         'int main(){ int a[] = {1, 2}; if (a[0]) { return 1; } zhao::exit_hard(0); }',
+         True),
+        ("report_and_exit is safe",
+         'int main(){ if (x) { return zhao::report_and_exit(1); }'
+         ' zhao::exit_hard(0); }', False),
+    )
+    for name, body, want_bad in cases:
+        src = H + body + "\n"
         scan = strip_for_scan(src)
         if scan.count("{") != scan.count("}"):
             raise SystemExit("self-check: blanker unbalanced %s" % name)
@@ -207,11 +287,21 @@ def self_check():
         if span is None:
             raise SystemExit("self-check: could not parse %s" % name)
         lo, hi = span
-        has_safe = any(s in src[lo:hi] for s in SAFE)
-        got_bad = not has_safe
+        safe_names = list(SAFE) + local_hard_exits(src, scan)
+
+        def is_safe(expr, _n=safe_names):
+            return any(s in expr for s in _n)
+
+        n = count_unsafe_returns(src, lo, scan[lo:hi], is_safe)
+        tail = src[lo:hi].rstrip()
+        falls = not is_safe(tail[max(0, len(tail) - 160):])
+        got_bad = bool(n or falls)
         if got_bad != want_bad:
-            raise SystemExit("self-check FAILED on %s: the gate cannot see the "
-                             "thing it exists to see" % name)
+            raise SystemExit(
+                "self-check FAILED on %r: wanted %s, got %s (%d unsafe return(s), "
+                "falls_through=%s) -- the gate cannot see the thing it exists to see"
+                % (name, "a finding" if want_bad else "clean",
+                   "a finding" if got_bad else "clean", n, falls))
 
 
 def main() -> int:

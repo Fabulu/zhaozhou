@@ -404,5 +404,8 @@ int main() {
   // negative control — it reads zero across two correct palettes.
 
   std::printf("geom_bonesrc_directed: %d cases PASSED\n", cases);
-  return 0;
+  // EXIT HARD, not `return`: a plain return runs exit-time static destruction of
+  // the default VerilatedContext, which deadlocks at ~0 CPU on this toolchain
+  // AFTER the checks pass. The value is unchanged.
+  zhao::exit_hard(0);
 }

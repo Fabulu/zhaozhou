@@ -728,5 +728,8 @@ int main(int argc, char** argv) {
   case11_queue_accounting();
 
   std::printf("terrain_spdesc_directed: %d checks, %d failures\n", checks, failures);
-  return failures == 0 ? 0 : 1;
+  // EXIT HARD, not `return`: a plain return runs exit-time static destruction of
+  // the default VerilatedContext, which deadlocks at ~0 CPU on this toolchain
+  // AFTER the checks pass. The value is unchanged.
+  zhao::exit_hard(failures == 0 ? 0 : 1);
 }

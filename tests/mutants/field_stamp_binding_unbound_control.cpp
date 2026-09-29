@@ -137,5 +137,8 @@ int main(int argc, char** argv) {
       "  prevents a production capsule selecting the permissive binding by\n"
       "  omission.\n");
   std::fflush(stdout);
-  return 1;
+  // EXIT HARD, not `return`: a plain return runs exit-time static destruction of
+  // the default VerilatedContext, which deadlocks at ~0 CPU on this toolchain
+  // AFTER the checks pass. The value is unchanged.
+  zhao::exit_hard(1);
 }

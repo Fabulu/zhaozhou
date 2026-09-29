@@ -450,5 +450,8 @@ int main(int argc, char** argv) {
               disc_moved);
 
   std::printf("bake_delta_idempotence_directed: %lld checks, %d failures\n", g_checks, g_fail);
-  return g_fail == 0 ? 0 : 1;
+  // EXIT HARD, not `return`: a plain return runs exit-time static destruction of
+  // the default VerilatedContext, which deadlocks at ~0 CPU on this toolchain
+  // AFTER the checks pass. The value is unchanged.
+  zhao::exit_hard(g_fail == 0 ? 0 : 1);
 }

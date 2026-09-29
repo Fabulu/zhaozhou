@@ -486,5 +486,11 @@ int main(int argc, char **argv) {
 
   std::printf("\n%s  (%d failure%s)\n", g_failures == 0 ? "PASS" : "FAIL",
               g_failures, g_failures == 1 ? "" : "s");
-  return g_failures == 0 ? 0 : 1;
+  // EXIT HARD, not `return`: a plain return runs exit-time static destruction
+  // of the default VerilatedContext, which deadlocks at ~0 CPU on this
+  // toolchain AFTER the checks pass and print -- so the SUCCESS path is the
+  // one that hangs. The value is carried across unchanged.
+  std::fflush(nullptr);   // _Exit does NOT flush stdio and the
+                        // checks have already been printed.
+  std::_Exit(g_failures == 0 ? 0 : 1);
 }

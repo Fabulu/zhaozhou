@@ -316,11 +316,23 @@ int main(int argc, char** argv) {
         "CONTROL FAILED: the axis-swap mutant produced NO check failure. The "
         "placement checks cannot tell the column plane from the row plane, so "
         "the primary target's zero is worth nothing.\n");
-    return 1;
+    // EXIT HARD, not `return`: a plain return runs exit-time static destruction
+    // of the default VerilatedContext, which deadlocks at ~0 CPU on this
+    // toolchain AFTER the checks pass and print -- so the SUCCESS path is the
+    // one that hangs. The value is carried across unchanged.
+    zhao::exit_hard(1);
   }
   std::printf("axis-swap control: %d of %d checks failed, as required\n", g_failed, g_checks);
-  return 0;
+  // EXIT HARD, not `return`: a plain return runs exit-time static destruction
+  // of the default VerilatedContext, which deadlocks at ~0 CPU on this
+  // toolchain AFTER the checks pass and print -- so the SUCCESS path is the
+  // one that hangs. The value is carried across unchanged.
+  zhao::exit_hard(0);
 #else
-  return g_failed == 0 ? 0 : 1;
+  // EXIT HARD, not `return`: a plain return runs exit-time static destruction
+  // of the default VerilatedContext, which deadlocks at ~0 CPU on this
+  // toolchain AFTER the checks pass and print -- so the SUCCESS path is the
+  // one that hangs. The value is carried across unchanged.
+  zhao::exit_hard(g_failed == 0 ? 0 : 1);
 #endif
 }

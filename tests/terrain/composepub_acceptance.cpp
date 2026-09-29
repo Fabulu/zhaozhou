@@ -1379,5 +1379,8 @@ int main(int argc, char** argv) {
   }
 
   std::printf("\ncomposepub_acceptance: %d checks, %d failures\n", g_checks, g_fails);
-  return g_fails == 0 ? 0 : 1;
+  // EXIT HARD, not `return`: a plain return runs exit-time static destruction of
+  // the default VerilatedContext, which deadlocks at ~0 CPU on this toolchain
+  // AFTER the checks pass. The value is unchanged.
+  zhao::exit_hard(g_fails == 0 ? 0 : 1);
 }

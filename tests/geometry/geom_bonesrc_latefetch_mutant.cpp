@@ -197,5 +197,8 @@ int main() {
         "about the fault it names, not beside it");
 
   std::printf("geom_bonesrc_latefetch_mutant: PASSED (the mutation is present)\n");
-  return 0;
+  // EXIT HARD, not `return`: a plain return runs exit-time static destruction of
+  // the default VerilatedContext, which deadlocks at ~0 CPU on this toolchain
+  // AFTER the checks pass. The value is unchanged.
+  zhao::exit_hard(0);
 }
