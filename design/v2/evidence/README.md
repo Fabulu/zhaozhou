@@ -1,3 +1,23 @@
+# CURRENT STATUS POINTER -- READ THIS BEFORE ANY FIGURE BELOW
+
+**Two conclusions in this file are WITHDRAWN. They are kept for the record and
+must not be reused:**
+
+* the **4-7% remaining storage saving** -- withdrawn. It rested on a
+  hierarchy-sensitive census and on `bits / 4`, which is capacity arithmetic and
+  not an integrated area measurement. **No percentage replaces it.**
+* the **51 MHz contractual floor** -- withdrawn. It multiplied a cycle CEILING
+  by the frame rate, which inverts the inequality: a ceiling plus a deadline
+  gives a relationship, not a minimum clock. The contract's own stated design
+  point is **100 MHz**; its "~80 MHz lowest credible" belongs to that cost
+  model and is **not** an architecture-independent bound for a redesigned
+  engine.
+
+Current position: `design/v2/proposals/R5-agent-candidate.md` and
+`design/v2/evidence/uop_store_probe.md`.
+
+---
+
 # V2 evidence base — measured, reproducible, and separated from assumption
 
 Every number the review and R1 rely on is listed here with the command that

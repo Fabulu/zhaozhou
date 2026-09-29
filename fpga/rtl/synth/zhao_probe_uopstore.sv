@@ -30,6 +30,57 @@
 // experiment. A census that cannot see a 15,360-bit array is not a bound on
 // remaining storage, in either direction.
 //
+// ===========================================================================
+// CORRECTION 2026-09-29, AT THE TOP BECAUSE THE TEXT BELOW IS WRONG
+// ===========================================================================
+// EVERYTHING BELOW HEADED "THE CAUSE, FOUND" IS REFUTED. It attributes the
+// failure to a combinational loop through the read enable and states that
+// STYLE=3 "MUST NOT infer". STYLE=3 INFERS. So do STYLE=4 (async-reset
+// process) and STYLE=5 (split addresses with the read address taken through a
+// dynamically-indexed flop array).
+//
+// ALL SIX STYLES INFER an identical Simple Dual Port. Measured, 5CSEBA6U23I7,
+// Quartus 17.0.2 map-only:
+//
+//   style 0  shipped int-cast address                 INFERS
+//   style 1  narrow unsigned address                  INFERS
+//   style 2  plain packed array (POSITIVE CONTROL)    INFERS
+//   style 3  read enable derived from read data        INFERS  <- refutes below
+//   style 4  async-reset process                       INFERS
+//   style 5  split addresses, address via flop array   INFERS
+//
+// So five candidate causes are ELIMINATED and THE CAUSE IS NOT KNOWN. What the
+// probe establishes is that the inference flow works and that none of these
+// shapes alone is sufficient to block it. Building up from a simplification has
+// failed five times; the remaining method is to reduce the REAL module.
+//
+// WHY HYPOTHESIS 2 WAS WRONG, since the reasoning is worth keeping: the enable
+// uses the ALREADY-REGISTERED value, so there was never a combinational loop --
+// and the same is true of production's `s1_uop_r`. A pipeline register was read
+// as if it were a wire.
+//
+// AND THE SIZE BELOW IS WRONG TOO. The console composes
+// `.PROGS(8)` and `.INSTR_N(48)`, so production is CTX=8, PLAN=48 -> **384
+// entries, 384 x 60 = 23,040 bits**, not the 256 x 60 = 15,360 stated below.
+// This probe uses the module DEFAULT PLAN=32 and is therefore the wrong depth.
+// Recording a module default as a production parameter is its own error and it
+// moved the figure by 50%.
+//
+// KNOWN FIDELITY LIMITS, so no one quotes this probe as a cost measurement:
+//   * styles 0-4 share ONE address for read and write; production's upload and
+//     fetch addresses are independent (style 5 varies this).
+//   * `dst/a/b/c` are derived from the opcode and address inputs rather than
+//     independent data, and `b: RW'(ctx_i)` zero-extends a 3-bit input into a
+//     5-bit field. That forces two bits per entry to zero and is exactly why
+//     the inferred memory reports 58 bits per entry, not 60: 256 x 2 = 512,
+//     and 14,848 + 512 = 15,360.
+//   * STYLE=4 resets its read-data register; production does not reset
+//     `s1_uop_r`.
+//
+// This file is retained as an inference-flow control and as the record of five
+// refutations. It is NOT a production-shaped store and NOT a resource delta.
+// ===========================================================================
+//
 // ---------------------------------------------------------------------------
 // THE CAUSE, FOUND -- AND QUARTUS NAMED IT ITSELF
 // ---------------------------------------------------------------------------
