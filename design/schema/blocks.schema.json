@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://zhaozhou.local/schemas/blocks.schema.json",
-  "title": "Zhaozhou Design Ledger \u2014 blocks.yml",
-  "description": "Structural schema for design/blocks.yml (charter \u00a74). Relational rules V1-V14 live in tools/ledger (schema validates shape, the validator validates law).",
+  "title": "Zhaozhou Design Ledger — blocks.yml",
+  "description": "Structural schema for design/blocks.yml (charter §4). Relational rules V1-V14 live in tools/ledger (schema validates shape, the validator validates law).",
   "type": "object",
   "required": [
     "schema_version",
@@ -95,7 +95,10 @@
     },
     "pathOrNone": {
       "$comment": "ADDED 2026-09-29. A path, or null meaning THERE IS DELIBERATELY NONE. Rule V4 tests truthiness (`if (!b.tests?.random)`), so null is FALSY and V4 catches it, while a non-empty placeholder string like \"OWED -- NOT WRITTEN\" is TRUTHY and V4 does NOT. The schema was rejecting the form that keeps the gate working and accepting the form that defeats it. Deliberately NOT used for `evidence`: a maturity_log entry with no evidence is not a considered none, it is an unsupported claim.",
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "minLength": 1
     },
     "block": {
@@ -229,7 +232,10 @@
         "reference_model": {
           "description": "The block's oracle. Either a zref:: symbol (a scalar reference model), or rtl::<module> when the block has NO arithmetic and its correctness is a protocol relationship with another RTL module -- MEM.HPS.ARBITER routes bursts and is checked against the real zhao_hps_bridge composed in its test. Demanding a zref:: name where none exists is how this ledger accumulated phantom citations; rtl:: is checked for existence by V17 exactly as zref:: is, so it is a different claim and not a weaker one. A block whose semantics ARE the Field IR interpreter names zfield::interpret, the same answer design/ops.yml gives: field-ir.md 1 puts op semantics in exactly two places, and the sequencer's law is that interpreter and not a per-block paraphrase of it.",
           "$comment": "null ALLOWED 2026-09-29, meaning there is deliberately no oracle. V4 tests truthiness so it still reports the block; see $defs/pathOrNone for why the honest form had to be legalised. The pattern applies to strings only, so a null passes it.",
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "pattern": "^(zref::[A-Za-z0-9_:]+|zfield::interpret|rtl::[a-z0-9_]+)$"
         },
         "implementation": {
@@ -290,7 +296,7 @@
           "type": "boolean"
         },
         "budget_group": {
-          "description": "\u00a725 budget table row. Per-block alm/dsp/m10k percentages stay optional until Phase 0 freezes them (V5).",
+          "description": "§25 budget table row. Per-block alm/dsp/m10k percentages stay optional until Phase 0 freezes them (V5).",
           "enum": [
             "platform",
             "command_debug",
@@ -323,7 +329,7 @@
           }
         },
         "resource_actual": {
-          "description": "Filled ONLY by tools/report from reports/synthesis/*.json \u2014 never hand-typed (charter discipline).",
+          "description": "Filled ONLY by tools/report from reports/synthesis/*.json — never hand-typed (charter discipline).",
           "type": "object",
           "additionalProperties": false,
           "properties": {
@@ -423,6 +429,11 @@
             "string",
             "null"
           ]
+        },
+        "source_ids_breach": {
+          "type": "string",
+          "minLength": 40,
+          "description": "Required when source_ids is false. Charter line 391 makes a stable source ID on the command/trace path universal for rtl blocks, so a false is a DECLARED BREACH and never a neutral fact: it must say what cannot be attributed and what the repair is. Rule V4 still reports the breach -- this field exists so the breach is representable in the schema stage, which otherwise blocks the entire rule stage (cli.ts runs V1-V23 only when schema errors are zero) and hid all twenty-three rules behind four spelling-level failures."
         }
       },
       "allOf": [
@@ -458,7 +469,7 @@
                 ]
               },
               "source_ids": {
-                "const": true
+                "type": "boolean"
               },
               "subsystem": {
                 "$ref": "#/$defs/subsystemRtl"
@@ -493,7 +504,7 @@
                 "not": {}
               },
               "source_ids": {
-                "const": true
+                "type": "boolean"
               }
             }
           }
@@ -532,6 +543,23 @@
               "budget_group": false,
               "reference_model": false
             }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "source_ids": {
+                "const": false
+              }
+            },
+            "required": [
+              "source_ids"
+            ]
+          },
+          "then": {
+            "required": [
+              "source_ids_breach"
+            ]
           }
         }
       ]

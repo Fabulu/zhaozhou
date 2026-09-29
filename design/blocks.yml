@@ -3003,7 +3003,16 @@ blocks:
     inputs: [patch_state, lod_target, cell_material]
     outputs: [terrain_mesh, triangle_material]
     upstream: [TERRAIN.PATCH, TERRAIN.COMPCACHE]
-    downstream: [TERRAIN.NORMALS, FORGE.CLIFF, TERRAIN.GROUP_SEQ]
+    # GROUP_SEQ -> GROUPSEQ, 2026-09-29. The old spelling could never be a block id:
+    # `blockId`'s pattern forbids the underscore, which is why all 136 ids concatenate
+    # compound words instead (GEOM.CLIPDOOR, GEOM.DEPTHQUANT, DEBUG.FRAMEBLIT). THE ROW
+    # IS STILL OWED -- fpga/rtl/terrain/zhao_terrain_group_seq.sv is real and composed, but it has no
+    # contract, no zref reference model and no random-test arm, so an honest record
+    # cannot be written from what is on disk and its `purpose` would be a description of
+    # someone else's design. Renamed rather than invented so rule V7 reports it as the
+    # unknown block reference it is, instead of the schema stage rejecting a spelling and
+    # thereby hiding all twenty-three rules behind it.
+    downstream: [TERRAIN.NORMALS, FORGE.CLIFF, TERRAIN.GROUPSEQ]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 emitted vertex per clock
@@ -3639,6 +3648,15 @@ blocks:
     # Required by the schema and simply absent: this block carries no
     # per-source identity, is not deferred and supersedes nothing.
     source_ids: false
+    source_ids_breach: >-
+      DECLARED BREACH of charter line 391 ("the profiler must be able to attribute ... terrain
+      samples ... to Form declarations"), not a neutral fact, and NOT to be flipped to true to
+      satisfy V4. zhao_terrain_matjoin carries no port that could hold a source id: the join is
+      keyed by the subpatch cell (a_ci_i/a_cj_i) and emits on the same key, so a material cell
+      cannot be attributed to the Form declaration that authored it. The repair is RTL plumbing,
+      not a records edit, and it was deliberately NOT made on 2026-09-29 because this file is
+      inside the running console_core fit closure -- editing it would leave that fit measuring a
+      design that no longer exists. V4 reports this breach every run, by design.
     deferred: false
     superseded_by: null
     budget_group: geometry_mantle
@@ -3949,6 +3967,15 @@ blocks:
       terrain_edgerecon_collisions: collisions_o
       terrain_edgerecon_edges_fallback: edges_fallback_o
     source_ids: false
+    source_ids_breach: >-
+      DECLARED BREACH of charter line 391, on the same terms as TERRAIN.MATJOIN and with the same
+      refusal to flip it. zhao_terrain_edgerecon is a frame-phased table keyed by patch index
+      (f_ix_i/f_iz_i) and subpatch offset, with no client or source field anywhere in its ports,
+      so a neighbour-edge level cannot be traced to the Form declaration it came from. Note its
+      contract discusses clients only at the memory-guard level (ZHAO_CLIENT_TERRAIN_BUILD); that
+      is arbitration for the read port, NOT per-datum provenance, and reading it as the latter is
+      how this would get closed wrongly. Repair is RTL plumbing, deferred past the running
+      console_core fit for the reason recorded on TERRAIN.MATJOIN.
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
     # ADDED 2026-09-29. The schema requires all three and this block carried none.
@@ -4003,7 +4030,16 @@ blocks:
     inputs: [lod_decisions, patch_state]
     outputs: [subpatch_jobs]
     upstream: [TERRAIN.LOD, TERRAIN.COMPCACHE]
-    downstream: [TERRAIN.GROUP_SEQ]
+    # GROUP_SEQ -> GROUPSEQ, 2026-09-29. The old spelling could never be a block id:
+    # `blockId`'s pattern forbids the underscore, which is why all 136 ids concatenate
+    # compound words instead (GEOM.CLIPDOOR, GEOM.DEPTHQUANT, DEBUG.FRAMEBLIT). THE ROW
+    # IS STILL OWED -- fpga/rtl/terrain/zhao_terrain_group_seq.sv is real and composed, but it has no
+    # contract, no zref reference model and no random-test arm, so an honest record
+    # cannot be written from what is on disk and its `purpose` would be a description of
+    # someone else's design. Renamed rather than invented so rule V7 reports it as the
+    # unknown block reference it is, instead of the schema stage rejecting a spelling and
+    # thereby hiding all twenty-three rules behind it.
+    downstream: [TERRAIN.GROUPSEQ]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 job per subpatch
@@ -4815,7 +4851,16 @@ blocks:
     inputs: [skinned_world_vertices, skin_world_normals, warp_field_results]
     outputs: [warped_vertices, warped_normals]
     upstream: [GEOM.SKIN, GEOM.SKIN.NORM, FIELD.SEQ.WARP, GEOM.LOOM]
-    downstream: [GEOM.GROUP_SEQ, GEOM.LIGHT]
+    # GROUP_SEQ -> GROUPSEQ, 2026-09-29. The old spelling could never be a block id:
+    # `blockId`'s pattern forbids the underscore, which is why all 136 ids concatenate
+    # compound words instead (GEOM.CLIPDOOR, GEOM.DEPTHQUANT, DEBUG.FRAMEBLIT). THE ROW
+    # IS STILL OWED -- fpga/rtl/geometry/zhao_geom_group_seq.sv is real and composed, but it has no
+    # contract, no zref reference model and no random-test arm, so an honest record
+    # cannot be written from what is on disk and its `purpose` would be a description of
+    # someone else's design. Renamed rather than invented so rule V7 reports it as the
+    # unknown block reference it is, instead of the schema stage rejecting a spelling and
+    # thereby hiding all twenty-three rules behind it.
+    downstream: [GEOM.GROUPSEQ, GEOM.LIGHT]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 warped vertex per clock
