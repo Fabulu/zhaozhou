@@ -3119,7 +3119,25 @@ blocks:
         evidence: tests/terrain/island_dir_rtl_directed.cpp
     deferred: false
     cut_order: null
-    superseded_by: "SW.STREAM, by ruling T5 and owner ruling R23. T5 puts the visibility walk and the patch directory on the HPS -- the sealed SubmitTerrainSet list is what the hardware consumes and replay does not rerun the walk -- and the software streamer asks BOTH questions there: reference/include/zref/zref_sw_stream.hpp says 'what a camera sees -> zref::island::visible_set' and 'which patches EXIST -> zref::island::Directory', both in reference/include/zref/zref_island.hpp, and its WorldStreamer holds a const island::Directory& . Tested at island scale by tests/terrain/sw_stream_directed.cpp and tests/terrain/island_8km_directed.cpp. THE EVIDENCE THAT MAKES THIS A DUPLICATE RATHER THAN A CHOICE: the only RTL that instantiates zhao_terrain_island_dir is fpga/rtl/terrain/zhao_terrain_visible.sv, which ruling R16 already superseded by the same T5 flow, and the ledger's other two consumers are TERRAIN.PROJECT (superseded by the shared projector) and TERRAIN.LOD, whose ports take per-subpatch deviations and no island answer at all. Caveat, recorded not hidden: that is the SW.STREAM REFERENCE implementation; no HPS runtime exists for any SW block yet."
+    # THE ID MOVED OUT OF THE PROSE 2026-09-29. This field is patterned for a
+    # block id and held the whole paragraph below, so it matched nothing and the
+    # schema rejected it. The id was never in doubt -- the text begins with it --
+    # and not one word of the evidence is dropped:
+    # by ruling T5 and owner ruling R23. T5 puts the visibility walk and the patch directory
+    # on the HPS -- the sealed SubmitTerrainSet list is what the hardware consumes and
+    # replay does not rerun the walk -- and the software streamer asks BOTH questions there:
+    # reference/include/zref/zref_sw_stream.hpp says 'what a camera sees ->
+    # zref::island::visible_set' and 'which patches EXIST -> zref::island::Directory', both
+    # in reference/include/zref/zref_island.hpp, and its WorldStreamer holds a const
+    # island::Directory& . Tested at island scale by tests/terrain/sw_stream_directed.cpp
+    # and tests/terrain/island_8km_directed.cpp. THE EVIDENCE THAT MAKES THIS A DUPLICATE
+    # RATHER THAN A CHOICE: the only RTL that instantiates zhao_terrain_island_dir is
+    # fpga/rtl/terrain/zhao_terrain_visible.sv, which ruling R16 already superseded by the
+    # same T5 flow, and the ledger's other two consumers are TERRAIN.PROJECT (superseded by
+    # the shared projector) and TERRAIN.LOD, whose ports take per-subpatch deviations and no
+    # island answer at all. Caveat, recorded not hidden: that is the SW.STREAM REFERENCE
+    # implementation; no HPS runtime exists for any SW block yet.
+    superseded_by: SW.STREAM
     notes: >-
       OWNER RULING R6 IS MOOT IN RTL, AND THIS IS THE RECORD OF WHY (2026-09-19,
       terrain3). R6 says "widen the RTL to 50 bits; T10 stands as written",
@@ -3261,7 +3279,18 @@ blocks:
         evidence: tests/terrain/visible_rtl_directed.cpp
     deferred: false
     cut_order: null
-    superseded_by: "SW.STREAM, by ruling T5 (the HPS runs the visibility walk; the sealed SubmitTerrainSet list is what the hardware consumes, and replay does not rerun the walk) and owner ruling R16. The software visible set: reference/include/zref/zref_sw_stream.hpp (WorldStreamer, which calls zref::island::visible_set from reference/include/zref/zref_island.hpp), tested at island scale by tests/terrain/sw_stream_directed.cpp. Caveat, recorded not hidden: that is the SW.STREAM reference implementation; no HPS runtime exists for any SW block yet (runtime/mister is empty)."
+    # THE ID MOVED OUT OF THE PROSE 2026-09-29. This field is patterned for a
+    # block id and held the whole paragraph below, so it matched nothing and the
+    # schema rejected it. The id was never in doubt -- the text begins with it --
+    # and not one word of the evidence is dropped:
+    # by ruling T5 (the HPS runs the visibility walk; the sealed SubmitTerrainSet list is
+    # what the hardware consumes, and replay does not rerun the walk) and owner ruling R16.
+    # The software visible set: reference/include/zref/zref_sw_stream.hpp (WorldStreamer,
+    # which calls zref::island::visible_set from reference/include/zref/zref_island.hpp),
+    # tested at island scale by tests/terrain/sw_stream_directed.cpp. Caveat, recorded not
+    # hidden: that is the SW.STREAM reference implementation; no HPS runtime exists for any
+    # SW block yet (runtime/mister is empty).
+    superseded_by: SW.STREAM
     notes: >-
       COST IS DOMINATED BY THE PATCHES IT REJECTS, which is why the measured
       figure is per EXAMINED patch and not per emitted one. On an 8 km island
@@ -3744,6 +3773,24 @@ blocks:
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
+    # ADDED 2026-09-29. The schema requires all three and this block carried none.
+    # PINNED TO THE COMMIT THAT LANDED THE DIRECTED TEST, not the one that added the
+    # RTL: UNIT_VERIFIED is a claim about VERIFICATION, and `git ls-tree` at this
+    # block's RTL-add commit shows the test was not there yet for two of the three
+    # blocks fixed in this pass. Pinning the RTL commit would have dated the
+    # verification before its evidence existed -- plausible, and wrong.
+    #
+    # `deferred: false` and `superseded_by: null` are this file's conventions (131 of
+    # 136 blocks) and are measured rather than assumed: the completion register
+    # reports exactly TWO superseded blocks, TERRAIN.ISLAND and TERRAIN.VISIBLE, and
+    # nothing in this file names TERRAIN.SPDESC as a replacement.
+    maturity_log:
+      - state: UNIT_VERIFIED
+        date: "2026-09-21"
+        commit: "750fdc5e"
+        evidence: tests/terrain/terrain_spdesc_directed.cpp   # 1,035 checks
+    deferred: false
+    superseded_by: null
     # REGISTERED BY THE PACKET THAT BUILT IT, 2026-09-21 (TERRASSEM), and it RAISES
     # the register by one ON PURPOSE. R214: a block with a contract AND silicon owes a
     # row, and POSEPAGE's precedent is that contract-without-silicon is the wrong half.
@@ -3789,6 +3836,24 @@ blocks:
     source_ids: false
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
+    # ADDED 2026-09-29. The schema requires all three and this block carried none.
+    # PINNED TO THE COMMIT THAT LANDED THE DIRECTED TEST, not the one that added the
+    # RTL: UNIT_VERIFIED is a claim about VERIFICATION, and `git ls-tree` at this
+    # block's RTL-add commit shows the test was not there yet for two of the three
+    # blocks fixed in this pass. Pinning the RTL commit would have dated the
+    # verification before its evidence existed -- plausible, and wrong.
+    #
+    # `deferred: false` and `superseded_by: null` are this file's conventions (131 of
+    # 136 blocks) and are measured rather than assumed: the completion register
+    # reports exactly TWO superseded blocks, TERRAIN.ISLAND and TERRAIN.VISIBLE, and
+    # nothing in this file names TERRAIN.EDGERECON as a replacement.
+    maturity_log:
+      - state: UNIT_VERIFIED
+        date: "2026-09-22"
+        commit: "1fcdb286"
+        evidence: tests/terrain/terrain_edgerecon_directed.cpp   # 1,041 checks
+    deferred: false
+    superseded_by: null
     # REGISTERED BY THE PACKET THAT BUILT IT, 2026-09-22 (EDGERECON), and it RAISES
     # the register by one ON PURPOSE. R214: a block with a contract AND silicon owes a
     # row, and the ratification of the six completion rulings says so in advance --
@@ -3830,6 +3895,24 @@ blocks:
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
+    # ADDED 2026-09-29. The schema requires all three and this block carried none.
+    # PINNED TO THE COMMIT THAT LANDED THE DIRECTED TEST, not the one that added the
+    # RTL: UNIT_VERIFIED is a claim about VERIFICATION, and `git ls-tree` at this
+    # block's RTL-add commit shows the test was not there yet for two of the three
+    # blocks fixed in this pass. Pinning the RTL commit would have dated the
+    # verification before its evidence existed -- plausible, and wrong.
+    #
+    # `deferred: false` and `superseded_by: null` are this file's conventions (131 of
+    # 136 blocks) and are measured rather than assumed: the completion register
+    # reports exactly TWO superseded blocks, TERRAIN.ISLAND and TERRAIN.VISIBLE, and
+    # nothing in this file names TERRAIN.JOBISSUE as a replacement.
+    maturity_log:
+      - state: UNIT_VERIFIED
+        date: "2026-09-21"
+        commit: "19daff0a"
+        evidence: tests/terrain/terrain_jobissue_directed.cpp   # 138 checks
+    deferred: false
+    superseded_by: null
     # REGISTERED BY THE COORDINATOR, 2026-09-21, and it RAISES the register
     # 23 -> 24 on purpose. Packet JOBISSUE built this block with a contract and
     # 138 directed checks and then declined a ledger row, citing R214 as a
