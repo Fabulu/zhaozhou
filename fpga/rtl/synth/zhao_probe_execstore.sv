@@ -1,54 +1,65 @@
-// zhao_probe_execstore -- DIAGNOSTIC REDUCTION of zhao_field_v3_exec, VARIANT R3a.
+// zhao_probe_execstore -- reduction of zhao_field_v3_exec, VARIANT R3c.
 //
-// GENERATED. DO NOT EDIT, DO NOT INSTANTIATE, DO NOT SHIP. DELETE when answered.
-//
-// ===========================================================================
-// WHERE THE SEARCH STANDS
-// ===========================================================================
-// `uop_t store[0:(CTX*PLAN)-1]` is 384 x 60 = 23,040 bits at the composed
-// PLAN=48 and sits in FLIP-FLOPS -- 92% of this module's registers. Quartus:
-// "uninferred due to ASYNCHRONOUS READ LOGIC".
-//
-// SIX synthetic probe styles all inferred, eliminating the typedef, the signed
-// index cast, an enable derived from read data, an async-reset process and an
-// address taken through a flop array.
-//
-// VARIANT R1 -- the read lifted out of BOTH enclosing gates, address unchanged --
-// **INFERRED**, and the arithmetic is emphatic:
-//
-//     production (PLAN=48)   24,962 reg   10,287 ALUT   25,344 mem bits
-//     R1                      1,862 reg    2,110 ALUT   48,384 mem bits
-//
-// +23,040 memory bits is EXACTLY 384 x 60, and registers fell by 23,100. So the
-// store can be an M10K, its 23,040-bit size is confirmed a third time, and
-// **the READ ADDRESS IS NOT THE BLOCKER** -- a hypothesis of mine, refuted by its
-// own prediction. One of the two enables is.
-//
-// THE PROBE PRODUCED A FALSE ELIMINATION, and that is the lesson worth keeping.
-// STYLE=3 tested "read enable derived from read data" and inferred, which read as
-// eliminating it. Its enable was `we_i | ~hazard_c` with `we_i` a port, and its
-// address was a port. A synthetic probe that infers can eliminate nothing.
+// GENERATED. DO NOT EDIT, DO NOT INSTANTIATE, DO NOT SHIP.
 //
 // ===========================================================================
-// VARIANT R3a: ONE ENABLE, `issue_c`, AND NOTHING ELSE
+// WHAT THE PREVIOUS TWO VARIANTS ESTABLISHED
 // ===========================================================================
-// Production gates the read twice; R3a keeps only the inner one:
+//   production   `!hold_c && !mul_denied_c` then `issue_c`   UNINFERRED
+//   R1           no enable at all                            INFERRED  48,384 bits
+//   R3a          `issue_c` alone                             INFERRED  48,384 bits
 //
-//     if (issue_c)
-//       s1_uop_r <= store[...];
+// R3a is the informative one. `issue_c` ALREADY CONTAINS the outer gate --
 //
-// `issue_c` is a function of the store's own read output:
+//   :378  issue_c = |ready_c && !dot_inflight_c && !hold_c && !mul_denied_c
+//                   && !sk_busy_c
 //
-//     :378  issue_c = |ready_c && !dot_inflight_c && !hold_c && ...
-//     :429  assign dot_inflight_c = (s1_v_r && is_dot(s1_uop_r.op)) || ...
+// -- so production's effective read enable and R3a's are THE SAME BOOLEAN, and one
+// infers while the other does not. **The enable expression is not the cause.** R3a
+// also refutes, in the real module instead of a probe, the hypothesis that an
+// enable derived from the read's own output blocks inference: `issue_c` depends on
+// `s1_uop_r.op` through `dot_inflight_c`, and it inferred anyway.
 //
-// and `s1_uop_r` is the store's read-data register. An M10K read port can be
-// enabled, but not by a term the read itself produces.
+// Two more candidates are closed by INSPECTION, at no fit cost: `store` has
+// exactly one read site (:1200) and one write site (:1090), and `s1_uop_r` has
+// exactly one driver. A second read port is not the explanation.
 //
-// PREDICTION: R3a does NOT infer. If it does, the outer `!hold_c &&
-// !mul_denied_c` is the cause and R3b tests that instead.
+// ===========================================================================
+// VARIANT R3c: THE WRITE MOVES BELOW THE READ. THAT IS THE WHOLE CHANGE.
+// ===========================================================================
+// What R1 and R3a also changed, unremarked, is ORDER -- both re-issued the read at
+// the top of the non-reset branch, i.e. ABOVE the write, where production has it
+// below:
 //
-// DIAGNOSTIC. Behaviour is deliberately wrong. Not a repair, not a cost.
+//     production        R1 / R3a
+//     write  :1090      READ
+//     read   :1200      write
+//
+// R3c isolates that and nothing else. The READ STAYS PUT, and the WRITE moves down
+// to just after the freeze block closes, carrying its `if (up_we_i)` guard verbatim
+// and keeping its own nesting level. It is deliberately NOT moved inside the freeze:
+// the production write is ungated by `hold_c`/`mul_denied_c` so an upload lands
+// during a stall, and putting it inside would have changed the write enable as well
+// as the order -- two properties at once, and a behaviour change besides.
+//
+// AND THIS REORDER IS PROVABLY BEHAVIOUR-PRESERVING, which is why it is worth a
+// map. Both statements are nonblocking, in one always_ff, on one clock, with
+// different left-hand sides; every right-hand side is evaluated from the pre-edge
+// value of `store`. The fetch therefore reads the OLD word whether the write sits
+// above it or below it -- including on a legal same-address collision, the law
+// FEEDBACK_AFTER_R5 requires be preserved. There is no semantics in the order of
+// two nonblocking assignments to different targets.
+//
+// SO R3c IS NOT A DIAGNOSTIC. If it infers, it is a repair candidate for
+// production, and a free one -- no extra cycle, no changed schedule, no new
+// collision contract, no address rework.
+//
+// PREDICTION: R3c INFERS. If it does not, the cause is nesting depth or the
+// surrounding block's other assignments, and R3d lifts the read one level while
+// keeping `issue_c`.
+//
+// NOT CLAIMED: any ALM saving, any timing result, or that this maps at PLAN=48
+// with the production addressing verified -- see check_plan48_addressing.
 // Classified by tools/budget/store_variant_receipt.py, by name, because a
 // reduction can make synthesis DELETE the array and deletion is not inference.
 // ===========================================================================
@@ -1141,15 +1152,8 @@ module zhao_probe_execstore #(
       skid_clocks_o <= 32'd0;
       for (int i = 0; i < CTX; i++) pc_r[i] <= '0;
     end else begin
-      // VARIANT R3a: the read, lifted out of the OUTER gate
-      // (`!hold_c && !mul_denied_c`) and wrapped in `issue_c` ALONE.
-      // `issue_c` depends on `s1_uop_r.op` via `dot_inflight_c`, i.e.
-      // on the value this very read produces.
-      if (issue_c)
-        s1_uop_r <= store[(int'(issue_ctx_c) * PLAN) + int'(pc_r[issue_ctx_c])];
-      if (up_we_i)
-        store[(int'(up_ctx_i) * PLAN) + int'(up_pc_i)] <=
-            '{op: up_op_i, dst: up_dst_i, a: up_a_i, b: up_b_i, c: up_c_i, imm: up_imm_i};
+      // WRITE RELOCATED (variant R3c) -- moved below the fetch,
+      // unchanged in every other respect. See header.
 
       if (start_i) begin
         active_r[start_ctx_i] <= 1'b1;
@@ -1258,8 +1262,7 @@ module zhao_probe_execstore #(
       s1_v_r <= issue_c;
       if (issue_c) begin
         s1_ctx_r              <= issue_ctx_c;
-        // READ LIFTED OUT (variant R3a) -- see header
-
+        s1_uop_r              <= store[(int'(issue_ctx_c) * PLAN) + int'(pc_r[issue_ctx_c])];
         inflight_r[issue_ctx_c] <= 1'b1;
       end
 
@@ -1285,6 +1288,19 @@ module zhao_probe_execstore #(
 
 
       end  // upstream: !hold_c && !mul_denied_c
+
+      // THE WRITE, verbatim from its production position above, at the
+      // SAME nesting level it had there -- still gated by `up_we_i` alone,
+      // still outside the freeze, so an upload lands during a stall exactly
+      // as before. The ONLY thing that changed is that it is now written
+      // BELOW the fetch instead of above it.
+      //
+      // Two nonblocking assignments to different targets in one always_ff:
+      // this changes no behaviour, including read-during-write, which is OLD
+      // DATA either way.
+      if (up_we_i)
+        store[(int'(up_ctx_i) * PLAN) + int'(up_pc_i)] <=
+            '{op: up_op_i, dst: up_dst_i, a: up_a_i, b: up_b_i, c: up_c_i, imm: up_imm_i};
 
       // ---- the long-op queue ----------------------------------------------
       if (lq_push_c) begin
