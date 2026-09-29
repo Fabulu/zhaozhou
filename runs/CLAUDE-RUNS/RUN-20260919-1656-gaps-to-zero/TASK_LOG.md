@@ -6175,3 +6175,39 @@ timed out at 600 s inside the suite twice and completes in seconds when run alon
 RC 0. `render_texture_packet_a` and `field_host_v2_r126_guard` are the same shape. The
 other ~35 reds are persistent and belong to other lanes' packets -- a serial re-run on
 the settled tree returned 38 of 39, which is what established the distinction.
+
+#### CONSOLE FIT, ATTEMPT 2 -- AND THE OWNER'S RETRY PROTOCOL, WRITTEN DOWN
+
+Owner, 2026-09-29: *"just launch the fit. If it breaks, wait an hour, launch again.
+Make a timer for yourself."*
+
+**THE PROTOCOL, recorded here because a context window is not a place to keep an
+instruction that spans hours:**
+
+1. Launch `run_block_fit.ps1 -Module zhao_console_core` from a CLEAN tree.
+2. If it dies for ANY reason -- memory reap, Quartus crash, disk -- wait ONE HOUR, then
+   launch again. Do not shorten the wait: the first kill happened because three heavy
+   things shared the machine, and retrying immediately reproduces the cause.
+3. The timer is a background command that exits after the hour, so its completion
+   re-invokes this session. It is not a poll loop on the fit: the fit's own task
+   notification already reports its end, and a second watcher would only add noise
+   (this run has already paid for seven watchers on one fit once).
+4. Keep working on things outside the fit's closure while it runs. Every gate cleared
+   in the last stretch was cleared that way.
+
+**Attempt 1** died at ~22 minutes in `quartus_map`, reaped for memory, no measurement.
+**Attempt 2** launched from `969e792f` + the closure digest commit, tree clean, 16.0 GB
+free of 63.4 GB, with no concurrent build of this tree and no second ctest running. The
+Upheaval lane's `upheaval-studio` is resident at 1.9 GB and is LEFT ALONE.
+
+**ONE CAVEAT ON THE ARRANGEMENT BEING MEASURED, stated rather than buried.** The owner
+said launch, so it launches -- but this fit measures the console WITHOUT the veljoin
+counter repair (`FINDINGS-veljoin-counter.md`), which adds roughly 32 flops and an
+incrementer once `u_terrain_veljoin.sweeps_aborted_o` is no longer prunable. So the ALM
+figure this fit returns is low by about that much, and by nothing else that is known.
+That is a rounding error against a 41,910-ALM budget and the measurement is still worth
+having; it is written down so nobody later reads the number as final.
+
+**The question this fit answers, unchanged:** does the complete console fit
+`5CSEBA6U23I7` -- 41,910 ALM, 112 DSP, 553 M10K -- and what is its Fmax? The completion
+register says ZERO mandatory gaps and *"Freeze this design and measure it."*
