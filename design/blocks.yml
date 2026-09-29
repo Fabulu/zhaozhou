@@ -5383,7 +5383,14 @@ blocks:
     counters: [particles, triangles, range_refused, stall_full, dq_refused, dq_stray]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: COMPOSED
+    # COMPOSED IS NOT ON THE LADDER -- corrected 2026-09-29, and this field was MISSED
+    # when its own maturity_log entry was corrected earlier the same day. A half-applied
+    # fix is worse than none: the block then disagrees with its own log.
+    #
+    # Same mapping and same reasoning as the entry below: composed here means wired into
+    # zhao_console_core, which is what INTEGRATED names, and the evidence is a PRODUCTION
+    # acceptance test. Nothing higher is claimed.
+    maturity: INTEGRATED
     maturity_log:
       - state: UNIT_VERIFIED
         date: "2026-09-22"
@@ -6450,68 +6457,79 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    blocked_on: >-
-      FOUR SEAMS. The RULING IS MADE -- spec/memory_rules.md 5f.1, 2026-09-19:
-      a published slot is named by the handle index of the resource it holds,
-      so the directory is {index:24} -> {slot, base, extent, kind}, and
-      zhao_mem_upload now publishes all five (publish_index_o, publish_slot_o,
-      publish_base_o, publish_extent_o, publish_tag_o). The history that led to
-      that sentence is kept below because it is the evidence for it.
-      WHAT REMAINS IS COMPOSITION, and it is FOUR seams, not one. The docket of
-      2026-09-19 called this ruling "the last thing between the texture island
-      and sampling anything"; it is not, and each of the four is already an
-      entry somebody wrote down:
-      (1) MEM.UPLOAD is composed NOWHERE. zhao_hps_arbiter carries exactly two
-      clients and both are taken in both instances -- CMD.DMA and
-      DEBUG.FRAMEBLIT in zhao_shell_top_v2, TERRAIN.CMD and TERRAIN.PAGELOADER
-      in zhao_console_core's u_terr_hps_arb. A third is an owner ruling, and
-      core entry I27 already records it as one.
-      (2) The record fetch (mem_*) wants a THIRD ENGINE1 requester;
-      zhao_geom_mem_adapter has exactly two, GEOM.MESHFETCH and GEOM.ASSETFETCH.
-      (3) The resolve REQUEST has no honest producer. Both nouns are live in
-      zhao_console_core and may NOT be joined: cmd_draw_material_set_o is the
-      DRAW's (core entry I41, a boundary) and mf_r_material_id is
-      GEOM.MESHFETCH's result register, which has moved on by the time the
-      meshlet is offered -- core entry I39 refuses exactly that join by name,
-      because it pairs meshlet N's triangles with meshlet M's material.
-      (4) tri_flat_request_i also wants the binding page's palette_slot,
-      palette_generation and response_class, which this block's own header says
-      it does not own.
-      THE HISTORY, kept: spec/memory_rules.md 5f left the render asset pool's
-      internal layout undecided, and MEM.UPLOAD published {slot, generation,
-      tag} with neither a base address nor an extent nor a resource kind. So
-      nothing could say WHERE a published MATERIAL_SET lives.
-      NARROWED 2026-09-19, and the narrowing removes two thirds of the work.
-      THE BASE AND THE EXTENT ARE NOT MISSING FROM THE DESIGN, THEY ARE MISSING
-      FROM THE PUBLICATION. zhao_mem_upload already TAKES `req_vram_addr_i` (32)
-      and `req_len_i` (32) on the request, and already bounds-checks both
-      against `cfg_region_base_i`/`cfg_region_bytes_i` before it writes a byte.
-      It simply drops them: `publish_*_o` is {slot, generation, tag} and nothing
-      else. So `dir_base_i` and `dir_count_i` cost two output ports carrying
-      values the block has already validated -- not a new law, not new
-      arithmetic, and no new producer. The resource KIND likewise already
-      travels, as `publish_tag_o`.
-      WHAT IS GENUINELY ABSENT IS THE KEY, and it is the sentence 5f has to add.
-      `req_material_set_i` is handle32 {index:24, gen:8} and `dir_set_index_i`
-      is that 24-bit index, but NOTHING IN THE TREE CARRIES IT: `req_tag_i` is 8
-      bits and means "which consumer asked", `publish_slot_o` is 8 bits of
-      arena slot, and no field anywhere maps a MATERIAL_SET index to a resident
-      slot. 5f's own closing paragraph is what has to move -- "Not decided: the
-      pool's internal layout (descriptors vs index streams vs vertex records)
-      ... how it is carved up is the asset fetcher's business and is still
-      open". THAT SENTENCE IS NOW WRITTEN, as 5f.1: a published slot is named
-      by the handle index of the resource it holds, so {index:24} is the
-      directory key and {slot, base, extent, kind} is its row. It was checked
-      before it was written rather than guessed -- every publish_slot/
-      publish_tag/publish_generation site in fpga/, tests/, spec/, design/ and
-      reference/ was searched, MEM.UPLOAD's publication had NO consumer at all,
-      and the only other publish_slot_* in the tree is DEBUG.FRAMEBLIT's
-      one-bit framebuffer slot into VIDEO.SLOTMGR. Terrain pages are out of
-      scope and keep ruling T10's handle and TERRAIN.RESIDENCY's own directory.
-      Guessing instead would have produced a directory that resolves
-      confidently to the wrong surface, which is the one failure this block's
-      own "a miss STALLS rather than returning a default" rule exists to
-      prevent.
+    # `blocked_on` IS AN ENUM of {hardware, none}, and this field held the paragraph
+    # below. It is real engineering content -- a ruling reference and the statement that
+    # four composition seams remain -- so every word of it is kept here.
+    #
+    # `none`, and the distinction matters. This field is about an EXTERNAL blocker: the
+    # four blocks that carried `hardware` struck it the moment their RTL existed.
+    # Composition work remaining is ordinary unfinished work, not a blocker in that
+    # sense, so `hardware` would be false here. What the paragraph says about four
+    # seams is not a blocked_on value and is not lost.
+    #
+    # THE ORIGINAL, verbatim:
+    #   FOUR SEAMS. The RULING IS MADE -- spec/memory_rules.md 5f.1, 2026-09-19:
+    #   a published slot is named by the handle index of the resource it holds,
+    #   so the directory is {index:24} -> {slot, base, extent, kind}, and
+    #   zhao_mem_upload now publishes all five (publish_index_o, publish_slot_o,
+    #   publish_base_o, publish_extent_o, publish_tag_o). The history that led to
+    #   that sentence is kept below because it is the evidence for it.
+    #   WHAT REMAINS IS COMPOSITION, and it is FOUR seams, not one. The docket of
+    #   2026-09-19 called this ruling "the last thing between the texture island
+    #   and sampling anything"; it is not, and each of the four is already an
+    #   entry somebody wrote down:
+    #   (1) MEM.UPLOAD is composed NOWHERE. zhao_hps_arbiter carries exactly two
+    #   clients and both are taken in both instances -- CMD.DMA and
+    #   DEBUG.FRAMEBLIT in zhao_shell_top_v2, TERRAIN.CMD and TERRAIN.PAGELOADER
+    #   in zhao_console_core's u_terr_hps_arb. A third is an owner ruling, and
+    #   core entry I27 already records it as one.
+    #   (2) The record fetch (mem_*) wants a THIRD ENGINE1 requester;
+    #   zhao_geom_mem_adapter has exactly two, GEOM.MESHFETCH and GEOM.ASSETFETCH.
+    #   (3) The resolve REQUEST has no honest producer. Both nouns are live in
+    #   zhao_console_core and may NOT be joined: cmd_draw_material_set_o is the
+    #   DRAW's (core entry I41, a boundary) and mf_r_material_id is
+    #   GEOM.MESHFETCH's result register, which has moved on by the time the
+    #   meshlet is offered -- core entry I39 refuses exactly that join by name,
+    #   because it pairs meshlet N's triangles with meshlet M's material.
+    #   (4) tri_flat_request_i also wants the binding page's palette_slot,
+    #   palette_generation and response_class, which this block's own header says
+    #   it does not own.
+    #   THE HISTORY, kept: spec/memory_rules.md 5f left the render asset pool's
+    #   internal layout undecided, and MEM.UPLOAD published {slot, generation,
+    #   tag} with neither a base address nor an extent nor a resource kind. So
+    #   nothing could say WHERE a published MATERIAL_SET lives.
+    #   NARROWED 2026-09-19, and the narrowing removes two thirds of the work.
+    #   THE BASE AND THE EXTENT ARE NOT MISSING FROM THE DESIGN, THEY ARE MISSING
+    #   FROM THE PUBLICATION. zhao_mem_upload already TAKES `req_vram_addr_i` (32)
+    #   and `req_len_i` (32) on the request, and already bounds-checks both
+    #   against `cfg_region_base_i`/`cfg_region_bytes_i` before it writes a byte.
+    #   It simply drops them: `publish_*_o` is {slot, generation, tag} and nothing
+    #   else. So `dir_base_i` and `dir_count_i` cost two output ports carrying
+    #   values the block has already validated -- not a new law, not new
+    #   arithmetic, and no new producer. The resource KIND likewise already
+    #   travels, as `publish_tag_o`.
+    #   WHAT IS GENUINELY ABSENT IS THE KEY, and it is the sentence 5f has to add.
+    #   `req_material_set_i` is handle32 {index:24, gen:8} and `dir_set_index_i`
+    #   is that 24-bit index, but NOTHING IN THE TREE CARRIES IT: `req_tag_i` is 8
+    #   bits and means "which consumer asked", `publish_slot_o` is 8 bits of
+    #   arena slot, and no field anywhere maps a MATERIAL_SET index to a resident
+    #   slot. 5f's own closing paragraph is what has to move -- "Not decided: the
+    #   pool's internal layout (descriptors vs index streams vs vertex records)
+    #   ... how it is carved up is the asset fetcher's business and is still
+    #   open". THAT SENTENCE IS NOW WRITTEN, as 5f.1: a published slot is named
+    #   by the handle index of the resource it holds, so {index:24} is the
+    #   directory key and {slot, base, extent, kind} is its row. It was checked
+    #   before it was written rather than guessed -- every publish_slot/
+    #   publish_tag/publish_generation site in fpga/, tests/, spec/, design/ and
+    #   reference/ was searched, MEM.UPLOAD's publication had NO consumer at all,
+    #   and the only other publish_slot_* in the tree is DEBUG.FRAMEBLIT's
+    #   one-bit framebuffer slot into VIDEO.SLOTMGR. Terrain pages are out of
+    #   scope and keep ruling T10's handle and TERRAIN.RESIDENCY's own directory.
+    #   Guessing instead would have produced a directory that resolves
+    #   confidently to the wrong surface, which is the one failure this block's
+    #   own "a miss STALLS rather than returning a default" rule exists to
+    #   prevent.
+    blocked_on: none
     notes: >-
       THE CARTRIDGE BLOCK (audit R4) IS DEAD AND WAS DEAD WHEN THIS ROW STILL
       CITED IT -- corrected 2026-09-19. Owner ruling D-2 chose option A on
