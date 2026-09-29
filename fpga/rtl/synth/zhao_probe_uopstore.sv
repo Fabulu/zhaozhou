@@ -91,6 +91,8 @@ module zhao_probe_uopstore #(
     input  logic [ 4:0] pc_i,
     input  logic [ 7:0] op_i,
     input  logic [31:0] imm_i,
+    input  logic [ 2:0] wctx_i,    // STYLE=5 only: a DIFFERENT write address
+    input  logic [ 4:0] wpc_i,     // STYLE=5 only
     output logic [59:0] uop_o
 );
 
@@ -105,8 +107,8 @@ module zhao_probe_uopstore #(
   // Quartus 17.0.2 rejects a bare module-scope elaboration check; it must sit
   // inside `initial begin ... end`. QUARTUS_GOTCHAS.md carries the case.
   initial begin
-    if (STYLE > 4)
-      $fatal(1, "zhao_probe_uopstore: STYLE=%0d is not 0..4", STYLE);
+    if (STYLE > 5)
+      $fatal(1, "zhao_probe_uopstore: STYLE=%0d is not 0..5", STYLE);
     if (UW != 60)
       $fatal(1, "zhao_probe_uopstore: UW=%0d but the probe's port is 60", UW);
   end
@@ -127,6 +129,7 @@ module zhao_probe_uopstore #(
       // rst_n exists in every style so the PORT LIST is identical across
       // the maps; differing I/O would make the rows incomparable.
       wire unused_rst = &{1'b0, rst_n};
+      wire unused_waddr = &{1'b0, wctx_i, wpc_i};
     end
   endgenerate
 
@@ -181,6 +184,7 @@ module zhao_probe_uopstore #(
       end
       assign uop_o = rd_r;
     end else if (STYLE == 4) begin : g_async_reset_process
+      wire unused_waddr4 = &{1'b0, wctx_i, wpc_i};
       // THIRD HYPOTHESIS, and it is THIS REPOSITORY'S OWN DOCUMENTED CAUSE.
       // check_ram_inference.py flags arrays "written from an ASYNC-RESET
       // process" as a RAM-inference hazard, with measured false positives. The
@@ -208,6 +212,43 @@ module zhao_probe_uopstore #(
         end
       end
       assign uop_o = rd_r ^ {52'd0, other_r};
+    end else if (STYLE == 5) begin : g_addr_from_flop_array
+      // FOURTH HYPOTHESIS, and it is the last structural difference between this
+      // probe and production. Production reads:
+      //
+      //   :1200  s1_uop_r <= store[(int'(issue_ctx_c) * PLAN)
+      //                            + int'(pc_r[issue_ctx_c])];
+      //   :1090  store[(int'(up_ctx_i) * PLAN) + int'(up_pc_i)] <= ...
+      //
+      // TWO differences from styles 0-4, which all used ONE shared address:
+      //   (a) the read and write addresses are DIFFERENT expressions, so this is
+      //       a true simple-dual-port rather than a read-during-write, and
+      //   (b) THE READ ADDRESS IS FORMED BY A DYNAMIC READ OF ANOTHER FLOP
+      //       ARRAY -- `pc_r[issue_ctx_c]`, where `pc_r` is a per-context PC
+      //       array and the index is combinational.
+      //
+      // (b) is the candidate. Quartus's message names ASYNCHRONOUS READ LOGIC,
+      // and an address path that runs through a combinational read of a
+      // flip-flop array is asynchronous read logic -- just not of `store`
+      // itself, which is why it took four refuted guesses to look here.
+      //
+      // MUST NOT INFER if the hypothesis is right.
+      uop_t store[0:(CTX*PLAN)-1];
+      uop_t rd_r;
+      logic [PW-1:0] pc_arr[0:CTX-1];
+      wire [AW-1:0] raddr_c = {ctx_i,  pc_arr[ctx_i]};
+      wire [AW-1:0] waddr_c = {wctx_i, wpc_i};
+      always_ff @(posedge clk) begin
+        // keep pc_arr live and written at more than one address, as production
+        // does at :1095, :1333 and :1376
+        if (we_i)       pc_arr[wctx_i] <= wpc_i;
+        else            pc_arr[ctx_i]  <= pc_arr[ctx_i] + PW'(1);
+        if (we_i)
+          store[waddr_c] <= '{op: op_i, dst: op_i[4:0], a: pc_i,
+                              b: RW'(ctx_i), c: op_i[7:3], imm: imm_i};
+        rd_r <= store[raddr_c];
+      end
+      assign uop_o = rd_r;
     end else begin : g_control_plain
       // POSITIVE CONTROL -- plain packed vector array. MUST infer.
       logic [UW-1:0] store[0:(CTX*PLAN)-1];
