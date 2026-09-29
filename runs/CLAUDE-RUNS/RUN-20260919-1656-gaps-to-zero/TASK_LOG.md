@@ -6211,3 +6211,63 @@ having; it is written down so nobody later reads the number as final.
 **The question this fit answers, unchanged:** does the complete console fit
 `5CSEBA6U23I7` -- 41,910 ALM, 112 DSP, 553 M10K -- and what is its Fmax? The completion
 register says ZERO mandatory gaps and *"Freeze this design and measure it."*
+
+#### ATTEMPT 2 KILLED THE SAME WAY, AND THE FIT IS NOT THE CAUSE. MEASURED.
+
+Launched 08:20:16 from clean `b1f233bf`, snapshot taken, digest `abf0c8d52952` --
+byte-identical to attempt 1's, which confirms the closure did not move between them.
+Killed at **09:05:21**, 45 minutes in, at about 42 CPU-minutes. Again no fit row, no ALM,
+no Fmax. Timer armed for a 09:05 + 1h relaunch per the owner's standing instruction:
+*"just launch the fit. If it breaks, wait an hour, launch again. Make a timer for
+yourself."*
+
+**THE FIT'S OWN FOOTPRINT NEVER EXCEEDED 4.54 GB.** That is the owner's question answered
+and it is now measured across both attempts -- 4.37 GB in attempt 1, 4.54 GB in attempt 2,
+as the LARGEST SINGLE PROCESS at any moment. Where the machine's 107 GB of commit actually
+goes, at the moment of the kill:
+
+    vmmemWSL          36.8 GB     <- one process
+    FPilot x10        17.8 GB
+    msedge x50         8.3 GB
+    WindowsTerminal    7.9 GB
+    claude x3          4.2 GB
+    cc1plus x4         2.8 GB     <- somebody's C++ build
+    quartus (the fit)  3.6 GB     <- SEVENTH
+
+WSL and FPilot alone are 54.6 GB. **The fit is being reaped for other processes' memory.**
+Free RAM was 12.3 GB two minutes AFTER the kill, so the machine recovered instantly --
+the reap fires on a dip, and waiting an hour does not change what causes the dip. The
+honest recommendation, already given to the owner: reclaim WSL (`wsl --shutdown`, 36.8 GB,
+destructive to whatever it holds so it is the owner's call), close the nine surplus FPilot
+instances, or start Claude Code with `CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP=1`.
+
+**TWO INSTRUMENT FAULTS IN ONE HOUR, both found by checking rather than by trusting, and
+both worth keeping because they are this file's own law with fresh clothes.**
+
+**1. A RAM monitor that could never fire.** Its comparisons were
+`$(echo "$ws > $peak" | bc -l)` and **`bc` does not exist on this machine**. Every test
+evaluated to the empty string, every branch was false, and the "QUARTUS GONE" arm was
+dead too. It ran a full 30 minutes and reported nothing, which I would have read as "the
+fit is healthy" -- a detector reading zero that had never been shown to fire, quoted as
+evidence. Caught only by asking `which bc` when its silence was suspicious. The
+replacement does its comparisons in PowerShell, prints a WATCH ARMED line on its first
+sample so blindness is distinguishable from quiet, and was confirmed firing before it was
+trusted.
+
+**2. The replacement then over-reported by 2.7x.** It summed `PeakWorkingSet64` ACROSS
+processes and announced "quartus NEW PEAK 12.1GB". Quartus spawns short-lived helpers, so
+that sum adds maxima from different moments and counts children that no longer exist. **A
+sum of peaks is not a peak.** The true figure was 4.54 GB in one process. Corrected to
+report the MAX over single processes, with the concurrent sum shown separately and
+labelled as such. Note the direction: this one over-reported, which is the rarer and less
+dangerous way to be wrong -- but it was on its way into a status report to the owner as
+"the fit is ballooning", which would have sent the next hour after the wrong problem.
+
+**THE LEDGER, worked entirely outside the fit's closure while it ran: 96 -> 49 errors.**
+Every value measured from the tree, from a contract, or from git; nothing silenced with a
+plausible string. The last batch pinned five `maturity_log` entries to the commit that
+ADDED their own evidence file -- all five corroborating the date already recorded, to the
+day, one of them matching even the "32 checks" figure in its commit subject -- and found
+`COMPOSED`, a **third** maturity value that is not on the ladder after `BUILT` on three
+blocks. Three instances in one file: the vocabulary is being written from memory rather
+than read.
