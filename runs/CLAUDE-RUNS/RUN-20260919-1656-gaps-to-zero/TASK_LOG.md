@@ -6360,3 +6360,71 @@ rather than read.
 (both are owner/architect decisions), THEN run the rule stage and read it -- expect >=71 from
 V7 alone and an unknown number from the other twenty-two -- and only then settle ownership
 for the seven modules, because the rule stage may name more.
+
+---
+
+## 10:50 -- exit-path gate closed, and the gate itself was the defect (`e785417b`)
+
+**Where I was before this, so it is not lost:** the ledger schema is at **7 errors** and the
+next step is unchanged -- clear those 7 (both groups are owner/architect decisions), then run
+the rule stage V1-V23 for the first time (expect >=71 from V7 alone), and only then settle
+ownership for the seven composed-without-a-row modules. Nothing below changed that queue.
+
+**`verilated_exit_path` went 18 offenders -> 0.** 18 Verilated mains, 19 files, 20 targets
+built (RC=0, cmake's own code), 20 of 20 affected ctests pass in 5.8 s.
+
+**The finding is not the 18; it is that the gate could not see the branch that matters.**
+Transformation A rewrote only main's LAST statement, so `terrain_mipreq_directed` and
+`terrain_psmux_directed` ended in `exit_hard(1)` on the failure path while keeping
+`if (failures == 0) { ... return 0; }` -- and the lint reported them FIXED. It counted brace
+depth and inspected depth 0 only, on the stated reasoning that "a return inside a lambda
+(depth > 0) is ordinary control flow". An `if` block raises the same counter. Since the
+deadlock is in exit-time static destruction AFTER the checks pass and print, **the success
+branch is the only branch that reaches the bug, and it was the one branch the gate was blind
+to.** Depth was the wrong question: a brace is a barrier only if it opens a lambda or a local
+type. 18 -> 4, and the 2 extra were exactly those success branches.
+
+Self-check grew 3 -> 9 cases and now fires on this shape; it also pins the false-positive
+direction the docstring warns about (lambda returns, and `int a[] = {1, 2}`, which likewise
+ends in `]` before a `{`). Widening held the count at 4, not the 164-of-254 that flagging
+every return once produced. `unsafe_return_spans()` is now the single implementation with
+`count_unsafe_returns()` as its length -- written because my first fixer used its own regex
+and wanted to rewrite `return r;` inside `auto take = [&]() { ... }`, which the lint already
+excluded correctly. Two matchers for one question; the duplicate is always the weaker one.
+
+**No red was turned green.** Every rewrite carries the returned expression across verbatim. A
+main that falls off the end got nothing, because its implicit 0 would become an unconditional
+success on a file that has a failure counter. `terrain_place_cache_directed` is an
+inverted-polarity control and still fails 24 of 40 checks and exits 0, verified after the
+change. `projshare_contention` does not link `zhao_harness` and so cannot reach
+`zhao_sim.hpp`; it got `std::fflush(nullptr); std::_Exit(rc)` -- exit_hard's body verbatim --
+rather than an edit to the shared `tests/CMakeLists.txt` for one inline function.
+
+**It does NOT explain today's three suite timeouts.** `render_texture_packet_a` and
+`texjoin_accounting_retirement` are Python, `field_host_v2_r126_guard` is PowerShell. An
+attractive theory with no connection; recorded so it is not re-proposed.
+
+**Two alarms I raised and then disproved, both worth keeping so nobody re-chases them:**
+
+* `terrain_place_cache_axis_swap` looked UNREGISTERED as a ctest -- a positive control nobody
+  runs. It is registered, as `terrain_place_cache_axis_swap_control`. An audit keyed on target
+  names invents this gap.
+* Three live `ctest` processes looked like a violation of one-ctest-per-tree. They are
+  Upheaval trees (`build\perf3`, `build\fix3`, `build\gate11`) from other sessions, all
+  healthy -- children at 296 s / 265 s / 153 s CPU. My guard matched `Get-Process ctest`
+  globally; the rule is per BUILD TREE. Guard now matches the tree path.
+
+## Fit attempt 3, and the RAM question answered
+
+**Alive at 40.5 CPU-min. `quartus_map` peak 4.37 GB, current 4.02 GB.** The owner asked to
+watch RAM "so we know it's not just you flaming out at 40+ gigs" -- **the fit never exceeds
+~4.4 GB.** It is not the memory hog and never was. Present pressure on the shared machine is
+other work: `cc1plus` x13 = 6.31 GB, `upheaval-studio` x3 = 3.99 GB, Memory Compression
+4.26 GB, free 5.04 GB of 63.4 GB. `vmmemWSL` has fallen from 36.8 GB to 1.14 GB.
+
+**The fit is NOT measuring a stale circuit, and this was checked rather than assumed.** Its
+banner reads `HEAD=2a354f96`, 11 commits behind current HEAD. Of everything committed since,
+exactly one file in the fit's 299-file closure changed -- `fpga/rtl/prod/zhao_console_core.sv`
+-- and that diff is **17 added, 0 removed, 0 non-comment** (the `// TIE:` reason on
+`u_cliff_lat_share.poison_value_i`). `design/blocks.yml` and the schema are not fit inputs. So
+the snapshot describes the current design and the measurement will be usable.
