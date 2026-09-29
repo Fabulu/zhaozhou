@@ -69,13 +69,20 @@ provide. That asymmetry is the whole reason the outer gate is there at all.
 
 ## The measurement
 
-PLAN=48, map-only, standalone:
+Both rows are maps of **production RTL**, not of a probe, from clean trees:
 
-| | registers | comb ALUTs | est. ALMs | memory bits |
-|---|---:|---:|---:|---:|
-| before | 24,962 | 10,287 | 17,100 | 25,344 |
-| after | 1,862 | 2,110 | 2,016 | 48,384 |
-| **delta** | **−23,100** | **−8,177** | **−15,084** | **+23,040** |
+| ledger row | source commit | registers | comb ALUTs | est. ALMs | memory bits |
+|---|---|---:|---:|---:|---:|
+| `zhao_field_v3_exec@prodparams` | `45b880cc` | 24,962 | 10,287 | 17,100 | 25,344 |
+| `zhao_field_v3_exec@repaired` | `4c807992` | **1,862** | **2,110** | **2,016** | **48,384** |
+| delta | | −23,100 | −8,177 | **−15,084** | +23,040 |
+
+Identical in both: device `5CSEBA6U23I7`, Quartus Prime Lite 17.0.2, map-only,
+standalone, `sourceListHash 47f29d31d3332652`, 408 source files, `rtlCleanAtHead:
+true`, parameters `LANES=1, CTX=8, REGS=32, LONGQ=4, PLAN=48`.
+
+The diagnostic variant `@R3d` produced **byte-identical** numbers to `@repaired`,
+which is the cross-check that the reduction and the repair are the same change.
 
 +23,040 is exactly 384 × 60, and the inferred object is named: `store_rtl_0`,
 **60 wide, 384 deep, Simple Dual Port** — the production payload and depth. The ALUT
