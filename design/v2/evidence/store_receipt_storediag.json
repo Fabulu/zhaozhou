@@ -1,0 +1,31 @@
+{
+  "array": "store",
+  "verdict": "UNINFERRED",
+  "quartus_reason": "asynchronous read logic",
+  "attributed_memories": [],
+  "shape": [],
+  "report": "C:\\Users\\Fabs\\AppData\\Local\\Temp\\zhao-block-map-42376-639262489614692714\\zhao_field_v3_exec\\output_files\\blockmap.map.rpt",
+  "report_sha256_16": "40d7da5dfe2f9049",
+  "sources_digest": null,
+  "row": {
+    "module": "zhao_field_v3_exec@storediag",
+    "topParameters": null,
+    "device": "5CSEBA6U23I7",
+    "tool": "Quartus Prime Lite 17.0.2",
+    "registers": 17274,
+    "combAluts": 7553,
+    "estimatedAlms": 11946,
+    "blockMemoryBits": 25344,
+    "mlabMemoryBits": 0,
+    "inferredMemoryCount": 18,
+    "rtlCleanAtHead": true,
+    "seconds": 223.5,
+    "critical": 1
+  },
+  "not_claimed": [
+    "estimatedAlms is a pre-placement ESTIMATE and is not a placed area",
+    "blockMemoryBits is logical; physical RAM blocks are a separate count",
+    "map-only establishes no setup/hold and no integrated timing",
+    "a resource delta against a row with different parameters is not a delta"
+  ]
+}

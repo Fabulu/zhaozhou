@@ -111,3 +111,54 @@ the first replacement experiment.
   the issue path, which is a schedule change. State reorganisation is priced
   inside a schedule, not counted from declarations.
 * **Not that this rescues anything.** It is one array.
+
+---
+
+# PAIRED STANDALONE MEASUREMENT, 2026-09-29 -- the size is now confirmed twice
+
+R5's external feedback asked for "a paired standalone comparison under identical
+settings" before any delta is quoted. Here it is, and it confirms the 384-entry
+correction by an independent route.
+
+| row | params | registers | comb ALUTs | est. ALMs | memory bits |
+|---|---|---:|---:|---:|---:|
+| `zhao_field_v3_exec@storediag` | module defaults (PLAN=32) | 17,274 | 7,553 | 11,946 | 25,344 |
+| `zhao_field_v3_exec@prodparams` | **PLAN=48** (production) | **24,962** | 10,287 | 17,100 | **25,344** |
+
+**Register delta: +7,688. Predicted if the store is entirely in flip-flops:
+(384 − 256) × 60 = 7,680.** A 0.1% match, and it can only hold if every bit of
+the additional 128 entries became a flip-flop.
+
+**Two further confirmations fall out of the same pair:**
+
+* **The composed console is at PLAN=48.** The PLAN=48 standalone reports 24,962
+  registers against the composed exec's 24,795 own registers — 0.7% apart. The
+  parameter trace said so (`.INSTR_N(48)` → `.PLAN(INSTR_N)` → engine → core →
+  exec); this measures it.
+* **Memory bits do not move: 25,344 at both parameterisations.** The store
+  contributes *zero* memory either way, and `u_rf`'s 24,576 plus 768 accounts for
+  all of it. Adding 7,680 bits of array changed the register count and left the
+  memory untouched.
+
+So: **the store is 384 × 60 = 23,040 bits in flip-flops — 92% of that module's
+24,962 registers.** Quartus's attribution, from the receipt tool:
+
+```
+array            : store
+VERDICT          : UNINFERRED
+quartus says     : asynchronous read logic
+device / tool    : 5CSEBA6U23I7 / Quartus Prime Lite 17.0.2
+```
+
+## Still not claimed
+
+* **No ALM saving.** `estimatedAlms` is a pre-placement estimate; the 11,946 →
+  17,100 difference between the two rows is a *parameterisation* difference, not
+  a conversion delta. Nothing here says what banking the store would recover.
+* **No schedule cost either.** The production read at `:1200` is already inside a
+  clocked process, so a synchronous RAM does **not** inherently need an extra
+  architectural cycle — an earlier claim of mine, withdrawn. Whether it needs one
+  depends on ports, enables, collision semantics and timing, and that is an
+  experiment.
+* **The cause remains unknown.** Six probe styles infer; the reduction of the
+  real module has not been done.
