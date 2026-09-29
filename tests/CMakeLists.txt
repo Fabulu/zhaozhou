@@ -2125,6 +2125,39 @@ set_tests_properties(field_v3_exec_random PROPERTIES LABELS "fast;nightly" TIMEO
 add_test(NAME field_v3_exec_random_nightly COMMAND test_field_v3_exec_directed --random 400)
 set_tests_properties(field_v3_exec_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
 
+# THE SAME DIFFERENTIAL AT THE PRODUCTION DEPTH. The target above elaborates the
+# core at its DEFAULT `PLAN = 32`; the composed console passes `.INSTR_N(48)`, so
+# the shipped store is 384 entries and `up_pc_i` is SIX bits. Until 2026-09-29 the
+# executor's differential had never run at the parameterisation the console ships,
+# and it could not have: at five bits, instruction indices 32..47 are not
+# expressible.
+#
+# The source is IDENTICAL -- same file, `-DZHAO_TEST_PLAN=48` on the C++ side and
+# `-GPLAN=48` on the RTL side, so the harness and the DUT agree by construction
+# rather than by a hand-kept second copy. `test_store_depth_and_context_isolation`
+# is its own negative control: the store is addressed `ctx * PLAN + pc`, so a
+# depth that silently stayed at 32 truncates pc=47 to 15, overwrites that
+# context's own uop 15, and the comparison against the interpreter fails.
+add_executable(test_field_v3_exec_plan48 differential/field_v3_exec_directed.cpp)
+target_link_libraries(test_field_v3_exec_plan48 PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_field_v3_exec_plan48 PRIVATE ZHAO_TEST_PLAN=48)
+verilate(test_field_v3_exec_plan48
+  PREFIX Vzhao_field_v3_core
+  TOP_MODULE zhao_field_v3_core
+  VERILATOR_ARGS -GPLAN=48
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ops_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_core.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_exec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_mulbank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rf.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv)
+add_test(NAME field_v3_exec_plan48 COMMAND test_field_v3_exec_plan48)
+set_tests_properties(field_v3_exec_plan48 PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+add_test(NAME field_v3_exec_plan48_random COMMAND test_field_v3_exec_plan48 --random 40)
+set_tests_properties(field_v3_exec_plan48_random PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
 # FIELD v3 Phase 4: NOISE2 and RIDGE for four points at once, on the shared
 # four-wide multiplier bank. ONE four-wide bank request is the SAME hash step
 # for all four points, so a four-point NOISE2 is six requests and RIDGE is

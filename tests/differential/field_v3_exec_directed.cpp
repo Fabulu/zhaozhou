@@ -68,7 +68,22 @@ using zhao::check;
 
 constexpr int kCtx = 8;
 constexpr int kRegs = 32;
-constexpr int kPlan = 32;
+
+// THE PARAMETERISATION IS A BUILD PARAMETER, because the console's is not the
+// module's default. `zhao_field_v3_core` defaults to `PLAN = 32`; the composed
+// console passes `.INSTR_N(48)`, so the production store is 384 entries deep and
+// `up_pc_i` is SIX bits, not five. Until 2026-09-29 this differential only ever
+// ran at 32 -- it was verilated with no `-G` and capped every program at 32 uops
+// -- so indices 32..47 were not merely untested, they were inexpressible.
+//
+// An object-like `#ifndef` guard is used deliberately: it is the shape a
+// command-line `-D` can actually reach. (CLAUDE.md records a day lost to a
+// FUNCTION-like `define` that `-D` silently failed to override, compiling the
+// production default and passing while testing nothing.)
+#ifndef ZHAO_TEST_PLAN
+#define ZHAO_TEST_PLAN 32
+#endif
+constexpr int kPlan = ZHAO_TEST_PLAN;
 
 struct Prng {
   uint64_t s;
@@ -163,6 +178,71 @@ zfield::Decoded alu_program(Prng& rng, int n_in, int n_body) {
   o.reg = (uint8_t)(next_reg - 1);
   d.out_lanes.push_back(o);
   d.program_hash = 0xA10A0000u | (uint32_t)n_body;
+  return d;
+}
+
+// ---------------------------------------------------------------------------
+
+// A program long enough to reach the store's LAST legal instruction index.
+//
+// `alu_program` above cannot do this and should not be changed to: it gives every
+// instruction a fresh destination and stops at `next_reg < 20`, which caps the body
+// at 16 instructions -- fine for the datapath tests it feeds, and exactly 16 short
+// of what a depth test needs at PLAN=48.
+//
+// Two properties make an arbitrarily long program legal here:
+//
+//   * destinations CYCLE through a small window above the input lanes, so length is
+//     not limited by the register count;
+//   * every instruction reads the PREVIOUS instruction's destination, so nothing is
+//     dead and the planner cannot shorten the program back down. Without the chain,
+//     re-using a destination before its value is read is dead code, the planner
+//     removes it, and the test silently measures a short program again -- the
+//     flattering direction.
+//
+// DOT2/DOT3 are excluded deliberately: they read a GROUP of consecutive registers,
+// which the cycling window does not guarantee. Their interaction with the pipe is
+// covered by the tests above; depth is what this one is for.
+zfield::Decoded deep_program(Prng& rng, int n_in, int n_body) {
+  static const uint8_t kSingle[] = {zfield::OP_MOV, zfield::OP_ADD,   zfield::OP_SUB,
+                                    zfield::OP_MUL, zfield::OP_MAD,   zfield::OP_MIN,
+                                    zfield::OP_MAX, zfield::OP_CLAMP, zfield::OP_SELECT};
+  zfield::Decoded d;
+  d.profile = 0;
+  static const char* names[8] = {"x", "z", "p0", "p1", "p2", "p3", "p4", "p5"};
+  for (int i = 0; i < n_in; ++i) {
+    zfield::IoLane l;
+    l.name = names[i];
+    l.type = 0;
+    l.reg = (uint8_t)i;
+    d.in_lanes.push_back(l);
+  }
+  const int kWindow = 8;  // destinations rotate through n_in .. n_in+kWindow-1
+  int defined = n_in;     // registers 0 .. defined-1 hold a value
+  int prev = -1;          // the previous instruction's destination
+  for (int k = 0; k < n_body; ++k) {
+    int dst = n_in + (k % kWindow);
+    if (dst == prev) dst = n_in + ((k + 1) % kWindow);  // never clobber what we read
+    zfield::Instr ins = {};
+    ins.op = kSingle[rng.below((uint32_t)(sizeof kSingle))];
+    ins.dst = (uint8_t)dst;
+    ins.a = (uint8_t)((prev >= 0) ? prev : (int)rng.below((uint32_t)n_in));
+    ins.b = (uint8_t)rng.below((uint32_t)defined);
+    ins.c = (uint8_t)rng.below((uint32_t)defined);
+    d.instrs.push_back(ins);
+    if (dst + 1 > defined) defined = dst + 1;
+    prev = dst;
+  }
+  zfield::Instr end = {};
+  end.op = zfield::OP_END;
+  d.instrs.push_back(end);
+
+  zfield::IoLane o;
+  o.name = "h";
+  o.type = 0;
+  o.reg = (uint8_t)prev;
+  d.out_lanes.push_back(o);
+  d.program_hash = 0xDEE90000u | (uint32_t)n_body;
   return d;
 }
 
@@ -961,6 +1041,128 @@ void test_random(Vzhao_field_v3_core& top, int iters) {
         (int)top.exec_desync_o);
 }
 
+
+// ---------------------------------------------------------------------------
+
+// THE STORE'S FULL DEPTH, AND THAT TWO CONTEXTS DO NOT SHARE A WORD.
+//
+// This is the test the external feedback asked for: programs reaching the last
+// legal instruction index, in more than one context, with independent data, and
+// with upload addresses that are not the fetch addresses.
+//
+// IT IS ALSO ITS OWN NEGATIVE CONTROL, which is what makes it worth writing.
+// The store is addressed `ctx * PLAN + pc`. At PLAN=48 the top index is 47 and
+// `up_pc_i` must be six bits. If the parameterisation silently stayed at 32 --
+// or if a future layout replaced the arithmetic with a `{ctx, pc}`
+// concatenation -- then pc=47 truncates to 15 and OVERWRITES this context's own
+// uop 15, so the program executes something else and the comparison against the
+// interpreter fails. Nothing has to be asserted about the parameter itself; a
+// wrong depth cannot pass.
+//
+// Deliberately NOT claimed: this is a semantic execution test over legal
+// programs, not a raw storage test over arbitrary data. There is no host read
+// port, so execution is the only observable, and a storage proof over arbitrary
+// bit patterns would need one.
+void test_store_depth_and_context_isolation(Vzhao_field_v3_core& top) {
+  printf("-- the store's full depth, in two contexts, with independent data\n");
+  Prng rng(0x5701E48D);
+
+  // A program that lands DEEP: as close to the last legal slot as the planner
+  // gets, leaving room for the END the installer appends.
+  //
+  // SEARCHED rather than computed, because the planner's uop count is not the
+  // requested op count -- DOT2/DOT3 expand, and uniform elimination can remove
+  // work. So sweep the request and KEEP THE BEST legal one. The first version of
+  // this only ever decremented, and at PLAN=32 it never found anything: a real
+  // failure of my own test, caught by running it.
+  zfield::Decoded prog;
+  zfield::Fplan fp;
+  const int n_in = 4;
+  int best = -1;
+  bool found = false;
+  for (int want_ops = 4; want_ops <= kPlan + 8; ++want_ops) {
+    const zfield::Decoded p = deep_program(rng, n_in, want_ops);
+    const zfield::Fplan f = zfield::plan(p, (1u << n_in) - 1u);
+    const int slots = (int)f.uops.size() + 1;  // + the appended END
+    if (slots > kPlan) continue;
+    if (slots > best) {
+      best = slots;
+      prog = p;
+      fp = f;
+      found = true;
+    }
+  }
+  check(found, "a program was built that fits the store", 1, found ? 1 : 0);
+  if (!found) return;
+
+  // The highest instruction index actually written, END included.
+  const int deepest = (int)fp.uops.size();
+  printf("   deepest instruction index written: %d of %d legal (0..%d)\n", deepest, kPlan,
+         kPlan - 1);
+  // The threshold is what makes this a DEPTH test rather than a second copy of the
+  // tests above, and it is expressed against kPlan so the PLAN=48 arm demands
+  // indices the five-bit interface cannot even carry.
+  const int need = kPlan - kPlan / 4;  // within the top quarter of the store
+  check(deepest >= need, "the program reaches the store's deep slots", 1,
+        deepest >= need ? 1 : 0);
+  if (deepest < need) {
+    printf("   (wanted index >= %d, planner's deepest legal program was %d)\n", need, deepest);
+    return;
+  }
+
+  // TWO CONTEXTS, FIRST AND LAST, with independent inputs. ctx 7's uop 0 sits at
+  // linear address 7*PLAN; ctx 0's deepest sits at `deepest`. Nothing may alias.
+  const int ctxs[2] = {0, kCtx - 1};
+  int32_t in[2][8] = {};
+  for (int s = 0; s < 2; ++s)
+    for (int i = 0; i < n_in; ++i) in[s][i] = rng.interesting();
+
+  Dut d(top);
+  d.reset();
+  for (int s = 0; s < 2; ++s) {
+    bool sc = false;
+    if (!install(d, ctxs[s], fp, in[s], (size_t)n_in, &sc)) {
+      check(false, "the deep program installed into both contexts", 1, 0);
+      return;
+    }
+  }
+  for (int s = 0; s < 2; ++s) d.start(ctxs[s]);
+
+  int fin = 0, guard = 0, done = -1;
+  while (guard++ < 80000 && fin < 2) {
+    if (d.step(&done)) ++fin;
+  }
+  check(fin == 2, "both contexts reached END", 2, fin);
+  check(top.exec_desync_o == 0, "the multiplier stayed in step at full depth", 0,
+        (int)top.exec_desync_o);
+  check(top.unsupported_o == 0, "no op was refused at full depth", 0, (int)top.unsupported_o);
+
+  // Each context must match the interpreter FOR ITS OWN INPUTS. A word shared
+  // between the two contexts shows up here as one of them computing the other's
+  // answer.
+  int bad = 0, crossed = 0;
+  for (int s = 0; s < 2; ++s) {
+    const zfield::Prepared prep = zfield::prepare(fp, prog, in[s], (size_t)n_in);
+    int32_t want[4] = {};
+    zfield::execute_point(fp, prog, prep, in[s], (size_t)n_in, want, fp.out_map.size(), nullptr);
+    int32_t other[4] = {};
+    const zfield::Prepared prep_o = zfield::prepare(fp, prog, in[1 - s], (size_t)n_in);
+    zfield::execute_point(fp, prog, prep_o, in[1 - s], (size_t)n_in, other, fp.out_map.size(),
+                          nullptr);
+    for (size_t o = 0; o < fp.out_map.size(); ++o) {
+      if (fp.out_map[o].kind != zfield::SrcKind::kVec) continue;
+      const int32_t got = d.shadow[ctxs[s]][fp.out_map[o].idx];
+      if (got != want[o]) {
+        ++bad;
+        // Naming the specific failure mode a shared word would produce.
+        if (got == other[o] && want[o] != other[o]) ++crossed;
+      }
+    }
+  }
+  check(bad == 0, "each context matches the interpreter on its OWN inputs", 0, bad);
+  check(crossed == 0, "no context received the OTHER context's answer", 0, crossed);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -982,6 +1184,7 @@ int main(int argc, char** argv) {
     test_results_survive_contention(top, 12);
     test_contention_with_many_contexts(top, 12);
     test_writes_survive_a_refusing_port(top, 12);
+    test_store_depth_and_context_isolation(top);
   }
   return zhao::report_and_exit("FIELD.V3.EXEC");
 }
