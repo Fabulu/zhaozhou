@@ -21000,6 +21000,23 @@ module zhao_console_core
   ) u_cliff_lat_share (
     .clk  (gpu_clk),
     .rst_n(rst_n),
+    // TIE: THE POISON DETECTOR IS DISABLED ON THIS SHARE, so this input is read by
+    // nothing. `.POISON_EN(1'b0)` above, and zhao_forge_cliff_srvshare.sv documents
+    // exactly this case in its own header: "POISON_EN exists because the lattice
+    // service has no refusal encoding to watch: lat_h_o/lat_wx_o/lat_wz_o are raw
+    // fx16 and EVERY bit pattern is a legal height. A detector there would have to
+    // invent a sentinel, which would be a detector watching a value this block made
+    // up." The port itself carries the module's lint waiver and the words "GENUINELY
+    // UNUSED when POISON_EN = 0 ... the counter that reads it is generated away
+    // entirely, so there is no register left to hold a value nobody watches."
+    //
+    // So the literal is the unused input of a detector that does not exist in this
+    // configuration, NOT a value anything compares against. Compare u_cliff_cs_share,
+    // which passes 2'd3 because the compose cache HAS a refusal encoding to watch.
+    //
+    // The OTHER silent tie-off this audit reports, u_terrain_veljoin.sweeps_aborted_o,
+    // deliberately does NOT get a comment: it is a misattributed counter, not a
+    // benign literal. See runs/.../FINDINGS-veljoin-counter.md.
     .poison_value_i(113'd0),
 
     // Client 0: TERRAIN.SPDESC's cache side, which carries TESS through the
