@@ -6271,3 +6271,92 @@ day, one of them matching even the "32 checks" figure in its commit subject -- a
 `COMPOSED`, a **third** maturity value that is not on the ladder after `BUILT` on three
 blocks. Three instances in one file: the vocabulary is being written from memory rather
 than read.
+
+#### THE LEDGER: 96 -> 7, AND THE REASON IT MATTERED WAS NOT THE COUNT
+
+Worked entirely outside the console fit's closure while attempt 3 ran.
+
+**THE FINDING THAT REFRAMED IT.** `tools/ledger/src/cli.ts:113-123` gates the ENTIRE rule
+stage on the SCHEMA stage being empty:
+
+    const errors = [...blocks.schemaErrors, ...ops.schemaErrors];
+    if (errors.length === 0) { ... V1-V23 ... }
+
+So with any schema error outstanding, **V1 through V23 do not execute.** `eb5ebfde` noted
+this in passing and nobody measured the consequence. Clearing the schema stage is not
+hygiene -- it is the only way to switch twenty-odd rules back on, and none of them has ever
+spoken.
+
+**I MEASURED ONE OF THEM AND IT IS NOT SMALL.** A one-off read-only preview of rule V7 --
+deliberately NOT committed, because reimplementing a rule the ledger already owns is the
+duplication CLAUDE.md warns about -- reports **11 unknown block references and 60
+asymmetric edges**. From ONE rule of twenty-plus, and it is a lower bound.
+
+**SIX OF THE ELEVEN NAME COMPOSED HARDWARE WITH NO LEDGER ROW**, every one present in the
+console fit's own 299-file source digest:
+
+    CMD.EXEC           zhao_cmd_exec           227,619 B   <- LARGEST MODULE IN THE CONSOLE
+    TERRAIN.GROUP_SEQ  zhao_terrain_group_seq   34,653 B
+    GEOM.GROUP_SEQ     zhao_geom_group_seq      28,605 B
+    TERRAIN.LODFEED    zhao_terrain_lodfeed
+    TERRAIN.HDRREAD    zhao_terrain_hdrread
+    TWOD.SAMPLER       zhao_twod_sampler
+
+plus `zhao_terrain_veljoin` (19,339 B) from the manifest. Seven, not the three I first found.
+`MEM.HPS` is the one genuine shorthand -- MEM.HPS.BRIDGE and MEM.HPS.ARBITER have rows and no
+`zhao_mem_hps.sv` exists.
+
+**And the completion register still reads ZERO mandatory gaps, correctly.** It checks
+DECLARED capabilities against the composition, so a module nobody declared is not a
+declaration it can find missing. The one instrument that would have caught these -- V7 --
+has been switched off by an unrelated red for as long as the schema stage has been failing.
+That is this file's own law about a gate giving cover to every other red inside it, and V7 is
+what was under the cover.
+
+**THE SCHEMA WAS REJECTING THE HONEST FORM AND ACCEPTING THE DECEPTIVE ONE.** Rule V4 reads
+`if (!b.tests?.random)` -- it tests TRUTHINESS. So:
+
+* `random: null` is FALSY, V4 catches it, and the schema REJECTED it as a type error;
+* `random: "OWED -- NOT WRITTEN"` is TRUTHY, **V4 is blind to it**, and the schema ACCEPTED
+  it because it is a non-empty string.
+
+Three blocks already carried the truthy placeholder. **I came close to propagating it to
+nine more this morning** as a way of "closing" the required-property errors, which would have
+turned nine real gaps into nine green lies with the schema's blessing. Instead: `null` is now
+legal via a new `$defs/pathOrNone` -- deliberately NOT applied to `evidence:`, where absence
+means an unsupported claim rather than a considered none -- the three truthy placeholders
+became `null`, and the nineteen missing keys were declared explicitly. Nineteen BLOCKING
+schema errors became nineteen rule-stage findings that V4 will name by block.
+
+**THE SEVEN THAT REMAIN ARE THE TWO IRREDUCIBLE CLASSES**, both decisions rather than values:
+three `downstream` references to the composed-but-unrowed modules, and four from V4 demanding
+`source_ids: true` of two blocks that issue no guarded memory traffic at all -- a rule to
+narrow, not data to fix.
+
+**THREE CORRECTIONS OF MINE IN THIS STRETCH, all caught by checking rather than trusting:**
+
+1. **"The ledger has no referential-integrity check."** Written in two findings docs. **V7
+   exists** (`rules.ts:240-258`) and does exactly that. I asserted an absence without
+   grepping for it -- out of my own document, two hours old. Both docs now carry a correction
+   banner.
+2. **A tool I wrote to generalise the missing-row finding, DELETED rather than committed.** It
+   asked which composed modules no block id resolves to and answered 188 of 279 -- a big
+   confident number that means nothing, because the ledger claims CAPABILITIES, not modules,
+   so `zhao_field_v3_exec` and `zhao_cmd_exec` read as unowned too. Its first version was
+   worse: it grepped for the module NAME in `blocks.yml`, which never appears there at all.
+   Neither was validated against a case checkable by hand before the total was believed.
+3. **The `source_ids` test grepped for `src_id`** and found zero in all five candidates -- I
+   was about to report five RTL gaps. The field is `client`, of type `zhao_client_e`. Caught
+   by checking a block the flag says `true` and finding the same zero.
+
+Plus one half-applied fix of my own: I corrected `COMPOSED` in a block's maturity_log and
+missed the `maturity:` field above it, leaving the block disagreeing with its own log.
+
+**SIX OFF-LADDER MATURITY WORDS IN ONE FILE:** `BUILT` on three blocks, `COMPOSED` twice, and
+"BUILT and COMPOSED" inside INPUT.SNAC's prose. The vocabulary is being written from memory
+rather than read.
+
+**NEXT, in order, and the order changed because of the cli.ts finding:** clear the last 7
+(both are owner/architect decisions), THEN run the rule stage and read it -- expect >=71 from
+V7 alone and an unknown number from the other twenty-two -- and only then settle ownership
+for the seven modules, because the rule stage may name more.
