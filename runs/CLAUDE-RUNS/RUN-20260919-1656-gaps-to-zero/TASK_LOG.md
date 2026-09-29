@@ -5820,3 +5820,77 @@ session picks up.
 **Clause 1 re-verified at HEAD after tonight's RTL edits:** completion register
 **MANDATORY GAPS REMAINING 0**, RC 0, self-test passed, 114 capabilities
 connected, 90 production roots clean.
+
+#### V2 ARCHITECTURE REVIEW, FOUR ROUNDS -- and almost every number I made was withdrawn
+
+New branch `design/zhaozhou-v2-rfc`, isolated from the lane branch. V1 untouched;
+no V2 RTL exists. Owner handed over an external candidate (R0) plus three
+successive review packages; the exchange ran R0 -> my R1 -> his R2 -> my R3 ->
+his R4 -> my R5.
+
+**THE DURABLE OUTPUT IS SMALL AND IT IS WORTH MORE THAN THE DOCUMENTS.**
+`zhao_field_v3_exec.sv:302` declares `uop_t store[0:(CTX*PLAN)-1]` -- 256 entries
+of a 60-bit packed struct, **15,360 bits, held in FLIP-FLOPS**, about 62% of that
+node's 24,795 own registers. Quartus states the cause itself, in a line that had
+been sitting in a 26 MB map report the whole time:
+
+    Info (276007): RAM logic "...u_exec|store" is uninferred due to
+    ASYNCHRONOUS READ LOGIC
+
+Mapped standalone, `zhao_field_v3_exec` reports the same 25,344 memory bits as in
+the composed console (24,576 of it the register file plus 768), so **the blocker
+is intrinsic to the module, not composition** -- and therefore bisectable.
+
+**FIVE PROBE STYLES ALL INFER**, which eliminates four candidate causes:
+shipped `int'()`-cast addressing, a narrow unsigned address, a plain
+packed-vector array, a read enable derived from the read register, and an
+async-reset process. STYLE=5 -- different read/write addresses with the read
+address formed by a dynamic read of another flop array -- is in flight.
+
+**WHAT I GOT WRONG, ALL OF IT CAUGHT BY THE EXTERNAL REVIEWER READING CODE:**
+
+* A "31% storage lever" from a census that is **hierarchy-sensitive**: it
+  excludes a node's whole register count if any descendant holds a RAM, which on
+  this console excludes 147,127 of 279,210 registers -- MORE THAN IT COUNTS --
+  including the largest single holder. Neither an upper nor a lower bound.
+* Then a "4-7% lever" from `bits / 4`, which is capacity arithmetic rather than
+  an integrated area measurement. Withdrawn; **no percentage is quoted now.**
+* A "contractual 51 MHz floor" derived by multiplying a cycle CEILING by the
+  frame rate. That inverts the inequality -- a ceiling plus a deadline gives a
+  relationship, not a minimum clock -- and 51 MHz would spend 100% of the frame
+  anyway. **The contract states it directly and higher:** FIELD.SEQ.EARTH.md
+  designs for the shared 100 MHz GPU domain, calls ~80 MHz the lowest credible
+  clock, and rejects a measured 59.22 MHz leaf by name at 108% of its own budget.
+* Two real bugs in my own instruments: `v2_state_lever.py` passed file CONTENTS
+  to a parser expecting a PATH (the JSON route worked, so the published numbers
+  stand), and it divided total bits by 10,240 to count M10K blocks.
+
+**THREE REPAIRS TO `check_ram_inference.py`, each measured before and after:**
+
+1. The declaration recogniser was `^\s*(?:logic|reg|bit)`, so **every
+   typedef-declared array was invisible to the whole tool.** Widened to "any
+   identifier that is not a statement-leading keyword". 292 ranked rows -> 293:
+   exactly TWO arrays were hidden (`field_v3_exec store`,
+   `raster_tile_pipe_v2 w`). Narrow blind spot -- and it was hiding the largest
+   remaining array in the tree.
+2. Size was ENTRIES printed as BITS for such arrays: `uop_t store[0:255]` read
+   "256 bits" against an actual 15,360, a 60x underestimate that ranks the
+   biggest array near the bottom of its own list. Now flagged explicitly.
+3. `ALREADY INFERRING` was `mem >= bits` -- MODULE SUBTREE memory against THIS
+   array's size, so an unrelated RAM masks an array in flops. It cannot identify
+   an array, and I had turned it into a 94/109/88 partition and derived a
+   percentage from it. Label now states what it can support.
+
+All three fire-tests still pass and `gate_baseline.json` is unchanged at 0.
+
+**WHERE IT LANDED.** Both sides now propose the same next experiment: replace one
+coherent Field prepared-context slice and measure correctness, cycles, timing,
+area, ports and queue maxima **together**, in one table. R4's comparison boundary
+and candidate organisation are adopted whole -- including its fence against my
+blanket "no arrays in flip-flops" rule, which `zhao_field_v3_rf` refutes at
+24,576 memory bits with SIX registers.
+
+**THE LESSON, and it is the run's own recurring one:** the sign of my errors was
+not predictable -- twice too pessimistic, twice too optimistic. Every estimate
+made without an instrument came in wrong. No probability of success appears in
+R5, deliberately.
