@@ -2690,7 +2690,15 @@ blocks:
       devstore_bursts_read: bursts_read_o
       devstore_bursts_written: bursts_written_o
       devstore_rd_wait_clocks: rd_wait_clocks_o
-    source_ids: false
+    # CORRECTED 2026-09-29: this block DOES carry a source identity and the flag
+    # was stale. Evidence in fpga/rtl/terrain/zhao_terrain_devstore.sv:
+    #   input var zhao_client_e cfg_vram_client_i
+    # Not a claim about new work -- the identity was always in the RTL. Found while
+    # clearing ledger:check, after a first test that grepped for `src_id` returned
+    # zero for every block including ones flagged true: the field is `client`, of
+    # type zhao_client_e, and a confident answer about the wrong identifier is how
+    # this would have been reported as five RTL gaps instead of three stale flags.
+    source_ids: true
     budget_group: geometry_mantle
     maturity: SPECIFIED
     maturity_log:
@@ -3653,7 +3661,15 @@ blocks:
       terrain_matpub_commit_busy: commit_busy_o
     # Required by the schema and simply absent: this block carries no
     # per-source identity, is not deferred and supersedes nothing.
-    source_ids: false
+    # CORRECTED 2026-09-29: this block DOES carry a source identity and the flag
+    # was stale. Evidence in fpga/rtl/terrain/zhao_terrain_matpub.sv:
+    #   input var zhao_client_e cfg_vram_client_i
+    # Not a claim about new work -- the identity was always in the RTL. Found while
+    # clearing ledger:check, after a first test that grepped for `src_id` returned
+    # zero for every block including ones flagged true: the field is `client`, of
+    # type zhao_client_e, and a confident answer about the wrong identifier is how
+    # this would have been reported as five RTL gaps instead of three stale flags.
+    source_ids: true
     deferred: false
     superseded_by: null
     budget_group: geometry_mantle
@@ -7381,7 +7397,15 @@ blocks:
       twod_asset_bridge_errs: bridge_errs_o
       twod_asset_loads_during_pass: loads_during_pass_o
       twod_asset_bursts: bursts_o
-    source_ids: false
+    # CORRECTED 2026-09-29: this block DOES carry a source identity and the flag
+    # was stale. Evidence in fpga/rtl/compositor/zhao_twod_asset.sv:
+    #   assign hps_req_o.client = CLIENT
+    # Not a claim about new work -- the identity was always in the RTL. Found while
+    # clearing ledger:check, after a first test that grepped for `src_id` returned
+    # zero for every block including ones flagged true: the field is `client`, of
+    # type zhao_client_e, and a confident answer about the wrong identifier is how
+    # this would have been reported as five RTL gaps instead of three stale flags.
+    source_ids: true
     budget_group: twod_post
     maturity: RTL_VERIFIED
     maturity_log:
