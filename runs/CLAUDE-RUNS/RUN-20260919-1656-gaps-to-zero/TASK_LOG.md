@@ -6492,3 +6492,36 @@ and correctly. And three earlier alarms of mine were disproved rather than left 
 `terrain_place_cache_axis_swap` IS registered (under a `_control` suffix), the three live
 ctests are Upheaval trees rather than a one-per-tree violation, and `TERRAIN.MATPUB` sharing
 `TERRAIN.MATJOIN.md` is a deliberate shared contract (`GEOM.PARAMBUF.md` covers three).
+
+---
+
+## 12:05 -- 224 left, and V20 is 164 real investigations
+
+Since the last entry: V5, V2 and the five `zhao_mem_guard` V20 findings closed. **229 -> 224.**
+Seven rules are now at zero (V2, V3, V5, V6, V10, V12, V16) and four remain: V20 167, V4 29,
+V17 18, V7 10.
+
+**The V20 classification is the useful result:** 164 of 167 have NO annotation at all, 3 name a
+test file that does not exist, and the 5 in `zhao_mem_guard` merely had unresolvable ones -- a
+wildcard symbol, which V20 matches literally, and a trailing comma captured into the path,
+whose error then reads "path does not exist" and points at the filesystem instead of the
+punctuation. **mem_guard was the exception, not the pattern:** its author had done the whole job
+-- right proof named, a committed positive control per fault -- and it still read as five
+unenforced claims. The 164 are individual investigations and must not be cleared in bulk, since
+the rule's whole value is that some of those claims are false.
+
+The three phantom enforcers have candidate substitutes identified and were deliberately NOT
+repointed: each candidate only *mentions* the subject, and writing an ENFORCED-BY at a test that
+does not enforce the sentence is the exact failure V20 exists to catch.
+
+**PART.CLIPFEED corrected INTEGRATED -> UNIT_VERIFIED.** A prior pass had decided on INTEGRATED,
+reasoning "Nothing higher is claimed: SYNTHESIZED would assert a fit this entry does not cite" --
+but SYNTHESIZED is LOWER on the ladder, so that sentence refutes itself and the rung was chosen
+on a misreading of the order. It was the only block of 136 above RTL_VERIFIED, and zero blocks
+are SYNTHESIZED. V2 could never have caught it either: it exempts blocks absent from the
+previous committed ledger and delegates to V3, which only checks that the CURRENT rung has
+evidence -- so a row can be BORN at any height on one evidence file, which is what happened.
+
+Fit attempt 3 still alive, ~90 min wall, peak 4.43 GB, and it measures the current design.
+
+All of the above is in `reports/LEDGER-RULE-STAGE-20260929.md` with the evidence.

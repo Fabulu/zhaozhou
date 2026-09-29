@@ -189,3 +189,103 @@ file in its 299-file closure changed — `fpga/rtl/prod/zhao_console_core.sv` �
 is **17 added, 0 removed, every added line a comment** (the `// TIE:` reason on
 `u_cliff_lat_share.poison_value_i`). `design/blocks.yml`, the schema, `ops.yml`,
 `formal_runs.yml` and the counter lock are not fit inputs.
+
+---
+
+# Amendment, same day — V20 classified, and four more rules closed
+
+After the sections above, work continued. **229 → 224.** V5, V2, V16, V3, V6 and V10 are now
+all at zero; the remaining 224 are V20 167, V4 29, V17 18, V7 10.
+
+## V20's 172 are NOT one population, and the split decides the work
+
+    164   the annotation is genuinely ABSENT — no ENFORCED-BY within 10 lines of the claim
+      3   an annotation exists and names a test file that DOES NOT EXIST
+      5   an annotation existed and was merely UNRESOLVABLE  → fixed, zhao_mem_guard.sv
+
+`zhao_mem_guard.sv` turned out to be the exception rather than the pattern, and it is
+instructive: its author had done the whole job — named the right proof, committed a positive
+control for each deliberate fault — and the file still read as five unenforced claims. Two
+form defects did it, both of which look correct to a reader:
+
+* **A wildcard symbol resolves to nothing.** `a1_resource_*` and `a1_pb_*` are the natural way
+  to cite a family; V20 matches the symbol literally. `a1_resource_*` has one member;
+  `a1_pb_*` has seventeen.
+* **A trailing comma becomes part of the path.** `V20_ANNOTATION` captures up to whitespace,
+  so `...mem_guard_no_escape.sby, and the committed mutant ...` yields a path ending in a
+  comma — **and the resulting error says "path does not exist", pointing at the filesystem
+  instead of the punctuation.**
+
+Fixed comment-only: 0 added and 0 removed lines that are not `//` comments, so the running
+console fit still measures what it snapshotted.
+
+**The 164 are the real campaign.** Each needs the enforcer named, the missing enforcement
+added, or the claim rewritten as an explicit assumption naming who upholds it. They must not
+be cleared in bulk: the rule's entire value is that some of those claims are false — its own
+comment records the two it was written after, a mode byte nothing validated and a
+"toggle-free by construction" that was false for the FULL case, a real CDC hazard.
+
+### The three phantom enforcers, with candidates found but NOT adopted
+
+| claim site | cites (missing) | candidate that mentions the subject |
+|---|---|---|
+| `zhao_geom_paramwalk.sv:835` | `tests/geometry/geom_chunkser_directed.cpp` | `tests/geometry/geom_arenabin_directed.cpp` |
+| `zhao_terrain_clipfeed.sv:4` | `tests/terrain/terrain_clipfeed_directed.cpp` | `tests/mutants/terrain_clipfeed_tokenskew_mutant.cpp` |
+| `zhao_texture_mosaic_hold.sv:4` | `tests/texture/texture_mosaic_hold_directed.cpp` | `tests/texture/desc_identity_stall_control.cpp` |
+
+Deliberately not repointed. Each candidate merely *mentions* the subject; whether it actually
+enforces the specific claim is unverified, and writing an `ENFORCED-BY` at a test that does not
+enforce the sentence is precisely the failure V20 exists to catch. Three investigations, not
+three edits.
+
+## PART.CLIPFEED was the only block above RTL_VERIFIED and had not earned it
+
+V5 wanted a `resource_actual` at rank ≥ SYNTHESIZED and there was none, with no standalone
+synthesis of `zhao_part_clipfeed` to take one from. Corrected INTEGRATED → UNIT_VERIFIED.
+
+**A prior pass had recorded a decision for INTEGRATED, and its reasoning refutes itself:**
+*"Nothing higher is claimed: SYNTHESIZED would assert a fit this entry does not cite."* The
+ladder is `… RTL_VERIFIED, SYNTHESIZED, INTEGRATED, HARDWARE_PROVEN` — SYNTHESIZED is **lower**.
+That sentence only makes sense if INTEGRATED sat beneath it, so the rung was chosen on a
+misreading of the order, and INTEGRATED asserts the fit it was declining plus one more rung. A
+factual correction to a stated premise, not a difference of judgement.
+
+Corroboration: it was the only block of 136 above RTL_VERIFIED (75 UNIT_VERIFIED, 28
+SPECIFIED, 20 RTL_VERIFIED, 12 REFERENCE_COMPLETE, 1 INTEGRATED, **zero SYNTHESIZED**), while
+TWOD.BAND, TWOD.CMD and POST.GATHER all record the same "composed in zhao_console_core" fact
+at RTL_VERIFIED; and it still owes `reference_model` and `tests.random`. The composition fact
+is kept — in `notes` and in the preserved, annotated INTEGRATED log entry. What the ladder
+lacks is a rung for *composed but not independently synthesized*; borrowing a higher one to
+express it is what went wrong.
+
+### And how the rung was claimed is the more useful finding
+
+    rules.ts:117   if (!p) continue; // new block: V3 governs evidence, not ordering
+
+V2's "maturity advances one step at a time" compares against the previously committed ledger,
+so a block absent from it is exempt by design and delegated to V3 — and V3 checks only that
+the **current** state has a dated, commit-pinned, on-disk evidence file, never that the rungs
+below were earned. **Between them a row can be BORN at any height on a single evidence file**,
+which is what happened: this row is not in `blocks.yml` at either 2026-09-22 commit its log
+cites, those being the dates its *tests* landed. Not an advance that slipped past a rule — a
+birth the rule structurally cannot see.
+
+## The four mem_guard formal controls were re-run, and two theorems lost their witness
+
+Registered green (V16 4 → 0) from a run here rather than transcribed. Detail in the section
+above; the part that is owed: **`a1_pb_wr_view0` and `a1_map` are no longer tripped by any
+mutant**, because `b9c2d3e2` widened `a1_region` on a branch parallel to the one that measured
+the controls, and nobody re-ran them after the merge. No committed positive control currently
+shows those two theorems are non-vacuous.
+
+## Also corrected: two of my own conclusions
+
+* **"No SymbiYosys on this machine" was wrong** — an unsourced shell. It is at
+  `.tools/oss-cad-suite/bin/sby.exe` once `tools/env/zhao-env.ps1` is sourced. I was one step
+  from writing `never_ran` into the formal registry about four properties that had in fact
+  been run. Third tool to bite this way after `cmake` and `ctest`.
+* **"GEOM.LIGHT's `reference_model` is wrong" was wrong.** Its contract already distinguishes
+  the law from this block's entry point, deliberately and correctly. It is V17(d) that is
+  over-strict for an oracle reached through a documented entry point — while
+  GEOM.PARAMARENA/PARAMWALK, whose test contains no `zref::geom::` reference at all, are
+  genuine hits.
