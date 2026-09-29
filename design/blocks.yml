@@ -541,6 +541,65 @@ counter_catalog:
   - post_gather_glow_saturations
   - post_gather_disp_clamps
   - post_gather_cells_flushed
+
+  # APPENDED 2026-09-29. These 44 names were already DECLARED by blocks in this
+  # same file and were absent from the catalog, so `check_counter_ids.py` failed
+  # 44 times with "a block declares counter 'X', which is not in the catalog".
+  #
+  # AT THE END, in one contiguous run, because a counter id IS its zero-based
+  # position here and the list is append-only: `frame_cycles` once drifted from
+  # id 0 to index 150 because twenty-three commits PREPENDED, and every tool that
+  # checked the catalog compared it only with itself. Nothing above this line
+  # moved.
+  #
+  # Adding a name here is the documented operation and it is not a claim that the
+  # counter is WIRED to anything. It says the catalog now has an id for a name the
+  # ledger already declares. Reachability is DEBUG.COUNTERS' business and is
+  # checked elsewhere.
+  - bakerec_aged_out
+  - bakerec_coalesced
+  - bakerec_overflow
+  - bakerec_records_dropped
+  - bakerec_records_issued
+  - bakerec_records_queued
+  - bakerec_records_retired
+  - bakerec_records_retried
+  - bakerec_stamps_seen
+  - bakerec_stray_done
+  - bakerec_unplaced
+  - compcache_mat_cells
+  - compcache_mat_oob
+  - dq_refused
+  - dq_stray
+  - err_hold_broken
+  - granted
+  - idle_offered
+  - mat_unarmed
+  - pagestream_cells
+  - particles
+  - range_refused
+  - stall_full
+  - switches
+  - terrain_edgerecon_collisions
+  - terrain_edgerecon_edges_fallback
+  - terrain_jobissue_ctx_refused
+  - terrain_jobissue_ctx_src_mismatch
+  - terrain_spdesc_door_src_mismatch
+  - terrain_spdesc_serve_no_door
+  - triangles
+  - twod_plane_disabled
+  - vertid_id_unnameable
+  - vertid_index_oob
+  - vertid_key_split
+  - vertid_opens
+  - vertid_published
+  - vertid_refs
+  - vertid_reused
+  - vertid_seal_abort
+  - vertid_stall
+  - vertid_sunk
+  - vertid_tris
+  - vertid_unshared
 blocks:
 
   # ===========================================================================
