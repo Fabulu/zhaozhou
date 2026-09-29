@@ -794,10 +794,30 @@ production_parameter_overrides:
   # THE RULE THIS SECTION NOW CARRIES: the shared FIELD port width appears in
   # FOUR places -- the host instance, both adapter instances, and here -- and
   # they move together or the fit measures a machine nobody composed.
+  # AND A THIRD TIME, FOUND 2026-09-29. `INSTR_N` read 32 while the console has
+  # composed 48 since 2026-09-22 (decision W14's ceiling, GEOM.WARP prerequisite
+  # P7, `zhao_console_core.sv:37686`). So `zhao_prod_top` elaborated the Field
+  # host with a 256-entry uop store against the console's 384 -- understating it
+  # by 128 x 60 = 7,680 bits and the logic around them. UNDERSTATING, which is
+  # the flattering direction and the reason nobody questioned it.
+  #
+  # The section above warned about exactly this, twice, in its own words: "an
+  # override that is present and wrong looks audited", "a stale override is a
+  # stale mutant wearing a manifest row". The warning was right and unread --
+  # which is this repository's most repeated shape, and the reason it is being
+  # written down a third time rather than quietly corrected.
+  #
+  # `PCW` comes with it and is NOT derived: `zhao_field_host_v2` keeps PCW as a
+  # separate parameter and $fatals at elaboration when it disagrees with
+  # clog2(INSTR_N). There was no PCW row here at all, so prod_top took the
+  # default 5. Moving INSTR_N alone would trip that guard -- which is the guard
+  # working, and it is inside an `initial begin`, so `--lint-only` would not have
+  # reached it.
   zhao_field_host_v2:
     CLIENTS: 32'd2
     PROGS: 32'd8
-    INSTR_N: 32'd32
+    INSTR_N: 32'd48
+    PCW: 32'd6
     REGS: 32'd32
     TABLES: 32'd2
     TBL_N: 32'd64
@@ -1761,3 +1781,22 @@ excluded:
   # watch this row wants: the discharge condition is written below and the tool
   # is what will ask whether it was performed.
   - zhao_terrain_pageio: not-yet-adopted  TERRAIN.BAKE's page window (design/contracts/TERRAIN.PAGEIO.md, owner ruling R210, design/blocks.yml id TERRAIN.PAGEIO): layer D in, layers B and D out, inside one resident TERRAIN.PAGE_POOL slot, plus the directory's deformation mark terr_dm_*. 79 checks in pageio_rtl_directed with layers A, C and E asserted byte-identical after a bake and the detector itself fired by a mutant. One new requester on the existing write-capable share (u_build_share, .N(3) -> .N(4)); NO guard change, no new client id, no new region -- zhao_mem_guard already admits ZHAO_CLIENT_TERRAIN_BUILD on this pool in both directions, and the bench's real-guard observer passes and forwards every request the block makes. BOTH CONDITIONS ARE SPENT and it is COMPOSED into zhao_console_core 2026-09-21 (terrabake): the cmd_* producer is zhao_terrain_bakerec and the sheet arbiter is zhao_surface_sheetshare, both composed in the same commit. This row remains about zhao_prod_top, which does not instantiate it. Fit gate F-PAGEIO1 in design/fit_targets.yml prices the shadow plane and the two page buffers before then
+
+  # ------------------------------------------------------------------------
+  # THE TWO RAM-INFERENCE PROBES, 2026-09-29.
+  #
+  # Both were UNACCOUNTED and the manifest check said so, which is the check
+  # doing its job: a new file under fpga/rtl/ with no row here reopens by one
+  # the gap that a 44-to-99 pass closed to zero. A third probe,
+  # zhao_probe_execstore, is not listed because it was DELETED the same day --
+  # it was a 1,400-line copy of zhao_field_v3_exec.sv with two lines changed,
+  # and a copy kept past the question it answered is a drift hazard rather
+  # than evidence (CLAUDE.md, mutant-copy-drift).
+  #
+  # `probe` rather than `unused` or `not-yet-adopted` is deliberate and
+  # tools/budget/uncashed_cheques.py depends on the distinction: those two
+  # wordings are deferrals it keeps watching, and `probe` CLOSES the question.
+  # Neither of these is ever going into the machine. They are instruments, and
+  # the measurements they produced are recorded in design/v2/evidence/.
+  - zhao_probe_rcp24_rom: probe  a 4-style generated probe (tools/quartus/gen_probe_rcp24_rom.py) that measured what turns a 256-arm combinational case into an M10K ROM: a REGISTERED READ is sufficient, 145 comb ALUTs -> 0. Never instantiated, in no source list, and mapped only ad hoc; the generator is committed so the probe is reproducible rather than precious
+  - zhao_probe_uopstore: probe  six synthetic styles of the Field executor's uop store, all of which INFERRED -- and the durable finding is that this proved nothing, because a probe that infers eliminates no cause. STYLE=3 produced a false elimination of the very hypothesis the real module's reduction later had to test. Retained with its correction banners as the record of that mistake; superseded on the CAUSE by design/v2/evidence/store_repair.md
