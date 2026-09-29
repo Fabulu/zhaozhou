@@ -1,3 +1,10 @@
+> **SUPERSEDED 2026-09-29 — THE CAUSE WAS FOUND.** It was the REDUNDANT OUTER GATE
+> `if (!hold_c && !mul_denied_c)` around the fetch, and hoisting that one statement
+> makes the array a Simple Dual Port M10K with no behaviour change at all. Read
+> [`store_repair.md`](store_repair.md) for the answer, the five mapped reductions
+> that isolated it, the before/after numbers and what they do not mean. Everything
+> below is kept for the record only.
+
 > # REFUTED THE SAME HOUR, BY ITS OWN PREDICTION
 >
 > **Everything below is wrong about the CAUSE.** It predicted that variant R1 --

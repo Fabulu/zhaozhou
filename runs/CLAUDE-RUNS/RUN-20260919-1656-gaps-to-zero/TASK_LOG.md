@@ -5970,3 +5970,91 @@ cause and R3b tests that.
 11,946 -> 17,100 between parameterisations is a parameterisation difference); no
 extra architectural cycle required (the production read is already clocked); and
 nothing here rescues a whole console from one array.
+
+#### THE CAUSE FOUND, THE REPAIR LANDED: A REDUNDANT GATE HELD 23,040 BITS IN FLOPS
+
+Branch `design/zhaozhou-v2-rfc`. Five mapped reductions of the real module, three of
+my own predictions refuted along the way, and a one-statement repair that changes no
+behaviour at all.
+
+**THE ELIMINATION TABLE.** Each row is a map of `zhao_probe_execstore` at PLAN=48,
+a diagnostic reduction of `zhao_field_v3_exec`, classified by name:
+
+    variant  read position    enable on the read                verdict
+    -------  ---------------  -------------------------------   ----------
+    prod     after the write  nested pair                       UNINFERRED
+    R1       before           none                              INFERRED
+    R3a      before           `issue_c` alone                   INFERRED
+    R3c      before           unchanged nested pair             UNINFERRED
+    R3d      after            `issue_c` alone, hoisted          INFERRED
+
+**R3a killed the enable hypothesis by arithmetic, not by measurement.** `issue_c`
+already contains `!hold_c && !mul_denied_c` (:378), so production's effective read
+enable and R3a's are THE SAME BOOLEAN -- and one infers while the other does not.
+That also refutes, in the real module rather than in a probe, the idea that an
+enable derived from the read's own output blocks inference: `issue_c` depends on
+`s1_uop_r.op` via `dot_inflight_c`, and it inferred anyway.
+
+**R3c is the row that settles it, and it is a perfect negative.** It moved the write
+below the read and changed nothing else. Byte-identical to the baseline: 24,962
+registers, 10,287 combinational ALUTs, 17,100 estimated ALMs, 25,344 memory bits,
+not one ALUT of difference. **Statement order is free; the NESTING is the cause.**
+
+**THE REPAIR is one statement hoisted out of `if (!hold_c && !mul_denied_c)`**, and
+it is provably behaviour-preserving because that gate was REDUNDANT for this
+assignment -- the inner condition already implies both of its terms. `s1_v_r` and
+`inflight_r` deliberately stay inside, where the gate is NOT redundant: hoisting
+`s1_v_r <= issue_c` would drive it to 0 during a hold instead of holding, breaking
+the retry the freeze exists to provide. The collision law is untouched -- both
+statements are nonblocking on one clock, so a same-address upload and fetch still
+reads the OLD word, which is what an M10K in Simple Dual Port mode does.
+
+    PLAN=48, map-only    registers   comb ALUTs   est. ALMs   memory bits
+    before                  24,962       10,287      17,100        25,344
+    after                    1,862        2,110       2,016        48,384
+    delta                  -23,100       -8,177     -15,084       +23,040
+
++23,040 is exactly 384 x 60 and the object is NAMED: `store_rtl_0`, 60 wide, 384
+deep, Simple Dual Port. The ALUT fall exceeds the flops because a 384-entry flop
+array also needs a 384-way read mux, and both go.
+
+**THE SEMANTIC EVIDENCE CAME WITH A FINDING OF ITS OWN.** Checking the harness
+rather than the map: `tests/CMakeLists.txt` verilated the executor's differential
+with no `-G`, so it ran at the module DEFAULT `PLAN = 32` while the console composes
+`.INSTR_N(48)`. **The executor's differential had never run at the parameterisation
+the console ships** -- and could not have, because `up_pc_i` is five bits at 32 and
+indices 32..47 are inexpressible. Fixed with a second target on the IDENTICAL
+source, `-DZHAO_TEST_PLAN=48` and `-GPLAN=48`, plus a depth/isolation test that is
+its own negative control: the store is addressed `ctx * PLAN + pc`, so a depth that
+silently stayed at 32 truncates pc=47 to 15, clobbers that context's own uop 15, and
+the comparison against `zfield::execute_point` fails.
+
+    PLAN=32   49 checks passed, deepest index 31 of 32   before AND after
+    PLAN=48   49 checks passed, deepest index 47 of 48   before AND after
+
+with every measured number identical across the repair -- 13 uops in 69 clocks on
+one context, 104 in 190 on eight, 2,311 clocks refused, 0 desyncs. For a
+behaviour-preserving change unchanged numbers are the PREDICTION, and the verilated
+model was confirmed rebuilt after the edit rather than assumed.
+
+**AND THE SWEEP FOR A SECOND INSTANCE CAME BACK EMPTY**, which is the
+non-flattering direction and the reason to trust it. `nested_read_candidates.py`
+finds 4 arrays at >= 4,096 bits and 19 at >= 512 with the same shape, and EVERY ONE
+already carries a different named cause -- multidimensional, two write addresses,
+combinational read. An earlier throwaway triage reported twenty-odd candidates
+including three arrays larger than the store; it counted `begin`/`end` depth, which
+includes the process's own `begin` and the reset `else begin`, so anything in the
+plain body scored 2. The committed tool counts CONDITIONS, excludes the reset by
+name, and carries a dangling `if (c)` forward -- and its self-test caught the error,
+on the store's own before/after shapes, inlined because the repair deleted the
+before.
+
+**NOT CLAIMED:** estimated ALMs are map-only ESTIMATES, not a placed saving; no
+timing result (and a store moving from flops to an M10K changes the paths around
+it); the PHYSICAL M10K count is not in a map report and 60 bits per entry needs
+width banking; and nothing here rescues a 351%-over console from one array.
+
+**Also this pass:** the joint-envelope extraction the reviews asked for in parallel
+(`design/v2/envelope/EXTRACTION.md`) -- which found that the block budgets are
+quoted against TWO different frame lengths, 13 contracts at 1,666,666 and 9 at
+1,333,333, with 14 of 18 percent-of-frame claims naming no denominator at all.

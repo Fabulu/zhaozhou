@@ -238,3 +238,12 @@ at 100% duty, before any other engine and before reserve. The clock is not a fre
 parameter. The only composed console placement on record is 18.5 MHz.
 
 Raw instrument output: `ram_inference_rank_at_head.txt`.
+
+**ADDED 2026-09-29 -- and this one is a RESULT rather than a withdrawal.** The uop
+store's non-inference has a cause and a landed repair: the fetch was nested inside a
+gate that was REDUNDANT for that one assignment, and hoisting it makes the 384 x 60
+array a Simple Dual Port M10K with no behaviour change. Five mapped reductions, the
+before/after numbers, the semantic evidence at the production PLAN=48, the empty
+tree-wide sweep for a second instance, and the five things it does NOT mean are all
+in [`store_repair.md`](store_repair.md). It is a local V1 repair; it is not a
+console saving and no fit has measured it.
