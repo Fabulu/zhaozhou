@@ -531,6 +531,69 @@ _RULE6_FIRE = (
 )
 
 
+_TYPEDEF_FIRE = (
+    # Each array needs a WRITE as well as a read: an array nothing writes is not
+    # a memory candidate and this scanner reports nothing for it, which is what
+    # made the first version of this fixture silently empty.
+    "module m;\n"
+    "  typedef struct packed { logic [7:0] op; logic [31:0] imm; } uop_t;\n"
+    "  typedef enum logic [1:0] { A, B } state_e;\n"
+    "  uop_t    store [0:255];\n"
+    "  state_e  hist  [0:63];\n"
+    "  logic [7:0] plain_q [0:15];\n"
+    "  zhao_dc_sdp_ram bank [0:3] (.clk(clk));\n"
+    "  always_ff @(posedge clk) begin\n"
+    "    store[wa]   <= wd;\n"
+    "    hist[wb]    <= we_state;\n"
+    "    plain_q[wc] <= wbyte;\n"
+    "  end\n"
+    "  always_comb begin\n"
+    "    x = store[ai];\n"
+    "    y = hist[bi];\n"
+    "    z = plain_q[ci];\n"
+    "  end\n"
+    "endmodule\n"
+)
+
+
+def typedef_fire_test():
+    """The 2026-09-28 widening owes its own proof, in THREE directions.
+
+    Added 2026-09-29 on the external reviewer's demand, and the demand was
+    right: the three older fire tests all pass whether or not the widened
+    recogniser works, because none of them declares a typedef array. A repair
+    whose only evidence is that the OLD tests still pass is not tested.
+
+    It must (a) SEE a `uop_t`-style array, (b) SEE an `_e`-named one, since 29
+    of this tree's 100 typedefs end that way and a `_t` suffix match would have
+    missed them, (c) still see the plain `logic` shape, and (d) NOT mistake an
+    ARRAY OF MODULE INSTANCES for storage -- `mod inst [0:3] (...)` has
+    parentheses where a declaration has a semicolon, and counting it would
+    invent findings in the ~175 instance arrays this tree contains.
+    """
+    # `sizes` must be passed or the entries-vs-bits flag is never
+    # populated and check (e) below would pass vacuously.
+    ENTRIES_ONLY.clear()
+    sizes = {}
+    seen = {n for n, _why in check_file_text(_TYPEDEF_FIRE, sizes)}
+    if "store" not in seen:      # (a)
+        return False
+    if "hist" not in seen:       # (b)
+        return False
+    if "plain_q" not in seen:    # (c) no regression in the original shape
+        return False
+    if "bank" in seen:           # (d) instance array must NOT be storage
+        return False
+    # (e) and the ENTRIES-vs-BITS flag must be set for the typedef arrays and
+    # NOT for the plain one, or a 60x underestimate prints as though it were
+    # bits -- which is how `uop_t store[0:383]` read "256 bits" against 23,040.
+    if "store" not in ENTRIES_ONLY or "hist" not in ENTRIES_ONLY:
+        return False
+    if "plain_q" in ENTRIES_ONLY:
+        return False
+    return True
+
+
 def rule6_fire_test():
     """True if rule 6 fires ONLY on the generate-for declaration."""
     fired = {n for n, why in check_file_text(_RULE6_FIRE)
@@ -876,6 +939,20 @@ def main():
     # being wrong are opposite: a generate-IF is innocent (measured: it infers)
     # and a PROCEDURAL for-loop is innocent, so a rule that fired on either
     # would bury the real finding under the ~175 generate blocks in this tree.
+    # The 2026-09-28 typedef widening and the entries-vs-bits flag owe the same
+    # proof, and the three tests above cannot give it: none of them declares a
+    # typedef array, so all three pass whether or not the widening works.
+    if not typedef_fire_test():
+        print("RAM-INFERENCE CHECKER BROKEN: the declaration scan no longer "
+              "sees a typedef-declared array (`uop_t store[...]`, or an "
+              "`_e`-named one), or it has started counting an ARRAY OF MODULE "
+              "INSTANCES as storage, or the entries-vs-bits flag is wrong. "
+              "Refusing to report: a scan blind to typedef arrays missed "
+              "zhao_field_v3_exec's 23,040-bit uop store entirely, and a size "
+              "printed as bits when it is really entries ranked it near the "
+              "bottom of this tool's own list.")
+        return 2
+
     if not rule6_fire_test():
         print("RAM-INFERENCE CHECKER BROKEN: rule 6 no longer fires on an "
               "array declared inside a generate FOR-LOOP, or it now fires on a "
