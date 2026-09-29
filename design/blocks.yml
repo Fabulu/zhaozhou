@@ -1551,6 +1551,15 @@ blocks:
     target_throughput: 1 poll per port per frame (>=; the gap counter fires when it is not met)
     reference_model: zref::SnacAdapter
     tests:
+      # random: null ADDED 2026-09-29. The key was ABSENT, and absence is silence: the
+      # schema reported a missing required property, which kept the schema stage non-empty,
+      # and cli.ts:123 gates the WHOLE rule stage on that stage being empty -- so V1-V23
+      # were switched off by it. `null` is a STATEMENT instead: there is deliberately no
+      # random arm. V4 tests truthiness (`if (!b.tests?.random)`), so null is FALSY and V4
+      # names this block the moment the rule stage runs. The check moves from the stage that
+      # blocks everything to the stage that can report which block and which field. The
+      # claim is unchanged: the test is not written.
+      random: null
       directed: tests/input/input_snac_directed.cpp
     counters: [input_snac_input_sequence_gaps]
     source_ids: true
@@ -3603,6 +3612,15 @@ blocks:
     target_throughput: 1 cell per page-stream vertex beat
     reference_model: zref::fieldir::compose_material
     tests:
+      # random: null ADDED 2026-09-29. The key was ABSENT, and absence is silence: the
+      # schema reported a missing required property, which kept the schema stage non-empty,
+      # and cli.ts:123 gates the WHOLE rule stage on that stage being empty -- so V1-V23
+      # were switched off by it. `null` is a STATEMENT instead: there is deliberately no
+      # random arm. V4 tests truthiness (`if (!b.tests?.random)`), so null is FALSY and V4
+      # names this block the moment the rule stage runs. The check moves from the stage that
+      # blocks everything to the stage that can report which block and which field. The
+      # claim is unchanged: the test is not written.
+      random: null
       directed: tests/terrain/terrain_matjoin_directed.cpp
     counters:
       [terrain_matjoin_field_composed, terrain_matjoin_token_refused,
@@ -3635,6 +3653,12 @@ blocks:
   - id: TERRAIN.MATPUB
     name: Composed material publisher
     kind: rtl
+    # reference_model: null ADDED 2026-09-29, same reasoning as any `random: null` in this
+    # file: the key was ABSENT and that absence was holding the entire rule stage off (see
+    # cli.ts:123). V4 tests truthiness, so null is falsy and V4 reports this block by name.
+    # The claim is unchanged: this block has no oracle. If one exists and was merely never
+    # written down, replacing null with the zref:: symbol is the fix -- not deleting the key.
+    reference_model: null
     subsystem: terrain
     clock_domain: gpu
     purpose: >-
@@ -3659,6 +3683,15 @@ blocks:
     latency: batch
     target_throughput: 1 published patch per compose fill
     tests:
+      # random: null ADDED 2026-09-29. The key was ABSENT, and absence is silence: the
+      # schema reported a missing required property, which kept the schema stage non-empty,
+      # and cli.ts:123 gates the WHOLE rule stage on that stage being empty -- so V1-V23
+      # were switched off by it. `null` is a STATEMENT instead: there is deliberately no
+      # random arm. V4 tests truthiness (`if (!b.tests?.random)`), so null is FALSY and V4
+      # names this block the moment the rule stage runs. The check moves from the stage that
+      # blocks everything to the stage that can report which block and which field. The
+      # claim is unchanged: the test is not written.
+      random: null
       directed: tests/terrain/terrain_matpub_directed.cpp
     counters:
       [terrain_matpub_cells_captured, terrain_matpub_commits,
@@ -3778,6 +3811,12 @@ blocks:
   - id: TERRAIN.SPDESC
     name: The subpatch descriptor assembler
     kind: rtl
+    # reference_model: null ADDED 2026-09-29, same reasoning as any `random: null` in this
+    # file: the key was ABSENT and that absence was holding the entire rule stage off (see
+    # cli.ts:123). V4 tests truthiness, so null is falsy and V4 reports this block by name.
+    # The claim is unchanged: this block has no oracle. If one exists and was merely never
+    # written down, replacing null with the zref:: symbol is the fix -- not deleting the key.
+    reference_model: null
     subsystem: terrain
     clock_domain: gpu
     purpose: >-
@@ -3799,6 +3838,15 @@ blocks:
     latency: variable
     target_throughput: 16 descriptors per patch
     tests:
+      # random: null ADDED 2026-09-29. The key was ABSENT, and absence is silence: the
+      # schema reported a missing required property, which kept the schema stage non-empty,
+      # and cli.ts:123 gates the WHOLE rule stage on that stage being empty -- so V1-V23
+      # were switched off by it. `null` is a STATEMENT instead: there is deliberately no
+      # random arm. V4 tests truthiness (`if (!b.tests?.random)`), so null is FALSY and V4
+      # names this block the moment the rule stage runs. The check moves from the stage that
+      # blocks everything to the stage that can report which block and which field. The
+      # claim is unchanged: the test is not written.
+      random: null
       directed: tests/terrain/terrain_spdesc_directed.cpp
     counters: [terrain_spdesc_door_src_mismatch, terrain_spdesc_serve_no_door]
     counter_ports:
@@ -3837,6 +3885,12 @@ blocks:
   - id: TERRAIN.EDGERECON
     name: The neighbour-edge level producer
     kind: rtl
+    # reference_model: null ADDED 2026-09-29, same reasoning as any `random: null` in this
+    # file: the key was ABSENT and that absence was holding the entire rule stage off (see
+    # cli.ts:123). V4 tests truthiness, so null is falsy and V4 reports this block by name.
+    # The claim is unchanged: this block has no oracle. If one exists and was merely never
+    # written down, replacing null with the zref:: symbol is the fix -- not deleting the key.
+    reference_model: null
     subsystem: terrain
     clock_domain: gpu
     purpose: >-
@@ -3873,6 +3927,15 @@ blocks:
     latency: variable_bounded:257
     target_throughput: 1 query per patch per frame
     tests:
+      # random: null ADDED 2026-09-29. The key was ABSENT, and absence is silence: the
+      # schema reported a missing required property, which kept the schema stage non-empty,
+      # and cli.ts:123 gates the WHOLE rule stage on that stage being empty -- so V1-V23
+      # were switched off by it. `null` is a STATEMENT instead: there is deliberately no
+      # random arm. V4 tests truthiness (`if (!b.tests?.random)`), so null is FALSY and V4
+      # names this block the moment the rule stage runs. The check moves from the stage that
+      # blocks everything to the stage that can report which block and which field. The
+      # claim is unchanged: the test is not written.
+      random: null
       directed: tests/terrain/terrain_edgerecon_directed.cpp
     counters: [terrain_edgerecon_collisions, terrain_edgerecon_edges_fallback]
     counter_ports:
@@ -3918,6 +3981,12 @@ blocks:
   - id: TERRAIN.JOBISSUE
     name: The subpatch job issuer
     kind: rtl
+    # reference_model: null ADDED 2026-09-29, same reasoning as any `random: null` in this
+    # file: the key was ABSENT and that absence was holding the entire rule stage off (see
+    # cli.ts:123). V4 tests truthiness, so null is falsy and V4 reports this block by name.
+    # The claim is unchanged: this block has no oracle. If one exists and was merely never
+    # written down, replacing null with the zref:: symbol is the fix -- not deleting the key.
+    reference_model: null
     subsystem: terrain
     clock_domain: gpu
     purpose: The producer entry I21 says does not exist -- joins TERRAIN.LOD's lod_target stream to the patch's own draw context, drives TERRAIN.GROUP_SEQ's subpatch job port, and drives TERRAIN.COMPCACHE's retirement pulse. Thirteen fields, not sixteen -- R13 rules the material triple the wrong carrier.
@@ -3932,6 +4001,15 @@ blocks:
     latency: variable
     target_throughput: 1 job per subpatch
     tests:
+      # random: null ADDED 2026-09-29. The key was ABSENT, and absence is silence: the
+      # schema reported a missing required property, which kept the schema stage non-empty,
+      # and cli.ts:123 gates the WHOLE rule stage on that stage being empty -- so V1-V23
+      # were switched off by it. `null` is a STATEMENT instead: there is deliberately no
+      # random arm. V4 tests truthiness (`if (!b.tests?.random)`), so null is FALSY and V4
+      # names this block the moment the rule stage runs. The check moves from the stage that
+      # blocks everything to the stage that can report which block and which field. The
+      # claim is unchanged: the test is not written.
+      random: null
       directed: tests/terrain/terrain_jobissue_directed.cpp
     counters: [terrain_jobissue_ctx_refused, terrain_jobissue_ctx_src_mismatch]
     counter_ports:
@@ -4084,6 +4162,12 @@ blocks:
   - id: TERRAIN.SHEETSEAM
     name: Bake's layer-F read path
     kind: rtl
+    # reference_model: null ADDED 2026-09-29, same reasoning as any `random: null` in this
+    # file: the key was ABSENT and that absence was holding the entire rule stage off (see
+    # cli.ts:123). V4 tests truthiness, so null is falsy and V4 reports this block by name.
+    # The claim is unchanged: this block has no oracle. If one exists and was merely never
+    # written down, replacing null with the zref:: symbol is the fix -- not deleting the key.
+    reference_model: null
     subsystem: terrain
     clock_domain: gpu
     purpose: "Serves zhao_terrain_bake_v2's sheet_texel_o / sheet_strength_i -- the per-vertex depth mode owner ruling R194 added -- out of SURFACE.SHEET's resident layer F, and carries owner ruling R221's ST_MISS law. zhao_surface_sheet's req_* is a CONTROL-AND-READ port with a separate response stream and a residency status, while bake wants a combinational lookup on the same beat as layers A/B/C, so the two do not meet without an adapter. It prefetches the 1,089 texels the 33x33 lattice can address -- 1,089 and not 4,096, because section 9.3(b) decimates, and one byte and not two, because bake has no tag port -- into a single M10K, then answers the dig from it. It issues OP_READ and NOTHING ELSE: an OP_ACQUIRE on a non-resident handle allocates a BLANK sheet, which is R221's refused 'dig zero' with a status code that says HIT, and steals one of Slots = 2 from the only block terrain_rules 7 allows to write layer F. OWNER RULING R231, 2026-09-21: it also serves sheet_before_o, the pre-blend strength, because TERRAIN.BAKE ACCUMULATES and what is added to an accumulator must be a CHANGE -- an absolute depth double-digs, so the same stamp sent twice dug twice. SURFACE.STAMP's decision S3 had said so since the stamp was written and rejects the absolute branch by name. The before plane is 1,089 x 9 bits ({seen, before}) fed from a stamp_results SINK, which gives surf_res_before_o its first consumer in the tree, and zhao_surface_stamp gained res_handle_o so the stream can be routed to a patch (st_handle CARRIED, not derived -- SURFACE.SHEET choice C4). The seen bit is cleared BY THE DIG'S OWN READ, so a vertex not stamped since the last bake serves before == after and contributes nothing: idempotence is structural rather than asserted. A clear-at-bake_done sweep was rejected (a 1,089-cycle window in which a stamp is wiped, which under-digs -- R221's refused 'dig zero') and so was an epoch tag (it aliases, and an aliased entry double-digs -- the defect reintroduced by the instrument meant to prevent it)."
@@ -4175,6 +4259,12 @@ blocks:
   - id: TERRAIN.BAKEREC
     name: The patch-bake record producer
     kind: rtl
+    # reference_model: null ADDED 2026-09-29, same reasoning as any `random: null` in this
+    # file: the key was ABSENT and that absence was holding the entire rule stage off (see
+    # cli.ts:123). V4 tests truthiness, so null is falsy and V4 reports this block by name.
+    # The claim is unchanged: this block has no oracle. If one exists and was merely never
+    # written down, replacing null with the zref:: symbol is the fix -- not deleting the key.
+    reference_model: null
     subsystem: terrain
     clock_domain: gpu
     purpose: "Forms the ONE patch-bake record per patch per frame that zhao_terrain_bake_v2's cmd_* port has never had a producer for, and sequences the three page agents a bake needs. zhao_console_core entry I32 commissioned it in as many words -- 'WHAT IS MISSING IS A THIRD BLOCK BETWEEN THEM' -- after measuring that both halves it sits between already exist: the ratified SurfaceStamp 0x0210 record and zhao_cmd_exec's EX_STAMP arm. It takes the stamp on SURFACE.STAMP's own accept, with SURFACE.DISPATCH's ruling-R45 envelope and patch key on the same wires, and it WATCHES TERRAIN.HDRREAD's forwarded job for the page identity -- slot, generation, epoch and the T5 record flags -- so it never looks a patch up and never pins one. Records COALESCE by patch key, which is a consequence of owner ruling R231's delta law rather than a convenience: layer F holds the accumulated after and the seam's plane holds the first pre-blend before, so one dig of (after - before) is the sum of every stamp on that patch exactly. It orders PAGEIO first and waits on serving_o (nb_o is combinational on a shadow plane that does not exist until S_SERVE, and nothing else on that face says so), then the seam -- whose job_ready_o IS its 1,089-texel prefetch's completion -- then the lattice pass. cmd_depth_from_i/cmd_depth_to_i are ZERO by parameter: a stamp-derived record is a SHEET record, the disc arm belongs to a cast's progress in the FIELD subsystem, and on an R221 ST_MISS fallback the record digs nothing and is RE-QUEUED rather than digging an absolute depth into an accumulating scar -- which is precisely the defect R231 repaired. The deferral is exact because the seam does not consume its before-plane on a fallback."
@@ -4995,6 +5085,15 @@ blocks:
     target_throughput: one corner per lookup plus one arena op per published record
     reference_model: null
     tests:
+      # random: null ADDED 2026-09-29. The key was ABSENT, and absence is silence: the
+      # schema reported a missing required property, which kept the schema stage non-empty,
+      # and cli.ts:123 gates the WHOLE rule stage on that stage being empty -- so V1-V23
+      # were switched off by it. `null` is a STATEMENT instead: there is deliberately no
+      # random arm. V4 tests truthiness (`if (!b.tests?.random)`), so null is FALSY and V4
+      # names this block the moment the rule stage runs. The check moves from the stage that
+      # blocks everything to the stage that can report which block and which field. The
+      # claim is unchanged: the test is not written.
+      random: null
       directed: tests/geometry/geom_vertid_directed.cpp
     counters: [vertid_tris, vertid_refs, vertid_published, vertid_reused, vertid_unshared, vertid_opens, vertid_sunk, vertid_index_oob, vertid_key_split, vertid_id_unnameable, vertid_seal_abort, vertid_stall]
     counter_ports:
@@ -6843,6 +6942,12 @@ blocks:
   - id: FORGE.SHADOW
     name: Contact shadows
     kind: rtl
+    # reference_model: null ADDED 2026-09-29, same reasoning as any `random: null` in this
+    # file: the key was ABSENT and that absence was holding the entire rule stage off (see
+    # cli.ts:123). V4 tests truthiness, so null is falsy and V4 reports this block by name.
+    # The claim is unchanged: this block has no oracle. If one exists and was merely never
+    # written down, replacing null with the zref:: symbol is the fix -- not deleting the key.
+    reference_model: null
     subsystem: forge
     clock_domain: gpu
     purpose: "A small terrain-conforming transparent hull under a creature or object, so it looks ATTACHED to the ground. BORING_3D_FUNDAMENTALS_AUDIT R8. No shadow map, no shadow buffer, no new raster hardware -- ordinary transparent geometry through the main renderer."
@@ -7282,6 +7387,12 @@ blocks:
   - id: TWOD.BAND
     name: HUD band store
     kind: rtl
+    # reference_model: null ADDED 2026-09-29, same reasoning as any `random: null` in this
+    # file: the key was ABSENT and that absence was holding the entire rule stage off (see
+    # cli.ts:123). V4 tests truthiness, so null is falsy and V4 reports this block by name.
+    # The claim is unchanged: this block has no oracle. If one exists and was merely never
+    # written down, replacing null with the zref:: symbol is the fix -- not deleting the key.
+    reference_model: null
     subsystem: compositor
     clock_domain: gpu
     purpose: "Descriptor-order to raster-order bridge for the HUD: an L-row band store, a per-band re-walk of the display list into band-clipped descriptors for TWOD.SPRITE, and R235's whole-sprite admission law against a leaky bucket."
@@ -7296,6 +7407,15 @@ blocks:
     latency: variable
     target_throughput: 1 HUD pixel written and 1 read per clock
     tests:
+      # random: null ADDED 2026-09-29. The key was ABSENT, and absence is silence: the
+      # schema reported a missing required property, which kept the schema stage non-empty,
+      # and cli.ts:123 gates the WHOLE rule stage on that stage being empty -- so V1-V23
+      # were switched off by it. `null` is a STATEMENT instead: there is deliberately no
+      # random arm. V4 tests truthiness (`if (!b.tests?.random)`), so null is FALSY and V4
+      # names this block the moment the rule stage runs. The check moves from the stage that
+      # blocks everything to the stage that can report which block and which field. The
+      # claim is unchanged: the test is not written.
+      random: null
       directed: tests/compositor/twod_band_directed.cpp
       # The positive control for the LAW rather than for a counter: BURST_PX
       # raised past the FIFO slack is "admit everything", and the driver passes
@@ -7373,6 +7493,12 @@ blocks:
   - id: TWOD.CMD
     name: TWOD descriptor producer
     kind: rtl
+    # reference_model: null ADDED 2026-09-29, same reasoning as any `random: null` in this
+    # file: the key was ABSENT and that absence was holding the entire rule stage off (see
+    # cli.ts:123). V4 tests truthiness, so null is falsy and V4 reports this block by name.
+    # The claim is unchanged: this block has no oracle. If one exists and was merely never
+    # written down, replacing null with the zref:: symbol is the fix -- not deleting the key.
+    reference_model: null
     subsystem: compositor
     clock_domain: gpu
     purpose: "Stage SetPlane 0x0306 and DrawSprite 0x0307 records with packet atomicity, then publish a SEALED per-frame descriptor list to TWOD.PLANE and TWOD.BAND at the band's own list-clear edge, with the frame-scoped plane disable and the empty-frame path the ruling requires."
@@ -7395,6 +7521,15 @@ blocks:
     # The stronger check is used instead: the chain bench drives REAL PACKET
     # BYTES to composited pixels, which no scalar oracle can stand in for.
     tests:
+      # random: null ADDED 2026-09-29. The key was ABSENT, and absence is silence: the
+      # schema reported a missing required property, which kept the schema stage non-empty,
+      # and cli.ts:123 gates the WHOLE rule stage on that stage being empty -- so V1-V23
+      # were switched off by it. `null` is a STATEMENT instead: there is deliberately no
+      # random arm. V4 tests truthiness (`if (!b.tests?.random)`), so null is FALSY and V4
+      # names this block the moment the rule stage runs. The check moves from the stage that
+      # blocks everything to the stage that can report which block and which field. The
+      # claim is unchanged: the test is not written.
+      random: null
       directed: tests/compositor/twod_cmd_directed.cpp
     # ALL THIRTEEN ARE NAMED (owner ruling R110). The first version of this
     # row named five, which is how a ledger missing half its counters reads as
@@ -7479,6 +7614,15 @@ blocks:
     target_throughput: 1 texel word written per clock
     reference_model: zref::twod::asset_verdict
     tests:
+      # random: null ADDED 2026-09-29. The key was ABSENT, and absence is silence: the
+      # schema reported a missing required property, which kept the schema stage non-empty,
+      # and cli.ts:123 gates the WHOLE rule stage on that stage being empty -- so V1-V23
+      # were switched off by it. `null` is a STATEMENT instead: there is deliberately no
+      # random arm. V4 tests truthiness (`if (!b.tests?.random)`), so null is FALSY and V4
+      # names this block the moment the rule stage runs. The check moves from the stage that
+      # blocks everything to the stage that can report which block and which field. The
+      # claim is unchanged: the test is not written.
+      random: null
       directed: tests/compositor/twod_asset_directed.cpp
     # ALL TWELVE ARE NAMED (owner ruling R110). The four REFUSAL counters are
     # separate on purpose and the order is the record's own -- destination,
