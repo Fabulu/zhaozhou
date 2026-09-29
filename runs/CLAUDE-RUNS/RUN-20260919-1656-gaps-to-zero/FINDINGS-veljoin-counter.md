@@ -1,3 +1,44 @@
+> # CORRECTED 2026-09-29, SAME DAY: THE REPAIR IS NOT A WIRING JOB
+>
+> This file says the fix is to "give `zhao_terrain_velocity`'s counter a port of its own"
+> and wire veljoin's to `terr_vj_sweeps_aborted_o`. **That is sound as RTL and it presumes
+> something that is not true: that `zhao_terrain_veljoin` has a ledger identity.** It does
+> not, and neither does the counter.
+>
+> * **There is no `TERRAIN.VELJOIN` block.** `design/blocks.yml` has `TERRAIN.VELOCITY` and
+>   no VELJOIN row, and no `design/contracts/*VELJOIN*` exists. The module is real --
+>   `fpga/rtl/terrain/zhao_terrain_veljoin.sv`, 19,339 bytes -- and it is **in the console
+>   fit's own 299-file source digest**, so it is shipping hardware.
+> * **`design/prod_manifest.yml:1434` names it "TERRAIN.VELJOIN" as though that were a block
+>   id** and marks it `not-yet-adopted`, while `zhao_console_core` composes it. Stale in the
+>   direction that matters, exactly like `zhao_terrain_group_seq`.
+> * **The ledger refers to it as a peer of a block that DOES have a row.**
+>   `TERRAIN.MATJOIN`'s own `purpose` reads: *"The out-lane 2 sibling of TERRAIN.VELJOIN."*
+>   One sibling was given a row; the other was not.
+> * **Neither block declares this counter at all.** `TERRAIN.VELOCITY` declares exactly one,
+>   `terrain_velocity_terrain_samples_evaluated`, and `sweeps_aborted` is nowhere in the
+>   catalog. So `terr_vj_sweeps_aborted_o` is an exported console port that no ledger row
+>   claims, under a namespace prefix for a block that does not exist.
+>
+> **WHY THAT CHANGES THE ACTION RATHER THAN THE FINDING.** The misattribution below is real
+> and still stands: the port named for veljoin carries velocity's count and veljoin's own is
+> discarded. But adding a second port now would export a *second* undeclared counter into
+> the console under a name the ledger cannot resolve -- which is the same class of defect
+> that produced the misattribution. `check_counters.py` resolves ONE MODULE PER BLOCK ID, so
+> until someone owns `zhao_terrain_veljoin` there is no row for either counter to belong to.
+>
+> So the RTL change WAITS on the ownership question, not on the fit. That question is the
+> same one in [`FINDINGS-group-seq-ids.md`](FINDINGS-group-seq-ids.md), and this is its third
+> instance: `zhao_terrain_group_seq`, `zhao_geom_group_seq`, `zhao_terrain_veljoin` -- three
+> composed modules, ~82 KB of shipping RTL between them, each named in the tree by an id the
+> ledger has no row for.
+>
+> **And the completion register still reads ZERO mandatory gaps**, correctly, because it
+> checks declared capabilities against the composition and cannot see a module nobody
+> declared. Three of these now exist. That is the checkable gap: *every id referenced in the
+> ledger or the manifest must be a block id, and every composed module must fall inside some
+> declared capability.* Neither rule exists today.
+
 # `terr_vj_sweeps_aborted_o` reads the WRONG BLOCK, and veljoin's own count cannot be read
 
 Coordinator, 2026-09-29. Found while triaging `console_core_tieoff_audit`, which has
