@@ -1237,3 +1237,89 @@ runs:
       RTL and the differential against zref::geom::VertexArena are GREEN across
       all sixteen directed lookups including every refusal class and the
       reopen-does-not-resurrect case; only the formal lane is open.
+
+  # ---- the four mem_guard MUTANT CONTROLS, registered 2026-09-29 ------------------
+  # V16(a) makes an unregistered `.sby` a hard failure, because the lane could not tell
+  # "skipped, tool absent" from "never ran". These four were on disk and unregistered.
+  #
+  # RE-RUN HERE rather than transcribed from commit e85a5896's record, and the re-run is
+  # the whole value: THE ASSERTION NAMES IN THAT RECORD ARE STALE. pbview and pbunion
+  # were recorded failing at a1_pb_wr_view0 and resbound at a1_map; all three now fail at
+  # a1_region, and devbound has moved from a1_region to a1_resource_bounded.
+  #
+  # Three distinct faults tripping one assertion is the stale-mutant signature, so it was
+  # checked, not assumed:
+  #   * mutant_copy_drift.py: OK -- all 80 copies at least as new as what they copy.
+  #   * all four assertions still exist, and source ORDER explains it: a1_region (~217)
+  #     precedes a1_map (378), a1_resource_bounded (408), a1_pb_wr_view0 (509), and a bmc
+  #     run names the first assertion it reaches.
+  #   * b9c2d3e2 WIDENED a1_region with the TERRAIN.DEVSTORE arm. It is 14:07 and
+  #     e85a5896 is 16:37, and NEITHER IS AN ANCESTOR OF THE OTHER -- parallel branches,
+  #     joined later by a9678ad2 "Merge DEVSDRAM". e85a5896 measured on a tree without the
+  #     widened a1_region and nobody re-ran the controls after the merge.
+  #
+  # e85a5896 had already stated the standard that settles this: "'The proof fails at X'
+  # reads like a property of the defect and is not one; the stable claim is that the proof
+  # FAILS." By that standard all four controls are intact and `green` is honest.
+  #
+  # WHAT IS GENUINELY WEAKER: a1_pb_wr_view0 and a1_map are no longer tripped by ANY
+  # mutant, so no committed control currently shows those two theorems are non-vacuous.
+  # They were shown once, on a tree that no longer exists. Closing that needs a fault
+  # aimed PAST a1_region; it is new work and it is named here so it is not lost.
+  #
+  # covers: false on all four -- `mode bmc`, no cover task. V16(d) requires covers only
+  # where a block at >= RTL_VERIFIED cites the property, and nothing cites a mutant:
+  # these are evidence about the instrument, not about the design.
+  - property: tests/formal/mem_guard_devbound_mutant.sby
+    status: green
+    date: "2026-09-29"
+    commit: "23cdaf97"
+    lane: formal_mem_guard_devbound_mutant
+    tasks: [bmc]
+    covers: false
+    notes: >-
+      R242's TERRAIN.DEVSTORE bound: the guard copy has the deviation store's UPPER bound
+      removed. INVERTED POLARITY (`expect fail`): this run PASSES only when
+      mem_guard_no_escape FAILS on the mutated copy. Re-run 2026-09-29 on a clean tree: DONE
+      (FAIL, rc=0), RC=0, 3.2 s, failing at a1_resource_bounded. Commit e85a5896 recorded
+      a1_region; see the block comment above for why that moved and why it does not weaken
+      the control.
+  - property: tests/formal/mem_guard_pbunion_mutant.sby
+    status: green
+    date: "2026-09-29"
+    commit: "23cdaf97"
+    lane: formal_mem_guard_pbunion_mutant
+    tasks: [bmc]
+    covers: false
+    notes: >-
+      The param-buffer union fault from PARAMARENA 2/n. INVERTED POLARITY (`expect fail`):
+      this run PASSES only when mem_guard_no_escape FAILS on the mutated copy. Re-run
+      2026-09-29 on a clean tree: DONE (FAIL, rc=0), RC=0, 1.3 s, failing at a1_region.
+      Commit e85a5896 recorded a1_pb_wr_view0; see the block comment above for why that
+      moved and why it does not weaken the control.
+  - property: tests/formal/mem_guard_pbview_mutant.sby
+    status: green
+    date: "2026-09-29"
+    commit: "23cdaf97"
+    lane: formal_mem_guard_pbview_mutant
+    tasks: [bmc]
+    covers: false
+    notes: >-
+      The param-buffer view fault from PARAMARENA 2/n. INVERTED POLARITY (`expect fail`):
+      this run PASSES only when mem_guard_no_escape FAILS on the mutated copy. Re-run
+      2026-09-29 on a clean tree: DONE (FAIL, rc=0), RC=0, 1.3 s, failing at a1_region.
+      Commit e85a5896 recorded a1_pb_wr_view0; see the block comment above for why that
+      moved and why it does not weaken the control.
+  - property: tests/formal/mem_guard_resbound_mutant.sby
+    status: green
+    date: "2026-09-29"
+    commit: "23cdaf97"
+    lane: formal_mem_guard_resbound_mutant
+    tasks: [bmc]
+    covers: false
+    notes: >-
+      The resource-bound fault from R20 + R32. INVERTED POLARITY (`expect fail`): this run
+      PASSES only when mem_guard_no_escape FAILS on the mutated copy. Re-run 2026-09-29 on a
+      clean tree: DONE (FAIL, rc=0), RC=0, 1.3 s, failing at a1_region. Commit e85a5896
+      recorded a1_map; see the block comment above for why that moved and why it does not
+      weaken the control.
