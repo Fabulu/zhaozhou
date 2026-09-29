@@ -15,13 +15,19 @@ schema stage fails first and the rule stage is skipped.)"* — and nothing had a
 
 ## Where it stands
 
+> **CURRENT AS OF THE AMENDMENT AT THE END OF THIS FILE: 224, not 230.** The table below is
+> the state at the first write-up; V5 closed, V20 dropped to 167, and the amendment carries
+> the V20 classification that changes what the largest number means. A summary table that
+> disagrees with its own document is the stale-claim failure this campaign keeps finding, so
+> it is flagged here rather than left to the reader.
+
 | rule | n | what it is | kind of work |
 |---|---|---|---|
-| V20 | 172 | an RTL prose invariant claim with no machine-resolvable `ENFORCED-BY` | 172 investigations |
+| V20 | 172 → **167** | an RTL prose invariant claim with no machine-resolvable `ENFORCED-BY` | **164 investigations**, 3 phantom enforcers (see amendment) |
 | V4 | 29 | rtl block missing `reference_model` / `tests.random` / `source_ids` | oracle + test authoring |
 | V17 | 18 | citation coherence: oracle/contract/test disagreement | mostly downstream of V4 |
 | V7 | 10 | edges naming six modules that have no ledger row | six rows to author |
-| V5 | 1 | `PART.CLIPFEED` is INTEGRATED with no `resource_actual` | needs a fit |
+| V5 | 1 → **0** | `PART.CLIPFEED` was INTEGRATED with no `resource_actual` | closed: the rung was wrong, not the number |
 
 **Nothing left is a records fix.** Everything closed on 2026-09-29 was bookkeeping that hid
 real work; everything remaining *is* the real work.
