@@ -5701,7 +5701,32 @@ blocks:
     # Same mapping and same reasoning as the entry below: composed here means wired into
     # zhao_console_core, which is what INTEGRATED names, and the evidence is a PRODUCTION
     # acceptance test. Nothing higher is claimed.
-    maturity: INTEGRATED
+    # MATURITY CORRECTED INTEGRATED -> UNIT_VERIFIED, 2026-09-29.
+    #
+    # A PRIOR PASS RECORDED A DECISION FOR INTEGRATED and it is addressed, not ignored. Its
+    # words are in the maturity_log below: "'composed' here means wired into
+    # zhao_console_core, which is what INTEGRATED names ... NOTHING HIGHER IS CLAIMED:
+    # SYNTHESIZED would assert a fit this entry does not cite".
+    #
+    # THAT REASONING REFUTES ITSELF. The ladder is SPECIFIED, REFERENCE_COMPLETE,
+    # UNIT_VERIFIED, RTL_VERIFIED, SYNTHESIZED, INTEGRATED, HARDWARE_PROVEN -- so
+    # SYNTHESIZED is LOWER than INTEGRATED. Offering "SYNTHESIZED would assert a fit" as a
+    # reason not to climb further only makes sense if INTEGRATED sat BELOW it. The decision
+    # was taken on a misreading of the order, and INTEGRATED asserts everything SYNTHESIZED
+    # asserts plus one rung. A factual correction to a premise, not a difference of
+    # judgement -- which is why it is made here rather than escalated.
+    #
+    # THE INTENT IS KEPT. Composition is real and worth recording: it stays in `notes` and
+    # in the INTEGRATED log entry, which is preserved and annotated rather than deleted.
+    # What the ladder LACKS is a rung for "composed but not independently synthesized", and
+    # that absence is the gap -- borrowing a higher rung to express it is what went wrong.
+    #
+    # CORROBORATION: V5 wants a resource_actual at rank >= SYNTHESIZED and there is none,
+    # with no standalone synthesis of zhao_part_clipfeed to take one from; this was the ONLY
+    # block of 136 above RTL_VERIFIED, while TWOD.BAND, TWOD.CMD and POST.GATHER all carry
+    # "composed in zhao_console_core" evidence at RTL_VERIFIED; and it still owes
+    # reference_model and tests.random, which are UNIT_VERIFIED-grade obligations.
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: UNIT_VERIFIED
         date: "2026-09-22"
@@ -5720,6 +5745,9 @@ blocks:
         # PRODUCTION acceptance test -- integration evidence rather than unit evidence.
         # Nothing higher is claimed: SYNTHESIZED would assert a fit this entry does not cite,
         # and HARDWARE_PROVEN a board run no block has had.
+      # KEPT DELIBERATELY: this records a true event -- the block was composed and
+      # the production acceptance test passed. Composition is not synthesis, and the
+      # `maturity` field above no longer reads INTEGRATED. See the block comment.
       - state: INTEGRATED
         date: "2026-09-22"
         # commit ADDED 2026-09-29: the commit that ADDED this entry's own evidence file,
@@ -5727,6 +5755,28 @@ blocks:
         # date already recorded above, to the day.
         commit: "d91f308b"
         evidence: tests/prod/partmat_acceptance.cpp
+      - state: UNIT_VERIFIED
+        date: "2026-09-29"
+        commit: "44365ac2"
+        evidence: tests/particles/part_clipfeed_directed.cpp
+        regression_reason: >-
+          CORRECTED DOWN from INTEGRATED on 2026-09-29 on this block's own evidence, not on any
+          new measurement. The prior pass's stated reason -- "SYNTHESIZED would assert a fit this
+          entry does not cite" -- has the ladder backwards: SYNTHESIZED is LOWER than INTEGRATED,
+          so claiming INTEGRATED asserts the fit it was declining plus one rung more. V5 wants a
+          resource_actual at rank >= SYNTHESIZED and there is none; there has never been a
+          standalone synthesis of zhao_part_clipfeed, so the honest move is to correct the rung
+          rather than invent a number. This was the only block of 136 above RTL_VERIFIED, while
+          TWOD.BAND, TWOD.CMD and POST.GATHER record the same "composed in zhao_console_core" fact
+          at RTL_VERIFIED. HOW THE RUNG WAS CLAIMED IS THE MORE USEFUL FINDING: V2 exempts a block
+          absent from the previous committed ledger (rules.ts:117, "new block: V3 governs
+          evidence, not ordering") and V3 checks only that the CURRENT state has an on-disk
+          evidence file, never that the rungs below were earned -- so a row can be BORN at any
+          height on one evidence file, which is what happened: this row is not in blocks.yml at
+          either 2026-09-22 commit its log cites, those being the dates its tests landed. TO EARN
+          IT BACK: a standalone synthesis with resource_actual under budget, plus the
+          reference_model and tests.random V4 already asks for. The composition fact is not lost
+          -- it is in notes and in the preserved INTEGRATED entry above.
     deferred: false
     cut_order: null
     superseded_by: null
