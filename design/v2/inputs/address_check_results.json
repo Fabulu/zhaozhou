@@ -1,0 +1,19 @@
+{
+  "scope": "Arithmetic address checks; no production RTL, simulator or Quartus execution",
+  "configuration": {
+    "CTX": 8,
+    "PLAN": 48,
+    "uop_bits": 60
+  },
+  "legal_entries": 384,
+  "packed_layout_entries": 384,
+  "packed_address_bits": 9,
+  "padded_layout_entries": 512,
+  "padded_max_legal_address": 495,
+  "padded_invalid_pc_encodings_rejected": 128,
+  "blind_concatenation_changed_addresses": 336,
+  "blind_concatenation_outside_384_word_array": 96,
+  "five_bit_pc_unique_addresses": 256,
+  "valid_payload_layout_equivalence": "384/384",
+  "result": "PASS, including deliberately wrong address controls"
+}
