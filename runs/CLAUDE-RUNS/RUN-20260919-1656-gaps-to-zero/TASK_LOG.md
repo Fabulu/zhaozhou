@@ -6058,3 +6058,66 @@ width banking; and nothing here rescues a 351%-over console from one array.
 (`design/v2/envelope/EXTRACTION.md`) -- which found that the block budgets are
 quoted against TWO different frame lengths, 13 contracts at 1,666,666 and 9 at
 1,333,333, with 14 of 18 percent-of-frame claims naming no denominator at all.
+
+#### WHERE I WAS WHEN THE CONSOLE FIT WENT IN -- written BEFORE reading its result
+
+The rule says write this down first, because a fit result redirects the work and the
+half-finished thing in your head is what gets lost. Launched 2026-09-29 from
+`c033dc00`, clean tree, `run_block_fit.ps1 -Module zhao_console_core`.
+
+**THE QUESTION THE FIT ANSWERS**, stated in advance as required: does the complete
+console fit `5CSEBA6U23I7` -- 41,910 ALM, 112 DSP, 553 M10K -- and what is its Fmax?
+That is the owner's own "so we know where we stand", and it is now askable because the
+completion register reads **ZERO mandatory gaps** with no superseded module composed:
+its own verdict is *"Freeze this design and measure it."*
+
+**WHAT CLEARED THE WAY TO IT, this stretch:**
+
+* the uop store repair (above) -- one statement hoisted, -15,084 estimated ALMs on
+  the executor at map-only, semantic evidence unchanged at both PLAN=32 and PLAN=48;
+* `check_prod_manifest.py` from FAILED to OK -- two probe modules were UNACCOUNTED;
+* the full `cmake --build` from broken to clean -- five targets were failing on stale
+  Verilator partitions (`undefined reference to V..__ConstPool__TABLE_h...`) in blocks
+  unrelated to any of this work. 21 partition directories purged, then regenerated
+  through `cmake --preset`, which is the documented fix and not another `--build`;
+* the manifest's `INSTR_N` override corrected 32 -> 48 with `PCW: 6` beside it, so
+  `zhao_prod_top` stops elaborating a 256-entry uop store against the console's 384.
+
+**WHAT IS IN PROGRESS AND MUST NOT BE LOST:**
+
+1. **`terr_vj_sweeps_aborted_o` reads the wrong block.** Full write-up in
+   `FINDINGS-veljoin-counter.md`. The console port in veljoin's namespace is driven by
+   `u_terrain_velocity`, while `u_terrain_veljoin`'s own identically-named counter is
+   dropped -- so a firing is attributed to the wrong block and veljoin's count cannot
+   be read at all. It is a PORT change, so it waits for the fit's receipt rather than
+   landing a commit between the snapshot and HEAD. **First item after the fit.**
+2. The other SILENT tie-off, `u_cliff_lat_share.poison_value_i (113'd0)`, is probably
+   benign -- that instance sets `.POISON_EN(1'b0)` -- but the reason is UNVERIFIED
+   against `zhao_forge_cliff_srvshare.sv` and must be checked before it is written
+   into the file as fact.
+3. The reviewer's next report is delivered (`design/v2/reviews/R6-agent-report.md`).
+   Nothing owed there until he answers.
+
+**THE SUITE'S 39 REDS ARE NOT A GATE ON THIS FIT, and here is why, measured.** A
+`-L fast` run reported 39 failures, and the first reading of that would be alarming.
+Two separate reasons it is not evidence about this work:
+
+* **I edited the tree while the suite was reading it** -- regenerated
+  `zhao_prod_top.sv` and changed `design/prod_manifest.yml` mid-run. Our own rule says
+  a suite whose inputs moved is not evidence in either direction, and the whole
+  `*_registration_static` cluster reads that manifest.
+* **Another lane is running its own gate on this machine.** The process tree showed a
+  second ctest whose children are `_lanes/upheaval-coord/build/gate11/test_gpu_device.exe`
+  and `test_impact_fx.exe`. That is what the 600-second timeouts on Python tests that
+  normally take under a second actually are. Their work was left alone.
+
+A serial re-run on the settled tree separated the two: the persistent failures are
+**pre-existing debt in other lanes' areas** -- `ledger_check` at 96 schema errors (a
+carried-over item), `golden_abi_info` on captures still at ABI 0x3 against 0x4, and a
+large `shell_fit_*` / `packet_h_*` cluster where the shell-fit policy is missing ~38
+ports another packet added. None of them touches FIELD, the manifest correction, or
+the console closure, and `field_v3_full_directed` / `field_v3_earth_directed` and
+eight more field tests all pass.
+
+**NEXT, in order, and none of it touches the fit's closure while it runs:** the
+`ledger_check` 96 schema errors; then the shell-fit policy drift; then the captures.
