@@ -999,7 +999,14 @@ blocks:
     inputs: [client_burst_requests]
     outputs: [bridge_burst_request, routed_responses]
     upstream: [DEBUG.FRAMEBLIT]
-    downstream: [MEM.HPS.BRIDGE]
+    # TWOD.ASSET ADDED 2026-09-29. Rule V7 checks edge SYMMETRY as well as
+    # existence, so repointing TWOD.ASSET.upstream from the non-existent
+    # `MEM.HPS` to this block without the reverse edge would trade one V7
+    # finding for another. It is requester index 6 of the eight this
+    # arbiter serves; NOTE that this block's own `purpose` still names only
+    # CMD.DMA and DEBUG.FRAMEBLIT, which is stale by six clients and is
+    # recorded rather than rewritten here.
+    downstream: [MEM.HPS.BRIDGE, TWOD.ASSET]
     backpressure: ready_valid
     latency: variable
     target_throughput: one burst in flight, which is all the bridge has
@@ -7607,7 +7614,16 @@ blocks:
     owner_issue: ZH-071
     inputs: [hps_arena]
     outputs: [texture_pages]
-    upstream: [CMD.EXEC, MEM.HPS]
+    # MEM.HPS -> MEM.HPS.ARBITER, 2026-09-29. `MEM.HPS` is NOT a block id -- the two real
+    # blocks are MEM.HPS.BRIDGE and MEM.HPS.ARBITER, and no zhao_mem_hps.sv exists. Which
+    # of the two is traced, not guessed: this block's hps_req_o/hps_grant_i/hps_rsp_i join
+    # `thps_req` as one of EIGHT requesters (zhao_console_core.sv:26678) and the grant comes
+    # back as thps_grant[6]; that array feeds .req_i of u_terr_hps_arb, module
+    # zhao_hps_arbiter_n -- the N-client arbiter that owner ruling R4 records as superseding
+    # the 2-client wrapper. MEM.HPS.ARBITER's own purpose is that interface exactly: "latch
+    # an owner, convert their held request into the single-cycle pulse the bridge requires,
+    # and route every response beat to the owner alone."
+    upstream: [CMD.EXEC, MEM.HPS.ARBITER]
     downstream: [TWOD.SAMPLER]
     backpressure: ready_valid
     latency: variable
