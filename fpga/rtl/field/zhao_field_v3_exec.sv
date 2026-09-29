@@ -1197,7 +1197,10 @@ module zhao_field_v3_exec #(
       s1_v_r <= issue_c;
       if (issue_c) begin
         s1_ctx_r              <= issue_ctx_c;
-        s1_uop_r              <= store[(int'(issue_ctx_c) * PLAN) + int'(pc_r[issue_ctx_c])];
+        // THE FETCH IS NOT HERE ANY MORE. It is hoisted below, out of this
+        // block's `!hold_c && !mul_denied_c`, and it MUST STAY THERE -- see the
+        // comment at its new home. `s1_ctx_r` and `inflight_r` stay, because
+        // they are not the store's read port.
         inflight_r[issue_ctx_c] <= 1'b1;
       end
 
@@ -1223,6 +1226,68 @@ module zhao_field_v3_exec #(
 
 
       end  // upstream: !hold_c && !mul_denied_c
+
+      // ==================================================================
+      // THE UOP FETCH LIVES HERE, OUTSIDE THE FREEZE, AND MUST NOT BE MOVED
+      // BACK INSIDE IT. That nesting is what kept the 384-entry store in
+      // FLIP-FLOPS.
+      // ==================================================================
+      //
+      // `store` is `uop_t [0:(CTX*PLAN)-1]` -- 384 x 60 = 23,040 bits at the
+      // console's `.INSTR_N(48)`. Quartus refused to infer it, reporting
+      // RAM logic "store" is uninferred due to ASYNCHRONOUS READ LOGIC --
+      // which is not what the message sounds like: there is no asynchronous
+      // read of `store` anywhere in this file, and the fetch below was always
+      // inside a clocked process.
+      //
+      // Five diagnostic reductions of this module, each mapped at PLAN=48,
+      // isolated it (rows `zhao_probe_execstore@R1/@R3a/@R3c/@R3d` in
+      // reports/synthesis/zhao_block_map.json):
+      //
+      //   the read with NO enable                        INFERRED
+      //   the read with `issue_c` alone                  INFERRED
+      //   the write moved BELOW the read, else unchanged  UNINFERRED
+      //   the read HOISTED out of the outer gate          INFERRED  <- this
+      //
+      // The third row is the one that settles it. It changed only the textual
+      // ORDER of the write and the read and came back BYTE-IDENTICAL to the
+      // baseline -- 24,962 registers, 10,287 combinational ALUTs, 17,100
+      // estimated ALMs, 25,344 memory bits, not one ALUT of difference. So
+      // order is free and the NESTING is the cause.
+      //
+      // AND THE HOIST CHANGES NO BEHAVIOUR WHATEVER, which is why it is a
+      // repair and not a trade. `issue_c` already contains both terms of the
+      // gate it was nested inside:
+      //
+      //   issue_c = |ready_c && !dot_inflight_c && !hold_c && !mul_denied_c
+      //             && !sk_busy_c
+      //
+      // so `(!hold_c && !mul_denied_c) && issue_c` is identically `issue_c`.
+      // `s1_uop_r` updates on exactly the clocks it updated on before. The
+      // outer gate was redundant for THIS assignment and for no other one in
+      // that block -- which is why the block still has it.
+      //
+      // `s1_v_r` and `inflight_r` deliberately stay inside the freeze. They are
+      // NOT redundant there: hoisting `s1_v_r <= issue_c` would drive it to 0
+      // during a hold instead of holding its value, which is a real behaviour
+      // change and would break the retry the freeze exists to provide.
+      //
+      // The collision law is unaffected. Read and write are both nonblocking in
+      // this one process on this one clock, so a same-address upload and fetch
+      // still reads the OLD word, and an M10K in Simple Dual Port mode with
+      // old-data read-during-write is the same law.
+      //
+      // MEASURED at PLAN=48, map-only, standalone:
+      //
+      //     before  24,962 reg  10,287 ALUT  17,100 ALM  25,344 mem bits
+      //     after    1,862 reg   2,110 ALUT   2,016 ALM  48,384 mem bits
+      //
+      // +23,040 memory bits is exactly 384 x 60, and the inferred object is
+      // named: `store_rtl_0`, 60 wide, 384 deep, Simple Dual Port. Estimated
+      // ALMs are map-only ESTIMATES until placed.
+      if (issue_c)
+        s1_uop_r <= store[(int'(issue_ctx_c) * PLAN) + int'(pc_r[issue_ctx_c])];
+
 
       // ---- the long-op queue ----------------------------------------------
       if (lq_push_c) begin
