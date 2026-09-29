@@ -1,67 +1,61 @@
-// zhao_probe_execstore -- reduction of zhao_field_v3_exec, VARIANT R3c.
+// zhao_probe_execstore -- reduction of zhao_field_v3_exec, VARIANT R3d.
 //
 // GENERATED. DO NOT EDIT, DO NOT INSTANTIATE, DO NOT SHIP.
 //
 // ===========================================================================
-// WHAT THE PREVIOUS TWO VARIANTS ESTABLISHED
+// THE ELIMINATION TABLE, four variants in
 // ===========================================================================
-//   production   `!hold_c && !mul_denied_c` then `issue_c`   UNINFERRED
-//   R1           no enable at all                            INFERRED  48,384 bits
-//   R3a          `issue_c` alone                             INFERRED  48,384 bits
+//   variant  read position    enable on the read                verdict
+//   -------  ---------------  -------------------------------   ----------
+//   prod     after the write  nested: `!hold_c && !mul_denied_c` UNINFERRED
+//                             then `issue_c`
+//   R1       before           none                              INFERRED
+//   R3a      before           `issue_c` alone                    INFERRED
+//   R3c      before           unchanged nested pair              UNINFERRED
 //
-// R3a is the informative one. `issue_c` ALREADY CONTAINS the outer gate --
+// R3c pins it. It moved the write BELOW the read and changed nothing else, and came
+// back BYTE-IDENTICAL to the production baseline -- 24,962 registers, 10,287
+// combinational ALUTs, 17,100 estimated ALMs, 25,344 memory bits, not one ALUT of
+// difference. **Statement order is not the cause.**
+//
+// So one property separates R3a from R3c: R3a gates the read with `issue_c` ALONE,
+// production and R3c wrap that inside `if (!hold_c && !mul_denied_c)`.
+//
+// AND THOSE TWO ARE THE SAME BOOLEAN:
 //
 //   :378  issue_c = |ready_c && !dot_inflight_c && !hold_c && !mul_denied_c
 //                   && !sk_busy_c
 //
-// -- so production's effective read enable and R3a's are THE SAME BOOLEAN, and one
-// infers while the other does not. **The enable expression is not the cause.** R3a
-// also refutes, in the real module instead of a probe, the hypothesis that an
-// enable derived from the read's own output blocks inference: `issue_c` depends on
-// `s1_uop_r.op` through `dot_inflight_c`, and it inferred anyway.
-//
-// Two more candidates are closed by INSPECTION, at no fit cost: `store` has
-// exactly one read site (:1200) and one write site (:1090), and `s1_uop_r` has
-// exactly one driver. A second read port is not the explanation.
+// `(!hold_c && !mul_denied_c) && issue_c` is identically `issue_c`. The outer gate
+// is redundant for THIS assignment; it is there because it is not redundant for the
+// dozen other assignments sharing the block.
 //
 // ===========================================================================
-// VARIANT R3c: THE WRITE MOVES BELOW THE READ. THAT IS THE WHOLE CHANGE.
+// VARIANT R3d: HOIST THE ONE FETCH OUT OF THE REDUNDANT GATE
 // ===========================================================================
-// What R1 and R3a also changed, unremarked, is ORDER -- both re-issued the read at
-// the top of the non-reset branch, i.e. ABOVE the write, where production has it
-// below:
+// The fetch moves out of the outer wrapper and is gated by `issue_c` alone. It
+// STAYS AFTER THE WRITE, where production has it, because R3c proved order does not
+// matter. Every other statement in the outer block stays exactly where it was --
+// including `s1_v_r <= issue_c` and `inflight_r[issue_ctx_c] <= 1'b1`, which MUST
+// stay inside: hoisting those would change behaviour, driving `s1_v_r` to 0 during a
+// hold instead of holding it.
 //
-//     production        R1 / R3a
-//     write  :1090      READ
-//     read   :1200      write
-//
-// R3c isolates that and nothing else. The READ STAYS PUT, and the WRITE moves down
-// to just after the freeze block closes, carrying its `if (up_we_i)` guard verbatim
-// and keeping its own nesting level. It is deliberately NOT moved inside the freeze:
-// the production write is ungated by `hold_c`/`mul_denied_c` so an upload lands
-// during a stall, and putting it inside would have changed the write enable as well
-// as the order -- two properties at once, and a behaviour change besides.
-//
-// AND THIS REORDER IS PROVABLY BEHAVIOUR-PRESERVING, which is why it is worth a
-// map. Both statements are nonblocking, in one always_ff, on one clock, with
-// different left-hand sides; every right-hand side is evaluated from the pre-edge
-// value of `store`. The fetch therefore reads the OLD word whether the write sits
-// above it or below it -- including on a legal same-address collision, the law
-// FEEDBACK_AFTER_R5 requires be preserved. There is no semantics in the order of
-// two nonblocking assignments to different targets.
-//
-// SO R3c IS NOT A DIAGNOSTIC. If it infers, it is a repair candidate for
-// production, and a free one -- no extra cycle, no changed schedule, no new
+// THE HOIST IS PROVABLY BEHAVIOUR-PRESERVING. `s1_uop_r` updates on exactly the
+// clocks it updated on before, because the enable is the same function of the same
+// signals. So if R3d infers, this is a REPAIR CANDIDATE for production and not a
+// diagnostic: one statement moved, no extra cycle, no schedule change, no new
 // collision contract, no address rework.
 //
-// PREDICTION: R3c INFERS. If it does not, the cause is nesting depth or the
-// surrounding block's other assignments, and R3d lifts the read one level while
-// keeping `issue_c`.
+// PREDICTION: R3d INFERS. If it does not, no property isolated so far explains the
+// refusal, and the next step is not a fifth reduction but the explicit memory
+// backend behind the same tested interface that the external feedback offers as the
+// legitimate alternative.
 //
-// NOT CLAIMED: any ALM saving, any timing result, or that this maps at PLAN=48
-// with the production addressing verified -- see check_plan48_addressing.
-// Classified by tools/budget/store_variant_receipt.py, by name, because a
-// reduction can make synthesis DELETE the array and deletion is not inference.
+// NOT CLAIMED: any ALM saving (the R1/R3a delta is measured on variants whose
+// behaviour is deliberately wrong), any timing result, or a verified PLAN=48
+// addressing layout. Classified by tools/budget/store_variant_receipt.py, by name,
+// because a reduction can make synthesis DELETE the array and deletion is not
+// inference.
 // ===========================================================================
 
 // zhao_field_v3_exec.sv — Field v3 Phase 4: the vector executor DATAPATH,
@@ -1152,8 +1146,9 @@ module zhao_probe_execstore #(
       skid_clocks_o <= 32'd0;
       for (int i = 0; i < CTX; i++) pc_r[i] <= '0;
     end else begin
-      // WRITE RELOCATED (variant R3c) -- moved below the fetch,
-      // unchanged in every other respect. See header.
+      if (up_we_i)
+        store[(int'(up_ctx_i) * PLAN) + int'(up_pc_i)] <=
+            '{op: up_op_i, dst: up_dst_i, a: up_a_i, b: up_b_i, c: up_c_i, imm: up_imm_i};
 
       if (start_i) begin
         active_r[start_ctx_i] <= 1'b1;
@@ -1262,7 +1257,9 @@ module zhao_probe_execstore #(
       s1_v_r <= issue_c;
       if (issue_c) begin
         s1_ctx_r              <= issue_ctx_c;
-        s1_uop_r              <= store[(int'(issue_ctx_c) * PLAN) + int'(pc_r[issue_ctx_c])];
+        // FETCH HOISTED (variant R3d) -- re-issued below, out of the
+        // redundant outer gate. See header. Everything else in this
+        // block stays exactly where it was.
         inflight_r[issue_ctx_c] <= 1'b1;
       end
 
@@ -1289,18 +1286,17 @@ module zhao_probe_execstore #(
 
       end  // upstream: !hold_c && !mul_denied_c
 
-      // THE WRITE, verbatim from its production position above, at the
-      // SAME nesting level it had there -- still gated by `up_we_i` alone,
-      // still outside the freeze, so an upload lands during a stall exactly
-      // as before. The ONLY thing that changed is that it is now written
-      // BELOW the fetch instead of above it.
+      // THE FETCH, hoisted out of `if (!hold_c && !mul_denied_c)` and gated
+      // by `issue_c` alone. IDENTICAL BEHAVIOUR: `issue_c` already contains
+      // both of those terms (:378), so the outer gate was redundant for this
+      // one assignment and `s1_uop_r` still updates on exactly the clocks it
+      // updated on before. Still placed AFTER the write, as production has it.
       //
-      // Two nonblocking assignments to different targets in one always_ff:
-      // this changes no behaviour, including read-during-write, which is OLD
-      // DATA either way.
-      if (up_we_i)
-        store[(int'(up_ctx_i) * PLAN) + int'(up_pc_i)] <=
-            '{op: up_op_i, dst: up_dst_i, a: up_a_i, b: up_b_i, c: up_c_i, imm: up_imm_i};
+      // `s1_v_r` and `inflight_r` deliberately stay inside the outer block:
+      // hoisting THOSE would change behaviour, because `s1_v_r` would be
+      // driven to 0 during a hold instead of holding its value.
+      if (issue_c)
+        s1_uop_r <= store[(int'(issue_ctx_c) * PLAN) + int'(pc_r[issue_ctx_c])];
 
       // ---- the long-op queue ----------------------------------------------
       if (lq_push_c) begin
