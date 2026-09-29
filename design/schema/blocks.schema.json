@@ -231,7 +231,10 @@
         },
         "tests": {
           "type": "object",
-          "additionalProperties": false,
+          "$comment": "WIDENED 2026-09-29 from additionalProperties:false. Five blocks carry nine arms outside the five kinds below -- rtl_directed, oracle, bridge, mutant_control, chain, sharer, mutant, law_directed, store_directed -- and every one names a real committed test. The schema allowed ONE path per KIND while this repository writes several directed arms per block plus the committed mutants its own rules demand. Extra keys must still be non-empty path strings, and the conditional required:[directed,random] is UNCHANGED, so this widens what may be added and relaxes nothing about what is owed.",
+          "additionalProperties": {
+            "$ref": "#/$defs/path"
+          },
           "properties": {
             "directed": {
               "$ref": "#/$defs/path"
