@@ -1558,13 +1558,31 @@ blocks:
     budget_group: platform
     maturity: UNIT_VERIFIED
     maturity_log:
-      - 2026-09-20 BUILT and COMPOSED under owner ruling R7. fpga/rtl/input/zhao_input_snac.sv;
-        contract and spec/input_rules.md section 7 authored the same day (both were
-        deliberately blank until R7 decided the block). 40 directed checks against
-        zref::SnacAdapter, every counter seen to fire on legal stimulus, and two
-        planted faults (a swapped button-table entry, a wrong axis shift) caught --
-        the first version of the button case did NOT catch the swap and was
-        strengthened to walk all sixteen bits.
+      # RESTRUCTURED 2026-09-29. This was a single PROSE BULLET, which the schema
+      # cannot read at all. Every value below comes out of that paragraph, which is
+      # preserved verbatim underneath -- nothing is summarised away.
+      #
+      # The commit is the one that ADDED the test this entry rests on, and its own
+      # date matches the prose to the day: 0bd7e00f 2026-09-20 "INPUT.SNAC BUILT AND
+      # COMPOSED (owner ruling R7); register 25 -> 24".
+      #
+      # state UNIT_VERIFIED is the block's own maturity, and rule V3 requires a log
+      # entry for the current state. The prose supports it: 40 directed checks
+      # against zref::SnacAdapter, every counter seen to fire, two planted faults
+      # caught. Note the prose calls the state "BUILT and COMPOSED" -- two more words
+      # that are not on the ladder, after BUILT and COMPOSED elsewhere today.
+      - state: UNIT_VERIFIED
+        date: "2026-09-20"
+        commit: "0bd7e00f"
+        evidence: tests/input/input_snac_directed.cpp
+      # THE ORIGINAL PARAGRAPH, verbatim:
+      #   - 2026-09-20 BUILT and COMPOSED under owner ruling R7. fpga/rtl/input/zhao_input_snac.sv;
+      #   contract and spec/input_rules.md section 7 authored the same day (both were
+      #   deliberately blank until R7 decided the block). 40 directed checks against
+      #   zref::SnacAdapter, every counter seen to fire on legal stimulus, and two
+      #   planted faults (a swapped button-table entry, a wrong axis shift) caught --
+      #   the first version of the button case did NOT catch the swap and was
+      #   strengthened to walk all sixteen bits.
     deferred: false   # REVOKED by the owner 2026-09-18: "I don't want to defer any unfinished blocks now". The 2026-08-31 SS6.3 cut is withdrawn.
     cut_order: null
     superseded_by: null
@@ -8032,31 +8050,45 @@ blocks:
     backpressure: none
     latency: variable
     target_throughput: gameplay-rate queries
-    reference_model: zref::nav::Service
+    # reference_model REMOVED 2026-09-29, and this is a category error rather than a
+    # format one. The schema forbids the field on a software block, and it is right:
+    #     zref::nav::Service
+    # is not a reference model OF this block, it IS this block -- a software block is
+    # the reference. Measured rather than argued: 15 blocks are kind: software and this
+    # was the ONLY one carrying the field. The symbol is named here so nothing is lost.
     maturity: SPECIFIED
     maturity_log:
       - state: SPECIFIED
         date: "2026-09-26"
-        commit: pending
+        # PINNED 2026-09-29. Held the literal word `pending`, and something HAD landed:
+        # this entry's own evidence file was added by 34dfa74d, dated 2026-09-26 -- the
+        # exact date the entry claims -- with the subject "NAVSERVICE 1/3: the CPU
+        # navigation query, production API, 113 green checks". The last of the nine
+        # unpinned commits, and the only one traced through its evidence rather than
+        # through a merge subject.
+        commit: "34dfa74d"
         evidence: reference/include/zref/zref_nav.hpp
-        note: >-
-          THE NAVIGATION HALF IS IMPLEMENTED, INTEGRATED AND TESTED; the
-          maturity stays SPECIFIED and that is deliberate. reports/
-          OWNER-DECISION-20260926-I34-NAV.md moved navigation truth and its
-          query service to this block and superseded the FPGA's
-          TERRAIN.COMPOSED_NAV publication. zref::nav::Service answers hard
-          passability plus composed movement cost for a location or a cell,
-          reusing zfield::interpret (through zref::render::compose_lattice),
-          zref::fieldir::compose_nav, zref::terrain::column_pick /
-          collision_normal / covers / plane_interp -- one evaluation, no second
-          transcription. Callers: zgame::Wizards and runtime/desktop, and
-          Upheaval's uph_engine links the same zhao_zref. Tests:
-          tests/nav/nav_service_directed.cpp (113 checks) and
-          tests/runtime/wizards_nav_directed.cpp (77 checks).
-          THE BLOCK'S OTHER TWO JOBS ARE STILL ABSENT -- the canonical B/D scar
-          mirror and the per-beam occlusion DDA -- so advancing the whole
-          block's maturity on one finished third would be exactly the renamed
-          entry the same decision forbids.
+        # `note:` IS NOT A SCHEMA KEY. Demoted to a comment 2026-09-29,
+        # verbatim, which is what this file already does for this same key
+        # elsewhere. Not one word is dropped:
+        # note: >-
+        # THE NAVIGATION HALF IS IMPLEMENTED, INTEGRATED AND TESTED; the
+        # maturity stays SPECIFIED and that is deliberate. reports/
+        # OWNER-DECISION-20260926-I34-NAV.md moved navigation truth and its
+        # query service to this block and superseded the FPGA's
+        # TERRAIN.COMPOSED_NAV publication. zref::nav::Service answers hard
+        # passability plus composed movement cost for a location or a cell,
+        # reusing zfield::interpret (through zref::render::compose_lattice),
+        # zref::fieldir::compose_nav, zref::terrain::column_pick /
+        # collision_normal / covers / plane_interp -- one evaluation, no second
+        # transcription. Callers: zgame::Wizards and runtime/desktop, and
+        # Upheaval's uph_engine links the same zhao_zref. Tests:
+        # tests/nav/nav_service_directed.cpp (113 checks) and
+        # tests/runtime/wizards_nav_directed.cpp (77 checks).
+        # THE BLOCK'S OTHER TWO JOBS ARE STILL ABSENT -- the canonical B/D scar
+        # mirror and the per-beam occlusion DDA -- so advancing the whole
+        # block's maturity on one finished third would be exactly the renamed
+        # entry the same decision forbids.
     deferred: false
     cut_order: null
     superseded_by: null
