@@ -1,3 +1,25 @@
+> # CORRECTED: RULE V7 EXISTS. I ASSERTED AN ABSENCE WITHOUT GREPPING FOR IT.
+>
+> This file says a referential-integrity check on `downstream`/`upstream` is a rule the
+> ledger does not have. **It has one.** `tools/ledger/src/rules.ts:240-258` implements
+> unknown-block references AND edge symmetry, both directions.
+>
+> What is true is that **it has never run**: `tools/ledger/src/cli.ts:123` gates the entire
+> rule stage on `if (errors.length === 0)` against the SCHEMA stage, so with schema errors
+> outstanding V1-V23 do not execute at all. The check was switched off by an unrelated red --
+> which is this repository's own law about a gate giving cover to every other red inside it,
+> and it makes the finding below worse rather than better: V7 would have caught these
+> references years ago.
+>
+> A read-only preview of V7 alone reports **11 unknown references and 60 asymmetric edges**,
+> and six of the eleven name modules that are IN THE CONSOLE FIT'S SOURCE DIGEST -- including
+> `CMD.EXEC`, `zhao_cmd_exec.sv`, **227 KB, the largest module in the console**, with no
+> ledger row. Six composed modules and one shorthand, not the three named below.
+>
+> Read [`FINDINGS-ledger-rules-never-run.md`](FINDINGS-ledger-rules-never-run.md) for the
+> full picture. Everything below about the specific modules stands; only the claim that the
+> rule is missing is withdrawn.
+
 > # CORRECTED 2026-09-29, SAME DAY: THE REPAIR IS NOT A WIRING JOB
 >
 > This file says the fix is to "give `zhao_terrain_velocity`'s counter a port of its own"
