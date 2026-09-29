@@ -4082,7 +4082,13 @@ blocks:
     maturity_log:
       - state: UNIT_VERIFIED
         date: "2026-09-21"
-        commit: "terrabake"
+        # PINNED 2026-09-29. The field held 'terrabake' -- a packet name, not a commit.
+        # Resolved from the MERGE SUBJECT git generated for it (Merge TERRABAKE...),
+        # cross-checked by this entry's own evidence file being present in that
+        # merge's tree. Exactly one merge matches. NOT resolved by
+        # `git log --grep`, which eb5ebfde showed returns confidently wrong
+        # answers by matching these words inside unrelated later commits.
+        commit: "9f22dde0d738"
         evidence: tests/terrain/bakerec_rtl_directed.cpp
     deferred: false
     cut_order: null
@@ -4807,7 +4813,13 @@ blocks:
     maturity_log:
       - state: BUILT
         date: "2026-09-22"
-        commit: "PARAMARENA"
+        # PINNED 2026-09-29. The field held 'PARAMARENA' -- a packet name, not a commit.
+        # Resolved from the MERGE SUBJECT git generated for it (Merge PARAMARENA...),
+        # cross-checked by this entry's own evidence file being present in that
+        # merge's tree. Exactly one merge matches. NOT resolved by
+        # `git log --grep`, which eb5ebfde showed returns confidently wrong
+        # answers by matching these words inside unrelated later commits.
+        commit: "c5ac4defe8aa"
         evidence: fpga/rtl/geometry/zhao_geom_paramarena.sv
     deferred: false
     superseded_by: null
@@ -4859,7 +4871,13 @@ blocks:
     maturity_log:
       - state: BUILT
         date: "2026-09-25"
-        commit: "ARENAID"
+        # PINNED 2026-09-29. The field held 'ARENAID' -- a packet name, not a commit.
+        # Resolved from the MERGE SUBJECT git generated for it (Merge ARENAID...),
+        # cross-checked by this entry's own evidence file being present in that
+        # merge's tree. Exactly one merge matches. NOT resolved by
+        # `git log --grep`, which eb5ebfde showed returns confidently wrong
+        # answers by matching these words inside unrelated later commits.
+        commit: "f52b2bbe34a9"
         evidence: fpga/rtl/geometry/zhao_geom_vertid.sv
     deferred: false
     superseded_by: null
@@ -4912,7 +4930,13 @@ blocks:
     maturity_log:
       - state: BUILT
         date: "2026-09-22"
-        commit: "PARAMARENA"
+        # PINNED 2026-09-29. The field held 'PARAMARENA' -- a packet name, not a commit.
+        # Resolved from the MERGE SUBJECT git generated for it (Merge PARAMARENA...),
+        # cross-checked by this entry's own evidence file being present in that
+        # merge's tree. Exactly one merge matches. NOT resolved by
+        # `git log --grep`, which eb5ebfde showed returns confidently wrong
+        # answers by matching these words inside unrelated later commits.
+        commit: "c5ac4defe8aa"
         evidence: fpga/rtl/geometry/zhao_geom_paramwalk.sv
     deferred: false
     superseded_by: null
@@ -7057,7 +7081,13 @@ blocks:
     maturity_log:
       - state: RTL_VERIFIED
         date: "2026-09-21"
-        commit: "gz/bandbuild"
+        # PINNED 2026-09-29. The field held 'gz/bandbuild' -- a branch name, not a commit.
+        # Resolved from the MERGE SUBJECT git generated for it (Merge BANDBUILD...),
+        # cross-checked by this entry's own evidence file being present in that
+        # merge's tree. Exactly one merge matches. NOT resolved by
+        # `git log --grep`, which eb5ebfde showed returns confidently wrong
+        # answers by matching these words inside unrelated later commits.
+        commit: "540a0d03918f"
         evidence: >-
           fpga/rtl/compositor/zhao_twod_band.sv, composed in zhao_console_core
           (owner rulings R233 and R235, core entry I17). 39 directed checks
@@ -7156,7 +7186,13 @@ blocks:
     maturity_log:
       - state: RTL_VERIFIED
         date: "2026-09-22"
-        commit: "gz/twodcmd"
+        # PINNED 2026-09-29. The field held 'gz/twodcmd' -- a branch name, not a commit.
+        # Resolved from the MERGE SUBJECT git generated for it (Merge TWODCMD...),
+        # cross-checked by this entry's own evidence file being present in that
+        # merge's tree. Exactly one merge matches. NOT resolved by
+        # `git log --grep`, which eb5ebfde showed returns confidently wrong
+        # answers by matching these words inside unrelated later commits.
+        commit: "1361bb3af4e9"
         evidence: >-
           fpga/rtl/compositor/zhao_twod_cmd.sv, composed in zhao_console_core as
           u_twod_cmd (owner completion ruling 2026-09-22 item 3, core entry
@@ -7232,7 +7268,13 @@ blocks:
     maturity_log:
       - state: RTL_VERIFIED
         date: "2026-09-22"
-        commit: "gz/twodcmd"
+        # PINNED 2026-09-29. The field held 'gz/twodcmd' -- a branch name, not a commit.
+        # Resolved from the MERGE SUBJECT git generated for it (Merge TWODCMD...),
+        # cross-checked by this entry's own evidence file being present in that
+        # merge's tree. Exactly one merge matches. NOT resolved by
+        # `git log --grep`, which eb5ebfde showed returns confidently wrong
+        # answers by matching these words inside unrelated later commits.
+        commit: "1361bb3af4e9"
         evidence: >-
           fpga/rtl/compositor/zhao_twod_asset.sv, composed in zhao_console_core
           as u_twod_asset and as client 6 of u_terr_hps_arb (owner completion
@@ -7338,7 +7380,13 @@ blocks:
         evidence: fpga/rtl/compositor/zhao_post_gather.sv
       - state: RTL_VERIFIED
         date: "2026-09-21"
-        commit: "gz/postgather"
+        # PINNED 2026-09-29. The field held 'gz/postgather' -- a branch name, not a commit.
+        # Resolved from the MERGE SUBJECT git generated for it (Merge gz/postgather...),
+        # cross-checked by this entry's own evidence file being present in that
+        # merge's tree. Exactly one merge matches. NOT resolved by
+        # `git log --grep`, which eb5ebfde showed returns confidently wrong
+        # answers by matching these words inside unrelated later commits.
+        commit: "c92011d18bd2"
         evidence: >-
           COMPOSED in zhao_console_core (owner ruling R195, core entry I17 (c)).
           The seam carries: SMOKE frags=2560 against the raster's own
