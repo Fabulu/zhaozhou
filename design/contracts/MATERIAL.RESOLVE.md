@@ -143,6 +143,14 @@ of a meshlet and usually many meshlets.
 
 ## Scalar reference function
 
+`zref::material::resolve`
+
+SYMBOL ADDED 2026-09-29. This section named the FILE but not the symbol, so rule
+V17(b) -- which compares the backticked oracle here against the ledger's
+`reference_model` -- found nothing to compare and reported the contract as naming no
+oracle. The file was never in doubt; the comparable symbol was missing. V17(a)
+independently confirms this symbol is defined under `reference/`.
+
 **WRITTEN 2026-09-05** — both, in
 `reference/include/zref/zref_material_resolve.hpp`. They could not be written
 earlier: the record they return was not frozen. It is now

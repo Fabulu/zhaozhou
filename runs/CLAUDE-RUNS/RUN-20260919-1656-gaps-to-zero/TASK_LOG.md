@@ -6428,3 +6428,67 @@ exactly one file in the fit's 299-file closure changed -- `fpga/rtl/prod/zhao_co
 -- and that diff is **17 added, 0 removed, 0 non-comment** (the `// TIE:` reason on
 `u_cliff_lat_share.poison_value_i`). `design/blocks.yml` and the schema are not fit inputs. So
 the snapshot describes the current design and the measurement will be usable.
+
+---
+
+## 11:35 -- the ledger rule stage ran for the FIRST TIME: 349 -> 230
+
+**Where I am, before anything redirects it:** the console fit (attempt 3) is alive at 67
+CPU-min, peak 4.43 GB, and it measures the current design (checked -- one closure file moved
+since its snapshot and that diff is 17 comment lines). Next after it lands: the source-id
+plumbing on TERRAIN.MATJOIN and TERRAIN.EDGERECON, which is blocked ONLY by the fit.
+
+**Full write-up: `reports/LEDGER-RULE-STAGE-20260929.md`** -- durable, not in this run
+folder, because a run folder orphans anything durable.
+
+**THE HEADLINE IS NOT THE 7.** `cli.ts:123` runs V1-V23 only when the schema stage is clean,
+and it never had been, so **no ledger rule had ever run on this repo.** The 7 remaining
+schema errors were a curtain in front of 349. `check_counter_ids.py`'s header had already
+written down the mechanism -- "it also never ran, because the ledger's schema stage fails
+first and the rule stage is skipped" -- and nobody acted on it.
+
+    schema 7 -> 0   |   rules first run: 349   |   now 230
+
+Closed today, in order, each committed and pushed separately:
+`60db6515` schema to 0 (GROUPSEQ rename + source_ids breach made representable)
+`436e7ff8` V12 44 -> 0 (counters registered, each verified against its RTL port; lock +154)
+`63544a8e` V7 70 -> 10 (60 reverse edges)
+`23cdaf97` V3 5 -> 0, V6 2 -> 0, V10 1 -> 0
+`f3edbe8b` V16 4 -> 0 (four formal mutant controls RE-RUN and registered)
+`e785417b` (earlier) the exit-path gate, 18 mains
+
+**BOTH "owner/architect decisions" in my own previous entry were neither.** One was settled
+by charter line 391 (source IDs on the command/trace path, terrain samples named
+explicitly), the other by the id convention all 136 ids obey. That is the third time this
+week the refusal-is-an-instrument law has paid out, and I filed both of these myself.
+
+**Remaining 230 contains no records fixes.** V20 172 (prose invariant claims with no
+enforcer -- 172 investigations, and bulk-adding ENFORCED-BY lines would be the worst
+available action), V4 29 + V17 18 (oracle and test authoring), V7 10 (six composed modules
+with no ledger row, `zhao_cmd_exec` at 227 KB among them), V5 1 (needs a fit).
+
+**Real findings surfaced and NOT closed, all in the report with evidence:** 118 counters with
+no presentation path at all; six production modules outside the ledger; the four mem_guard
+mutants' recorded assertions stale because `b9c2d3e2` widened `a1_region` on a PARALLEL
+branch and nobody re-ran the controls after the merge -- leaving `a1_pb_wr_view0` and
+`a1_map` with no control showing them non-vacuous; V17(d) over-strict where a contract
+declares an entry point (GEOM.LIGHT is right, the rule is not) while PARAMARENA/PARAMWALK
+are genuine hits; POST.ECHO citing a namespace as a symbol; V3 never checking superseded
+maturity entries.
+
+**Two traps, both mine, both already documented for other tools:**
+
+* **"No SymbiYosys on this machine" was wrong** -- I checked a bare shell. It is at
+  `.tools/oss-cad-suite/bin/sby.exe` the moment `zhao-env.ps1` is sourced. I was one step
+  from writing `never_ran` into the formal registry, which would have been a false statement
+  about four properties that had in fact been run. CLAUDE.md records this for cmake and
+  ctest; it is now three tools.
+* **`cmd | tee f | head -3` truncates `f`** -- `head` exiting SIGPIPEs `tee`, and a by-rule
+  histogram read 31 where the total said 305. Caught only because the two numbers disagreed.
+
+Also corrected mid-flight: I concluded GEOM.LIGHT's `reference_model` was wrong and it is
+not -- its contract already distinguishes the law from this block's entry point, deliberately
+and correctly. And three earlier alarms of mine were disproved rather than left standing:
+`terrain_place_cache_axis_swap` IS registered (under a `_control` suffix), the three live
+ctests are Upheaval trees rather than a one-per-tree violation, and `TERRAIN.MATPUB` sharing
+`TERRAIN.MATJOIN.md` is a deliberate shared contract (`GEOM.PARAMBUF.md` covers three).

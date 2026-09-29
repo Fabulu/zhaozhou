@@ -52,6 +52,18 @@ A lane word is **enabled** when all three hold, and the three are independent:
 | `f_present_i` | the adapter's `ans_present_o[2]` | the Earth record's ordinal-2 presence. **An absent output is not a write of zero** |
 | tag | `zmt_tag_ok(f_material_i)` | the word is a v1 material token |
 
+## Scalar reference function
+
+`zref::fieldir::compose_material`
+
+HEADING ADDED 2026-09-29. The symbol was already named three times above -- as the
+**Reference law** in the summary, in section 2, and in section 7 -- and matches the
+ledger's `reference_model` exactly. What was missing was this canonical heading, which
+is the one place rule V17(b) compares contract against ledger. That comparison exists
+because drift between the two is how `zref::framePixelCrc` survived as a citation to
+nothing, so the heading is load-bearing rather than decorative: naming the oracle in
+prose leaves the two records uncomparable by any tool.
+
 ## 3. THE ARBITRATION IS AT THE COMPOSE POINT, NOT AT THE PAGE
 
 This is the decision the block encodes and it is the one worth reading twice.
