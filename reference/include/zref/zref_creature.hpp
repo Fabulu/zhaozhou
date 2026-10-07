@@ -154,8 +154,15 @@ void mat3x4_invert_rigid(const mat3x4fx& in, mat3x4fx& out, SatLedger* L);
 
 // -------------------------------------------------------------- skeleton ---
 
-/** Hard donor law: <=32 bones per creature (creature_rules 1.2). */
-inline constexpr int kMaxBones = 32;
+/** The REFERENCE LIBRARY's bone ceiling: the PC / Studio path (Upheaval, owner 2026-10-06:
+ *  creatures render in PC software). 64, raised from 32 for Temper (u04, 55 bones; Upheaval
+ *  creature/Unnamed04/PASS-2-ARCHITECTURE.md 1.2). Every array between the rig and the GPU
+ *  follows it; the per-vertex skin cost does not (two influences per vertex). */
+inline constexpr int kMaxBones = 64;
+/** The SILICON donor law, unchanged: <=32 bones per creature (creature_rules 1.2). This is the
+ *  export cap for a creature that targets the console (none does today); the page formats
+ *  (zref::clip_page, zref::creature_page) keep their own 32. */
+inline constexpr int kConsoleMaxBones = 32;
 
 /**
  * One bone: parent index (parent-before-child order REQUIRED, validated at
